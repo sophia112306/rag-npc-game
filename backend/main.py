@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 
+from .api.game import router as game_router
 from .api.health import APP_VERSION, SERVICE_NAME, router as health_router
 
 
@@ -12,6 +13,7 @@ app = FastAPI(
 )
 
 app.include_router(health_router)
+app.include_router(game_router)
 
 
 @app.get("/", tags=["meta"], summary="Show API service information")
