@@ -1,25 +1,23 @@
-"""Shared Pydantic contracts used by the backend modules and API layer."""
+"""Shared Pydantic contracts used by the backend modules and APIs."""
 
-from .api_response import ApiError, GameTurnResponse
-from .game_state import GameState, InventoryItem, NPCState, PlayerState, SceneState
+from .api_response import ApiError, DeltaPayload, GameTurnResponse, NarrativeAIResponse
+from .game_state import GameState, InventoryItem, NPCState, PlayerState, SceneState, StoryPhase
 from .parsed_action import ActionType, ParsedAction
 from .player_action import InputType, PlayerAction
-from .story import DialogueLine, EventProposal, SpeakerType, StoryProposal
 
 __all__ = [
     "ActionType",
     "ApiError",
-    "DialogueLine",
-    "EventProposal",
+    "DeltaPayload",
     "GameState",
     "GameTurnResponse",
     "InputType",
     "InventoryItem",
+    "NarrativeAIResponse",
     "NPCState",
     "ParsedAction",
     "PlayerAction",
     "PlayerState",
     "SceneState",
-    "SpeakerType",
-    "StoryProposal",
+    "StoryPhase",
 ]
