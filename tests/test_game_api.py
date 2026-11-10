@@ -54,6 +54,11 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert state["state_version"] == 1
     assert state["current_scene_id"] == "minglin"
     assert state["npc_states"]["vidalia"]["met"] is True
+    assert "truth_level" not in state
+    assert "axis" not in state
+    assert "usurp" not in state
+    assert "flags" not in state
+    assert "relation" not in state["npc_states"]["vidalia"]
 
     response = client.post("/api/game/turn", json=action_payload(state["session_id"]))
 
@@ -62,6 +67,8 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert turn["turn_number"] == 1
     assert turn["state"]["turn_count"] == 1
     assert turn["state"]["state_version"] == 2
+    assert "truth_level" not in turn["state"]
+    assert "flags" not in turn["state"]
     assert turn["parsed_action"]["action_type"] == "dialogue"
     assert "開發替身" in turn["story"]["dialogue"][0]["text"]
     assert turn["story"]["event_proposals"] == []
@@ -69,6 +76,8 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     state_response = client.get(f"/api/game/{state['session_id']}/state")
     assert state_response.status_code == 200
     assert state_response.json()["state_version"] == 2
+    assert "truth_level" not in state_response.json()
+    assert "flags" not in state_response.json()
 
 
 def test_repeated_action_id_does_not_advance_the_turn_twice(client: TestClient) -> None:

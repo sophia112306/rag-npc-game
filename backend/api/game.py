@@ -10,8 +10,8 @@ from backend.orchestration.game_orchestrator import (
     StateVersionConflictError,
 )
 from backend.schemas.api_response import GameTurnResponse
-from backend.schemas.game_state import GameState
 from backend.schemas.player_action import PlayerAction
+from backend.schemas.player_view import PlayerViewState, project_player_view
 
 
 class StartGameRequest(BaseModel):
@@ -33,17 +33,18 @@ def get_orchestrator(request: Request) -> GameOrchestrator:
 
 @router.post(
     "/start",
-    response_model=GameState,
+    response_model=PlayerViewState,
     status_code=status.HTTP_201_CREATED,
     summary="Start a game session",
 )
 async def start_game(
     request: StartGameRequest,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
-) -> GameState:
+) -> PlayerViewState:
     """Create a new session or return the existing session state."""
 
-    return await orchestrator.start_game(request.session_id)
+    state = await orchestrator.start_game(request.session_id)
+    return project_player_view(state)
 
 
 @router.post(
@@ -87,17 +88,18 @@ async def submit_player_action(
 
 @router.get(
     "/{session_id}/state",
-    response_model=GameState,
+    response_model=PlayerViewState,
     summary="Get the current game state",
 )
 async def get_game_state(
     session_id: str,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
-) -> GameState:
+) -> PlayerViewState:
     """Return the latest state snapshot for a session."""
 
     try:
-        return await orchestrator.get_state(session_id)
+        state = await orchestrator.get_state(session_id)
+        return project_player_view(state)
     except SessionNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

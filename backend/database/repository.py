@@ -121,6 +121,7 @@ class SqlAlchemyGameRepository:
         self,
         action: PlayerAction,
         request_digest: str,
+        updated_state: GameState,
         response: GameTurnResponse,
         approved_events: Sequence[CommittedGameEvent] = (),
     ) -> GameTurnResponse:
@@ -144,10 +145,12 @@ class SqlAlchemyGameRepository:
                             action.expected_state_version,
                             session_record.state_version,
                         )
-                    if response.state.state_version != action.expected_state_version + 1:
+                    if updated_state.state_version != action.expected_state_version + 1:
                         raise ValueError("Committed state must advance state_version exactly once")
+                    if response.state.state_version != updated_state.state_version:
+                        raise ValueError("Player view must represent the committed state version")
 
-                    state_payload = response.state.model_dump(mode="json")
+                    state_payload = updated_state.model_dump(mode="json")
                     result = await database.execute(
                         update(GameSessionRecord)
                         .where(
@@ -155,10 +158,10 @@ class SqlAlchemyGameRepository:
                             GameSessionRecord.state_version == action.expected_state_version,
                         )
                         .values(
-                            state_version=response.state.state_version,
-                            turn_count=response.state.turn_count,
+                            state_version=updated_state.state_version,
+                            turn_count=updated_state.turn_count,
                             state_json=state_payload,
-                            updated_at=response.state.updated_at,
+                            updated_at=updated_state.updated_at,
                         )
                     )
                     if result.rowcount != 1:

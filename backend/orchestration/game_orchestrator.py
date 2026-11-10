@@ -14,6 +14,7 @@ from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState, PlayerState
 from backend.schemas.parsed_action import ActionType, ParsedAction
 from backend.schemas.player_action import ActionMode, PlayerAction
+from backend.schemas.player_view import project_player_view
 from backend.schemas.story import (
     DialogueLine,
     SpeakerType,
@@ -60,6 +61,7 @@ class GameRepository(Protocol):
         self,
         action: PlayerAction,
         request_digest: str,
+        updated_state: GameState,
         response: GameTurnResponse,
     ) -> GameTurnResponse: ...
 
@@ -111,11 +113,16 @@ class GameOrchestrator:
             turn_number=updated_state.turn_count,
             parsed_action=parsed_action,
             story=story,
-            state=updated_state,
+            state=project_player_view(updated_state),
         )
 
         try:
-            return await self._repository.commit_turn(action, request_digest, response)
+            return await self._repository.commit_turn(
+                action,
+                request_digest,
+                updated_state,
+                response,
+            )
         except RepositoryActionIdConflictError as exc:
             raise ActionIdConflictError(exc.action_id) from exc
         except PersistentSessionNotFoundError as exc:

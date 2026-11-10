@@ -5,6 +5,7 @@ from .character import CharacterProfile
 from .game_state import GameState, InventoryItem, NPCState, PlayerState, SceneState, StoryPhase
 from .parsed_action import ActionType, ParsedAction
 from .player_action import ActionMode, InputType, PlayerAction
+from .player_view import NPCPublicStateView, PlayerIdentityView, PlayerViewState
 from .story import DialogueLine, EventProposal, SpeakerType, StoryProposal
 
 __all__ = [
@@ -21,9 +22,12 @@ __all__ = [
     "InventoryItem",
     "NarrativeAIResponse",
     "NPCState",
+    "NPCPublicStateView",
     "ParsedAction",
     "PlayerAction",
+    "PlayerIdentityView",
     "PlayerState",
+    "PlayerViewState",
     "SceneState",
     "SpeakerType",
     "StoryPhase",

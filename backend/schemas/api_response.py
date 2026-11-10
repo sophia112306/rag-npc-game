@@ -4,8 +4,8 @@ from uuid import UUID, uuid4
 from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-from .game_state import GameState
 from .parsed_action import ParsedAction
+from .player_view import PlayerViewState
 from .story import StoryProposal
 
 
@@ -47,6 +47,6 @@ class GameTurnResponse(BaseModel):
     turn_number: int = Field(..., ge=0)
     parsed_action: ParsedAction
     story: StoryProposal
-    state: GameState
+    state: PlayerViewState
     narrative: Optional[NarrativeAIResponse] = None
     available_endings: List[str] = Field(default_factory=list, description="當前可選結局清單")
