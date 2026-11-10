@@ -66,6 +66,17 @@ SCENES: dict[str, SceneDefinition] = {
         canon_status="confirmed",
         allowed_destinations=(),
     ),
+    "lieyi_plains": SceneDefinition(
+        scene_id="lieyi_plains",
+        region_name="烈燚原",
+        display_name="烈燚原",
+        subtitle="暫定火焰場景",
+        description="依使用者參考設計建立的火柱、祭壇與熔流原野；正式世界設定仍待團隊確認。",
+        background_url="/game/scenes/lieyi-plains-v1.png",
+        horizon_url="/game/scenes/lieyi-plains-v1.png",
+        canon_status="provisional",
+        allowed_destinations=(),
+    ),
 }
 
 
