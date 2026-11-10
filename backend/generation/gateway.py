@@ -69,6 +69,10 @@ class ModelGatewayPermanentError(RuntimeError):
     """A configuration or request failure that should not be retried."""
 
 
+class ModelGatewayResponseRejectedError(ModelGatewayPermanentError):
+    """A refusal or safety block that should fail safely without a retry."""
+
+
 class ModelGateway(Protocol):
     """Interface B's external model adapter must implement."""
 

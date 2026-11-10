@@ -11,6 +11,7 @@ from backend.generation.gateway import (
     GenerationBudget,
     ModelGateway,
     ModelGatewayPermanentError,
+    ModelGatewayResponseRejectedError,
     ModelGatewayTransientError,
     ModelStoryOutput,
     ModelTurnRequest,
@@ -126,6 +127,10 @@ class GatewayStoryPlanner:
                 failure_code = "model_timeout"
             except ModelGatewayTransientError:
                 failure_code = "model_unavailable"
+            except ModelGatewayResponseRejectedError as exc:
+                raise StoryGenerationUnavailableError(
+                    "model_response_rejected", attempts
+                ) from exc
             except ModelGatewayPermanentError as exc:
                 raise StoryGenerationUnavailableError("model_configuration_error", attempts) from exc
             except ValidationError:

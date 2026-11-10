@@ -12,6 +12,7 @@ from backend.generation.gateway import (
     ModelTurnRequest,
 )
 from backend.generation.http_gateway import HttpModelGateway
+from backend.generation.openai_compatible_gateway import OpenAICompatibleChatGateway
 from backend.schemas.content import NPCGenerationContext
 from backend.schemas.parsed_action import ParsedAction
 
@@ -109,3 +110,32 @@ def test_external_gateway_is_opt_in(monkeypatch) -> None:
     monkeypatch.delenv("MODEL_GATEWAY_URL", raising=False)
 
     assert build_story_planner_from_env(object()) is None
+
+
+def test_config_builds_openai_compatible_gateway(monkeypatch) -> None:
+    monkeypatch.setenv("MODEL_GATEWAY_PROVIDER", "openai_compatible")
+    monkeypatch.setenv("MODEL_GATEWAY_URL", "https://model.example/v1")
+    monkeypatch.setenv("MODEL_GATEWAY_MODEL", "school-model")
+    monkeypatch.setenv("MODEL_GATEWAY_RESPONSE_FORMAT", "json_object")
+
+    planner = build_story_planner_from_env(object())
+
+    assert planner is not None
+    assert isinstance(planner._gateway, OpenAICompatibleChatGateway)
+
+
+def test_openai_compatible_config_requires_model(monkeypatch) -> None:
+    monkeypatch.setenv("MODEL_GATEWAY_PROVIDER", "openai_compatible")
+    monkeypatch.setenv("MODEL_GATEWAY_URL", "https://model.example/v1")
+    monkeypatch.delenv("MODEL_GATEWAY_MODEL", raising=False)
+
+    with pytest.raises(ValueError, match="MODEL_GATEWAY_MODEL"):
+        build_story_planner_from_env(object())
+
+
+def test_config_rejects_unknown_gateway_provider(monkeypatch) -> None:
+    monkeypatch.setenv("MODEL_GATEWAY_PROVIDER", "unknown")
+    monkeypatch.setenv("MODEL_GATEWAY_URL", "https://model.example/v1")
+
+    with pytest.raises(ValueError, match="MODEL_GATEWAY_PROVIDER"):
+        build_story_planner_from_env(object())

@@ -85,17 +85,20 @@
 - 加入結構驗證、逾時、最多 1～3 次有限嘗試、暫時／永久 HTTP 錯誤分類及失敗 503 回復。
 - 外部模型失敗時不增加回合、不建立 ActionRecord，也不留下部分狀態。
 - 加入 opt-in HTTP adapter 與環境變數；未設定 `MODEL_GATEWAY_URL` 時不呼叫外部服務。
+- 新增 OpenAI 相容 Chat Completions adapter，可用環境變數選擇模型，支援 strict JSON schema 與 JSON object fallback；原本 B 的自訂契約 adapter 繼續保留。
+- 模型 system prompt 明確隔離玩家指令、未授權秘密、缺失核心設定與尚未核准的客觀結果。
 - 模型可生成目標 NPC 的主觀台詞與事件提案；後端固定說話者身分，客觀效果仍只用核准事件的確定性系統敘事。
 - 新增 `/api/capabilities`，前端會明確顯示「開發替身」或「AI 動態」。
 - B 的完整 HTTP 契約記錄於 `docs/MODEL_GATEWAY_CONTRACT.md`。
 
 ## M3 目前驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：41 passed。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：70 passed（目前全套；含後續 M4、語音與 OpenAI 相容 adapter 回歸測試）。
 - 格式錯誤可有限修正，timeout 達上限後停止，永久設定錯誤不重試。
 - fake Gateway 的動態台詞已通過完整 API 流程，玩家端不再顯示開發替身。
 - 外部模型失敗的 503、Retry-After、狀態不推進均有自動化測試。
 - HTTP 408／429／5xx 與 4xx 分類、Bearer header、授權 context payload 均有測試。
+- OpenAI 相容 `/v1/chat/completions` request、模型名稱、Bearer token、回應解包、strict schema、JSON fallback、拒絕、截斷及 content filter 均有自動化測試。
 - `npm run build`：Next.js、TypeScript 與全部既有 routes 通過 production build。
 - 尚未使用 B 的真實服務做延遲、角色一致性、RAG 召回與多回合品質驗收，因此 M3 不記為 100%。
 
@@ -132,8 +135,8 @@
 ## 已知限制
 
 - M1 的 `minglin` 起始場景是為沿用現有可玩前端的暫時整合值，不視為最終世界觀定案。
-- 真實 AI、RAG、自動記憶寫入、STT/TTS 尚未接入。
-- 真實 ModelGateway 端點尚未提供；目前程式可接入，但預設仍為開發替身。
+- 真實 AI、RAG 與外部 STT/TTS 尚未接入；NPC 互動／目擊記憶已由後端依核准結果自動寫入。
+- 真實 ModelGateway 端點、模型名稱與認證尚未提供；目前可直接接 B 的自訂契約或 OpenAI 相容服務，但預設仍為開發替身。
 - 預設 `DevelopmentStoryPlanner` 不產生事件；要看到真正動態內容仍需接入 B 的 ModelGateway／RAG。
 - 目前只有維達利亞的前端公開原型資料；私有角色設定、正式來源、初始知識與秘密解鎖條件仍待團隊提供。
 - 目前白名單為 `transfer_item`、`establish_commitment`、`offer_quest`；關係、線索、任務接受／完成、固定事件與結局效果仍需依 C 的正式介面加入。
@@ -147,5 +150,5 @@
 
 ## 下一步
 
-1. B 提供正式 URL、認證方式、模型／RAG 能力後完成 M3 live 驗收與角色品質案例。
+1. 團隊提供正式 provider、URL、模型名稱與認證方式，先完成無 RAG 的 M3 live 生成驗收；B 提供 RAG 後再驗收知識邊界、召回與角色品質案例。
 2. C 確認任務接受／完成、關係、固定事件與結局操作後再擴充白名單；不自行改寫現有規則語意。

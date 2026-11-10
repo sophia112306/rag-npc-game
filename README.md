@@ -30,7 +30,17 @@ python3.12 -m venv .venv
 
 可用 `DATABASE_URL` 改變資料庫位置，例如 `sqlite+aiosqlite:////absolute/path/game.db`。
 
-外部模型是選用且預設關閉。可複製根目錄 [`.env.example`](.env.example) 設定 `MODEL_GATEWAY_URL`；HTTP 格式與 B 需確認的項目見 [`docs/MODEL_GATEWAY_CONTRACT.md`](docs/MODEL_GATEWAY_CONTRACT.md)。只設定 shell／部署環境變數才會生效，程式不會自動讀取或提交本機 `.env`。
+外部模型是選用且預設關閉。後端同時支援 B 的自訂 HTTP 契約與 OpenAI 相容 Chat Completions（可接雲端 OpenAI 或校內 vLLM）。例如在啟動後端前設定：
+
+```bash
+export MODEL_GATEWAY_PROVIDER=openai_compatible
+export MODEL_GATEWAY_URL=https://api.openai.com/v1
+export MODEL_GATEWAY_MODEL='<由團隊選定的模型名稱>'
+export MODEL_GATEWAY_API_KEY='<本機金鑰>'
+./.venv/bin/uvicorn backend.main:app --reload --port 8300
+```
+
+程式不會替團隊選定模型，也不會自動讀取或提交本機 `.env`。未設定 URL 時仍使用「開發替身」；完整格式、JSON schema fallback 與 B 需確認的項目見 [`docs/MODEL_GATEWAY_CONTRACT.md`](docs/MODEL_GATEWAY_CONTRACT.md)。
 
 前端：
 
@@ -60,7 +70,7 @@ npm run dev
 
 同一個 `action_id`、同一內容重送會回傳原結果；同 ID 換成不同內容或提交過期的 `expected_state_version` 會得到 HTTP 409。Session、狀態、對話、核准事件與完整回應會以單一交易保存，後端重啟後仍可接續。
 
-玩家 API 只回傳 `PlayerViewState`，不包含角色私有設定、NPC 關係數值、未解鎖知識或私人記憶。後端已建立 WorldCanon、角色設定、KnowledgeRecord 與 MemoryRecord 結構；NPC 生成背景會依 NPC、Session、解鎖狀態和可用回合過濾。這些結構尚未接到 B 的模型／RAG 服務。
+玩家 API 只回傳 `PlayerViewState`，不包含角色私有設定、NPC 關係數值、未解鎖知識或私人記憶。後端已建立 WorldCanon、角色設定、KnowledgeRecord 與 MemoryRecord 結構；NPC 生成背景會依 NPC、Session、解鎖狀態和可用回合過濾。這些結構已能送入 ModelGateway，但尚未用 B 的真實模型／RAG 服務驗收。
 
 未受信任的 `StoryProposal` 會先通過固定操作白名單。目前第一個可執行操作是 `transfer_item`：後端確認行動者、接收者及實際持有權後才更新狀態。不存在的物品、角色或冒用他人物品會整件拒絕；核准／拒絕紀錄只存後端，玩家只會看見已成立且可公開的事件與最終敘事。
 

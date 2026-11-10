@@ -8,7 +8,11 @@ from uuid import uuid4
 import pytest
 
 from backend.content.characters import CHARACTER_PROFILES
-from backend.generation.gateway import ModelGatewayPermanentError, ModelTurnRequest
+from backend.generation.gateway import (
+    ModelGatewayPermanentError,
+    ModelGatewayResponseRejectedError,
+    ModelTurnRequest,
+)
 from backend.generation.planner import GatewayStoryPlanner, StoryGenerationUnavailableError
 from backend.schemas.content import NPCGenerationContext
 from backend.schemas.game_state import GameState, PlayerState
@@ -145,5 +149,19 @@ async def test_permanent_gateway_error_is_not_retried() -> None:
         await planner.propose(action, parsed, state)
 
     assert error.value.code == "model_configuration_error"
+    assert error.value.attempts == 1
+    assert len(gateway.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_refused_model_response_is_not_reported_as_configuration_error() -> None:
+    gateway = SequenceGateway(ModelGatewayResponseRejectedError("content filter"))
+    planner = GatewayStoryPlanner(gateway, FixedContextProvider(), max_attempts=3)
+    action, parsed, state = make_inputs()
+
+    with pytest.raises(StoryGenerationUnavailableError) as error:
+        await planner.propose(action, parsed, state)
+
+    assert error.value.code == "model_response_rejected"
     assert error.value.attempts == 1
     assert len(gateway.requests) == 1
