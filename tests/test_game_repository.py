@@ -136,6 +136,14 @@ async def test_same_action_id_with_different_content_is_rejected(repository_cont
         )
 
 
+def test_story_choice_is_part_of_idempotency_digest() -> None:
+    first = make_action("story-choice-digest")
+    first.story_choice_id = "investigate_life_spring"
+    second = first.model_copy(update={"story_choice_id": "investigate_rune_grove"})
+
+    assert action_request_digest(first) != action_request_digest(second)
+
+
 @pytest.mark.asyncio
 async def test_stale_version_does_not_create_a_second_turn(repository_context) -> None:
     repository, session_factory, _database_url = repository_context

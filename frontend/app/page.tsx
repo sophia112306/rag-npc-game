@@ -5,13 +5,14 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import MinglinGame, { interactWithNpc, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP } from "../components/MinglinGame";
 import {
   ApiRequestError,
+  DEFAULT_SCENE_VISUAL_PROFILE,
   GAME_SESSION_STORAGE_KEY,
   requestJson,
+  resolveSceneImage,
   type Capabilities,
   type GameStateSummary,
   type GameTurnResponse,
   type PlayerChoice,
-  type PlayerQuest,
   type PlayerScene,
 } from "../lib/game-api";
 
@@ -40,6 +41,7 @@ type PendingAction = {
   targetNpcId: string | null;
   actionMode: PlayerChoice["action_mode"];
   destinationSceneId: string | null;
+  storyChoiceId: string | null;
   expectedStateVersion: number;
 };
 
@@ -76,6 +78,7 @@ const previewScene: PlayerScene = {
   description: "維達利亞接見旅人的林間議會庭。",
   background_url: "/game/forest-council.png",
   horizon_url: "/game/forest-eye-backdrop.png",
+  visual_profile: DEFAULT_SCENE_VISUAL_PROFILE,
   canon_status: "confirmed",
 };
 
@@ -101,6 +104,8 @@ export default function Home() {
   const [turnNumber, setTurnNumber] = useState(0);
   const [stateVersion, setStateVersion] = useState(1);
   const [scene, setScene] = useState<PlayerScene>(previewScene);
+  const [sceneImageUrl, setSceneImageUrl] = useState(previewScene.background_url);
+  const [sceneImageStatus, setSceneImageStatus] = useState<"queued" | "processing" | "succeeded" | "fallback">("fallback");
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
   const [questLabel, setQuestLabel] = useState("與維達利亞交談");
   const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
@@ -124,6 +129,23 @@ export default function Home() {
       window.speechSynthesis?.cancel();
     };
   }, []);
+
+  useEffect(() => {
+    if (!ready || !sessionId) return;
+    let current = true;
+    setSceneImageUrl(scene.background_url);
+    setSceneImageStatus("queued");
+    void resolveSceneImage(sessionId, stateVersion, () => current)
+      .then((job) => {
+        if (!current || !job || job.scene_id !== scene.scene_id) return;
+        setSceneImageStatus(job.status);
+        if (job.image_url) setSceneImageUrl(job.image_url);
+      })
+      .catch(() => {
+        if (current) setSceneImageStatus("fallback");
+      });
+    return () => { current = false; };
+  }, [ready, scene.background_url, scene.scene_id, sessionId, stateVersion]);
 
   useEffect(() => {
     if (dialogueOpen) endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -159,11 +181,8 @@ export default function Home() {
       ]);
       setProfile(character);
       setGenerationMode(capabilities.generation_mode);
-      const [quests, choices] = await Promise.all([
-        requestJson<PlayerQuest[]>(`/api/game/${id}/quests`),
-        requestJson<PlayerChoice[]>(`/api/game/${id}/choices`),
-      ]);
-      setQuestLabel(quests[0] ? `${quests[0].status === "offered" ? "任務提議" : "目前任務"}：${quests[0].title}` : "與維達利亞交談");
+      const choices = await requestJson<PlayerChoice[]>(`/api/game/${id}/choices`);
+      setQuestLabel(`故事進度：${state.story_progress.chapter_title}`);
       setPlayerChoices(choices);
       setTurnNumber(state.turn_count);
       setStateVersion(state.state_version);
@@ -269,6 +288,7 @@ export default function Home() {
       retryingPending ? pending.targetNpcId : "vidalia",
       retryingPending ? pending.actionMode : "dialogue",
       retryingPending ? pending.destinationSceneId : null,
+      retryingPending ? pending.storyChoiceId : null,
     );
   }
 
@@ -279,6 +299,7 @@ export default function Home() {
       choice.target_npc_id,
       choice.action_mode,
       choice.destination_scene_id,
+      choice.choice_id,
     );
   }
 
@@ -288,6 +309,7 @@ export default function Home() {
     targetNpcId: string | null,
     actionMode: PlayerChoice["action_mode"],
     destinationSceneId: string | null,
+    storyChoiceId: string | null,
   ) {
     if (!text || !ready || busy) return;
 
@@ -297,9 +319,9 @@ export default function Home() {
     setError("");
     setMessages((current) => [...current, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }]);
     const pending = pendingActionRef.current;
-    const canRetryPending = pending?.text === text && pending.inputType === actionInputType && pending.targetNpcId === targetNpcId && pending.actionMode === actionMode && pending.destinationSceneId === destinationSceneId && pending.expectedStateVersion === stateVersion;
+    const canRetryPending = pending?.text === text && pending.inputType === actionInputType && pending.targetNpcId === targetNpcId && pending.actionMode === actionMode && pending.destinationSceneId === destinationSceneId && pending.storyChoiceId === storyChoiceId && pending.expectedStateVersion === stateVersion;
     const actionId = canRetryPending ? pending.actionId : window.crypto.randomUUID();
-    pendingActionRef.current = { actionId, text, inputType: actionInputType, targetNpcId, actionMode, destinationSceneId, expectedStateVersion: stateVersion };
+    pendingActionRef.current = { actionId, text, inputType: actionInputType, targetNpcId, actionMode, destinationSceneId, storyChoiceId, expectedStateVersion: stateVersion };
 
     try {
       const turn = await requestJson<GameTurnResponse>("/api/game/turn", {
@@ -313,6 +335,7 @@ export default function Home() {
           target_npc_id: targetNpcId,
           action_mode: actionMode,
           destination_scene_id: destinationSceneId,
+          story_choice_id: storyChoiceId,
           expected_state_version: stateVersion,
         }),
       });
@@ -320,12 +343,9 @@ export default function Home() {
       setTurnNumber(turn.turn_number);
       setStateVersion(turn.state.state_version);
       setScene(turn.state.current_scene);
+      setQuestLabel(`故事進度：${turn.state.story_progress.chapter_title}`);
       try {
-        const [quests, choices] = await Promise.all([
-          requestJson<PlayerQuest[]>(`/api/game/${sessionId}/quests`),
-          requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`),
-        ]);
-        setQuestLabel(quests[0] ? `${quests[0].status === "offered" ? "任務提議" : "目前任務"}：${quests[0].title}` : "與維達利亞交談");
+        const choices = await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`);
         setPlayerChoices(choices);
       } catch { /* The committed turn remains valid if the optional quest refresh fails. */ }
       const nextMessages: ChatMessage[] = [...messages, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }, ...turn.story.dialogue.map((line) => ({
@@ -381,7 +401,7 @@ export default function Home() {
   return (
     <main className="game-page">
       <section className="map-stage" aria-label="斜俯視的鳴霖遊戲地圖">
-        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}`} backgroundUrl={scene.background_url} paused={dialogueOpen || helpOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpc} onInteract={openDialogue} onZoomChange={setMapZoom} />}
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} paused={dialogueOpen || helpOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpc} onInteract={openDialogue} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
 
         <header className="location-banner" aria-label="目前場景">
@@ -391,7 +411,7 @@ export default function Home() {
             <path d="M36 3l6 27 27 6-27 6-6 27-6-27L3 36l27-6L36 3Z" stroke="currentColor" strokeWidth="1.7" />
             <path d="M36 22l4 10 10 4-10 4-4 10-4-10-10-4 10-4 4-10Z" fill="currentColor" />
           </svg>
-          <div className="location-copy"><strong>{scene.region_name}</strong><span>{scene.display_name} · {scene.subtitle}</span></div>
+          <div className="location-copy"><strong>{scene.region_name}</strong><span>{scene.display_name} · {scene.subtitle} · {sceneImageStatus === "succeeded" ? "生成場景" : sceneImageStatus === "fallback" ? "版本化場景" : "場景生成中"}</span></div>
           <span className="location-ornament" aria-hidden="true">✧</span>
         </header>
 

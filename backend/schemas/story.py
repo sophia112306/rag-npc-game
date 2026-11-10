@@ -33,6 +33,7 @@ class OperationType(str, Enum):
     ESTABLISH_COMMITMENT = "establish_commitment"
     OFFER_QUEST = "offer_quest"
     CHANGE_SCENE = "change_scene"
+    ADVANCE_STORY = "advance_story"
 
 
 class TransferItemOperation(BaseModel):
@@ -80,13 +81,24 @@ class ChangeSceneOperation(BaseModel):
 
     operation_type: Literal[OperationType.CHANGE_SCENE] = OperationType.CHANGE_SCENE
     destination_scene_id: str = Field(..., min_length=1, max_length=100)
+    story_choice_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class AdvanceStoryOperation(BaseModel):
+    """Advance only through an author-bounded choice available in current state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation_type: Literal[OperationType.ADVANCE_STORY] = OperationType.ADVANCE_STORY
+    story_choice_id: str = Field(..., min_length=1, max_length=100)
 
 
 ProposedOperation = Annotated[
     TransferItemOperation
     | EstablishCommitmentOperation
     | OfferQuestOperation
-    | ChangeSceneOperation,
+    | ChangeSceneOperation
+    | AdvanceStoryOperation,
     Field(discriminator="operation_type"),
 ]
 

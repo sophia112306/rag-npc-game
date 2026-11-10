@@ -1,5 +1,6 @@
-"""Build player-visible shortcuts from authoritative state and scene data."""
+"""Build player-visible shortcuts from authoritative story and scene data."""
 
+from backend.content.demo_story import available_demo_story_choices
 from backend.content.scenes import travel_destinations
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import ActionMode
@@ -12,6 +13,12 @@ def build_player_choices(
     quests: list[PlayerQuestView],
 ) -> list[PlayerChoice]:
     """Return a small contextual set; movement comes from the scene graph."""
+
+    story_choices = available_demo_story_choices(state)
+    if story_choices and not (
+        quests and state.story_progress.node_id == "minglin_arrival"
+    ):
+        return [choice.to_player_choice() for choice in story_choices]
 
     travel = _travel_choices(state.current_scene_id)
     dialogue_limit = max(1, 4 - len(travel))

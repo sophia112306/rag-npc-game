@@ -1,20 +1,27 @@
 """Game endpoints exposed to the frontend."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.generation.planner import StoryGenerationUnavailableError
+from backend.generation.scene_image_jobs import (
+    SceneImageCoordinator,
+    SceneImageJobNotFoundError,
+)
 from backend.orchestration.game_orchestrator import (
     ActionIdConflictError,
     GameOrchestrator,
     SessionNotFoundError,
     StateVersionConflictError,
+    StoryChoiceMismatchError,
+    StoryChoiceUnavailableError,
 )
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.player_action import PlayerAction
 from backend.schemas.player_choice import PlayerChoice
 from backend.schemas.player_view import PlayerViewState, project_player_view
 from backend.schemas.progression import PlayerQuestView
+from backend.schemas.scene_image import EnqueueSceneImageRequest, SceneImageJobView
 
 
 class StartGameRequest(BaseModel):
@@ -32,6 +39,10 @@ def get_orchestrator(request: Request) -> GameOrchestrator:
     """Return the database-backed orchestrator configured by the app lifespan."""
 
     return request.app.state.game_orchestrator
+
+
+def get_scene_image_coordinator(request: Request) -> SceneImageCoordinator:
+    return request.app.state.scene_image_coordinator
 
 
 @router.post(
@@ -86,6 +97,16 @@ async def submit_player_action(
                 "message": str(exc),
                 "action_id": str(exc.action_id),
             },
+        ) from exc
+    except StoryChoiceUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "STORY_CHOICE_UNAVAILABLE", "message": str(exc)},
+        ) from exc
+    except StoryChoiceMismatchError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "STORY_CHOICE_MISMATCH", "message": str(exc)},
         ) from exc
     except StoryGenerationUnavailableError as exc:
         raise HTTPException(
@@ -156,4 +177,62 @@ async def get_game_state(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "SESSION_NOT_FOUND", "message": str(exc)},
+        ) from exc
+
+
+@router.post(
+    "/{session_id}/scene-image",
+    response_model=SceneImageJobView,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Enqueue the current public scene image",
+)
+async def enqueue_scene_image(
+    session_id: str,
+    request: EnqueueSceneImageRequest,
+    background_tasks: BackgroundTasks,
+    orchestrator: GameOrchestrator = Depends(get_orchestrator),
+    coordinator: SceneImageCoordinator = Depends(get_scene_image_coordinator),
+) -> SceneImageJobView:
+    """Create a deduplicated image job only after the state is committed."""
+
+    try:
+        state = await orchestrator.get_state(session_id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "SESSION_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    if request.expected_state_version != state.state_version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "STATE_VERSION_CONFLICT",
+                "message": "Scene image request does not match the current state version.",
+                "expected_state_version": request.expected_state_version,
+                "actual_state_version": state.state_version,
+            },
+        )
+
+    job = await coordinator.enqueue(state)
+    if job.status == "queued":
+        background_tasks.add_task(coordinator.process, job.job_id)
+    return job
+
+
+@router.get(
+    "/{session_id}/scene-image/{job_id}",
+    response_model=SceneImageJobView,
+    summary="Get scene image job status",
+)
+async def get_scene_image_job(
+    session_id: str,
+    job_id: str,
+    coordinator: SceneImageCoordinator = Depends(get_scene_image_coordinator),
+) -> SceneImageJobView:
+    try:
+        return await coordinator.get_job(session_id, job_id)
+    except SceneImageJobNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "SCENE_IMAGE_JOB_NOT_FOUND", "message": str(exc)},
         ) from exc

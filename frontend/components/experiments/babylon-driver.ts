@@ -15,6 +15,7 @@ import {
   VertexData,
   TransformNode,
 } from "@babylonjs/core";
+import type { SceneVisualProfile } from "../../lib/game-api";
 import { EYE_HEIGHT, NPC, pillars, RELIC, trees, type Pick, type TrialDriver } from "./world";
 
 export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
@@ -248,8 +249,55 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   relicLight.intensity = 0.8;
   relicLight.range = 4;
 
+  function propGroup(
+    meshName: string,
+  ): SceneVisualProfile["prop_groups"][number] | null {
+    if (/^(tree trunk|leaf canopy|lower leaves)/.test(meshName)) return "forest";
+    if (/^(path slab|moss between slabs|relic branch stone)/.test(meshName)) return "path";
+    if (/^(council dais|etched ring|radial inscription|council edge rock)/.test(meshName)) return "council";
+    if (/^pillar/.test(meshName)) return "pillars";
+    if (/^(forest spring|spring rock)/.test(meshName)) return "spring";
+    return null;
+  }
+
+  function setSceneProfile(profile: SceneVisualProfile) {
+    const clear = Color3.FromHexString(profile.clear_color);
+    scene.clearColor = new Color4(clear.r, clear.g, clear.b, 1);
+    scene.fogColor = Color3.FromHexString(profile.fog_color);
+    scene.fogDensity = profile.fog_density;
+    scene.ambientColor = Color3.FromHexString(profile.ambient_color);
+
+    groundMat.diffuseColor = Color3.FromHexString(profile.ground_color);
+    groundMat.diffuseTexture = profile.use_ground_texture ? groundTexture : null;
+    sky.diffuse = Color3.FromHexString(profile.sky_color);
+    sky.groundColor = Color3.FromHexString(profile.sky_ground_color);
+    sky.intensity = profile.sky_intensity;
+    moon.diffuse = Color3.FromHexString(profile.key_light_color);
+    moon.intensity = profile.key_light_intensity;
+    goldLight.diffuse = Color3.FromHexString(profile.accent_light_color);
+    goldLight.intensity = profile.accent_light_intensity;
+    backgroundMat.emissiveColor = Color3.FromHexString(profile.backdrop_emissive_color);
+
+    stone.diffuseColor = Color3.FromHexString(profile.surface_color);
+    stoneLight.diffuseColor = Color3.FromHexString(profile.surface_light_color);
+    stoneDark.diffuseColor = Color3.FromHexString(profile.surface_dark_color);
+    moss.diffuseColor = Color3.FromHexString(profile.organic_color);
+    bark.diffuseColor = Color3.FromHexString(profile.organic_color);
+    rune.diffuseColor = Color3.FromHexString(profile.rune_color);
+    rune.emissiveColor = Color3.FromHexString(profile.rune_emissive_color);
+    water.diffuseColor = Color3.FromHexString(profile.liquid_color);
+    water.emissiveColor = Color3.FromHexString(profile.liquid_emissive_color);
+
+    const visibleGroups = new Set(profile.prop_groups);
+    for (const mesh of scene.meshes) {
+      const group = propGroup(mesh.name);
+      if (group) mesh.setEnabled(visibleGroups.has(group));
+    }
+  }
+
   const started = performance.now();
   return {
+    setSceneProfile,
     setBackdrop(url) {
       if (activeBackgroundUrl === url) {
         if (backdropLoad && backdropLoad.url !== url) {
@@ -263,7 +311,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       const request = ++backdropRequest;
       let nextTexture: Texture;
       const promise = new Promise<void>((resolve, reject) => {
-        nextTexture = new Texture(url, scene, false, false, Texture.TRILINEAR_SAMPLINGMODE, () => {
+        nextTexture = new Texture(url, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE, () => {
           if (disposed || request !== backdropRequest) {
             nextTexture.dispose();
             resolve();

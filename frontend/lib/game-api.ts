@@ -1,3 +1,57 @@
+export type SceneVisualProfile = {
+  profile_id: string;
+  clear_color: string;
+  fog_color: string;
+  fog_density: number;
+  ambient_color: string;
+  ground_color: string;
+  use_ground_texture: boolean;
+  sky_color: string;
+  sky_ground_color: string;
+  sky_intensity: number;
+  key_light_color: string;
+  key_light_intensity: number;
+  accent_light_color: string;
+  accent_light_intensity: number;
+  backdrop_emissive_color: string;
+  surface_color: string;
+  surface_light_color: string;
+  surface_dark_color: string;
+  organic_color: string;
+  rune_color: string;
+  rune_emissive_color: string;
+  liquid_color: string;
+  liquid_emissive_color: string;
+  prop_groups: Array<"forest" | "path" | "council" | "pillars" | "spring">;
+};
+
+export const DEFAULT_SCENE_VISUAL_PROFILE: SceneVisualProfile = {
+  profile_id: "minglin_council",
+  clear_color: "#142e38",
+  fog_color: "#29525c",
+  fog_density: 0.011,
+  ambient_color: "#2e3b45",
+  ground_color: "#b5c2b6",
+  use_ground_texture: true,
+  sky_color: "#d1e5e3",
+  sky_ground_color: "#2e4038",
+  sky_intensity: 0.72,
+  key_light_color: "#c7e3e0",
+  key_light_intensity: 0.85,
+  accent_light_color: "#ffe0b0",
+  accent_light_intensity: 0.26,
+  backdrop_emissive_color: "#666b66",
+  surface_color: "#92958a",
+  surface_light_color: "#aaafa0",
+  surface_dark_color: "#657970",
+  organic_color: "#537e65",
+  rune_color: "#668f88",
+  rune_emissive_color: "#183d39",
+  liquid_color: "#2d9297",
+  liquid_emissive_color: "#1e626c",
+  prop_groups: ["forest", "path", "council", "pillars", "spring"],
+};
+
 export type PlayerScene = {
   scene_id: string;
   region_name: string;
@@ -6,6 +60,7 @@ export type PlayerScene = {
   description: string;
   background_url: string;
   horizon_url: string;
+  visual_profile: SceneVisualProfile;
   canon_status: "confirmed" | "provisional";
 };
 
@@ -15,6 +70,13 @@ export type GameStateSummary = {
   updated_at: string;
   current_scene_id: string;
   current_scene: PlayerScene;
+  story_progress: {
+    arc_id: string;
+    node_id: string;
+    chapter_title: string;
+    mode: "demo_fallback";
+    public_clue_ids: string[];
+  };
 };
 
 export type GameTurnResponse = {
@@ -36,6 +98,47 @@ export type Capabilities = {
   generation_mode: "rule_based" | "external_model";
   dynamic_dialogue: boolean;
 };
+
+export type SceneImageJob = {
+  job_id: string;
+  session_id: string;
+  scene_id: string;
+  story_node_id: string;
+  state_version: number;
+  prompt_fingerprint: string;
+  provider: string;
+  status: "queued" | "processing" | "succeeded" | "fallback";
+  image_url: string | null;
+  attempt_count: number;
+  error_code: string | null;
+};
+
+export function enqueueSceneImage(sessionId: string, expectedStateVersion: number) {
+  return requestJson<SceneImageJob>(`/api/game/${sessionId}/scene-image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_state_version: expectedStateVersion }),
+  });
+}
+
+export function getSceneImageJob(sessionId: string, jobId: string) {
+  return requestJson<SceneImageJob>(`/api/game/${sessionId}/scene-image/${jobId}`);
+}
+
+export async function resolveSceneImage(
+  sessionId: string,
+  expectedStateVersion: number,
+  isCurrent: () => boolean,
+) {
+  let job = await enqueueSceneImage(sessionId, expectedStateVersion);
+  for (let attempt = 0; attempt < 10 && isCurrent(); attempt += 1) {
+    if (job.status === "succeeded" || job.status === "fallback") return job;
+    await new Promise((resolve) => window.setTimeout(resolve, 750));
+    if (!isCurrent()) return null;
+    job = await getSceneImageJob(sessionId, job.job_id);
+  }
+  return isCurrent() ? job : null;
+}
 
 export type PlayerQuest = {
   quest_id: string;

@@ -13,7 +13,9 @@ from backend.database import create_async_session_factory, create_database_engin
 from backend.database.session import get_database_url
 from backend.database.repository import SqlAlchemyGameRepository
 from backend.generation.config import build_story_planner_from_env
+from backend.generation.image_gateway import ImageGateway
 from backend.generation.rule_based_planner import RuleBasedStoryPlanner
+from backend.generation.scene_image_jobs import SceneImageCoordinator
 from backend.orchestration.game_orchestrator import GameOrchestrator, StoryPlanner
 
 from .api.capabilities import router as capabilities_router
@@ -28,6 +30,7 @@ StoryPlannerFactory = Callable[[NPCContextRepository], StoryPlanner]
 def create_app(
     database_url: str | None = None,
     story_planner_factory: StoryPlannerFactory | None = None,
+    image_gateway: ImageGateway | None = None,
 ) -> FastAPI:
     """Build an application with an isolated persistence lifecycle."""
 
@@ -53,6 +56,10 @@ def create_app(
                 generation_mode = "external_model"
         application.state.database_engine = engine
         application.state.game_orchestrator = GameOrchestrator(repository, story_planner=story_planner)
+        application.state.scene_image_coordinator = SceneImageCoordinator(
+            session_factory,
+            image_gateway,
+        )
         application.state.npc_context_repository = context_repository
         application.state.generation_mode = generation_mode
         try:

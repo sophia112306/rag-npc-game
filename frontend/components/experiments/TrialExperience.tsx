@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   ApiRequestError,
+  DEFAULT_SCENE_VISUAL_PROFILE,
   GAME_SESSION_STORAGE_KEY,
   requestJson,
+  resolveSceneImage,
   type GameStateSummary,
   type GameTurnResponse,
   type PlayerChoice,
@@ -26,6 +28,7 @@ const previewScene: PlayerScene = {
   description: "維達利亞接見旅人的林間議會庭。",
   background_url: "/game/forest-council.png",
   horizon_url: "/game/forest-eye-backdrop.png",
+  visual_profile: DEFAULT_SCENE_VISUAL_PROFILE,
   canon_status: "confirmed",
 };
 
@@ -47,10 +50,12 @@ export default function TrialExperience() {
   const [storyLine, setStoryLine] = useState("「旅人，請看看四周。這裡留下的光，或許能告訴我們泉水發生了什麼。」");
   const [turnBusy, setTurnBusy] = useState(false);
   const [turnError, setTurnError] = useState("");
+  const [sceneImageStatus, setSceneImageStatus] = useState<"queued" | "processing" | "succeeded" | "fallback">("fallback");
   const currentScene = gameState?.current_scene ?? previewScene;
   const title = currentScene.display_name;
 
   function showBackdrop(scene: PlayerScene, context: "initial" | "turn" = "turn") {
+    driverRef.current?.setSceneProfile?.(scene.visual_profile);
     const load = driverRef.current?.setBackdrop?.(scene.horizon_url);
     if (!load) return;
     void load.catch(() => {
@@ -93,6 +98,26 @@ export default function TrialExperience() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!sessionId || !gameState) return;
+    let current = true;
+    setSceneImageStatus("queued");
+    void resolveSceneImage(sessionId, gameState.state_version, () => current)
+      .then((job) => {
+        if (!current || !job || job.scene_id !== sceneRef.current.scene_id) return;
+        setSceneImageStatus(job.status);
+        if (!job.image_url) return;
+        const load = driverRef.current?.setBackdrop?.(job.image_url);
+        if (load) void load.catch(() => {
+          if (current) setTurnError("生成場景載入失敗，已保留目前遠景。");
+        });
+      })
+      .catch(() => {
+        if (current) setSceneImageStatus("fallback");
+      });
+    return () => { current = false; };
+  }, [gameState?.state_version, sessionId]);
+
   async function selectStoryChoice(choice: PlayerChoice) {
     if (!sessionId || !gameState || turnBusy) return;
     setTurnBusy(true);
@@ -110,6 +135,7 @@ export default function TrialExperience() {
           target_npc_id: choice.target_npc_id,
           action_mode: choice.action_mode,
           destination_scene_id: choice.destination_scene_id,
+          story_choice_id: choice.choice_id,
           expected_state_version: gameState.state_version,
         }),
       });
@@ -341,6 +367,7 @@ export default function TrialExperience() {
         if (cancelled) { loaded.dispose(); return; }
         driver = loaded;
         driverRef.current = loaded;
+        loaded.setSceneProfile?.(sceneRef.current.visual_profile);
         const backdrop = loaded.setBackdrop?.(sceneRef.current.horizon_url);
         if (backdrop) void backdrop.catch(() => {
           const message = `無法載入${sceneRef.current.display_name}遠景；目前保留預設場景。`;
@@ -392,7 +419,8 @@ export default function TrialExperience() {
           found ? "符石的紋路已記錄。光芒仍在引導你。" : "這枚符石閃著青色微光。拖曳畫面轉頭，仔細看看它的刻痕。"}</p>
           {focus === "npc" && choices.length > 0 && <div className={styles.storyChoices} aria-label="動態行動選項">{choices.map((choice) => <button key={choice.choice_id} type="button" disabled={turnBusy} onClick={() => void selectStoryChoice(choice)}>{choice.label}</button>)}</div>}
           {turnError && <span className={styles.turnError} role="alert">{turnError}</span>}
-          <span>目前場景：{currentScene.display_name} · {currentScene.canon_status === "provisional" ? "暫定內容" : "已確認設定"}</span></div>
+          <span>故事進度：{gameState?.story_progress.chapter_title ?? "鳴霖異象"}</span>
+          <span>目前場景：{currentScene.display_name} · {currentScene.canon_status === "provisional" ? "暫定內容" : "已確認設定"} · {sceneImageStatus === "succeeded" ? "生成場景" : sceneImageStatus === "fallback" ? "版本化場景" : "場景生成中"}</span></div>
         <div className={styles.inspectActions}>{focus === "relic" && !found && <button type="button" onClick={() => controllerRef.current?.record()}>記錄符石</button>}<button type="button" onClick={() => controllerRef.current?.exit()}>結束觀察</button></div>
       </section>}
       <footer className={styles.footer}><span>點擊路面或目標，角色會沿固定路線行走；抵達對話或任務時才能拖曳轉頭</span><button type="button" onClick={() => controllerRef.current?.reset()}>回到入口 ↺</button></footer>

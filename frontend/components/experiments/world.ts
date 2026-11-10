@@ -1,3 +1,5 @@
+import type { SceneVisualProfile } from "../../lib/game-api";
+
 export const START = { x: 0, z: 8 };
 export const NPC = { x: 0, z: -8 };
 export const NPC_STOP = { x: 0, z: -3.8 };
@@ -18,6 +20,7 @@ export type Pick = { kind: "ground"; x: number; z: number } | { kind: "npc" | "r
 export type TrialDriver = {
   setView: (x: number, z: number, yaw: number, pitch: number, eyeBob?: number) => void;
   setBackdrop?: (url: string) => Promise<void>;
+  setSceneProfile?: (profile: SceneVisualProfile) => void;
   setTalking?: (talking: boolean) => void;
   pick: (clientX: number, clientY: number) => Pick;
   render: () => void;

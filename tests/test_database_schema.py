@@ -17,6 +17,7 @@ EXPECTED_TABLES = {
     "npc_goals",
     "commitments",
     "quests",
+    "scene_image_jobs",
     "world_canon",
 }
 

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -41,6 +41,26 @@ class PlayerState(BaseModel):
     player_id: str = "player_01"
     name: str = "主角"
     inventory: List[str] = Field(default_factory=list)
+
+
+class StoryProgressState(BaseModel):
+    """Persisted demo-story position kept separate from author canon."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    arc_id: str = "vita_anomaly_demo_v1"
+    node_id: str = "minglin_arrival"
+    chapter_title: str = "鳴霖異象"
+    mode: Literal["demo_fallback"] = "demo_fallback"
+    completed_choice_ids: List[str] = Field(default_factory=list)
+    public_clue_ids: List[str] = Field(default_factory=list)
+    unlocked_scene_ids: List[str] = Field(
+        default_factory=lambda: [
+            "minglin",
+            "minglin_life_spring",
+            "minglin_rune_grove",
+        ]
+    )
 
 
 class GameState(BaseModel):
@@ -85,5 +105,6 @@ class GameState(BaseModel):
     )
     
     player: PlayerState = Field(default_factory=PlayerState)
+    story_progress: StoryProgressState = Field(default_factory=StoryProgressState)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

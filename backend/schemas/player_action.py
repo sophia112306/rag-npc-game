@@ -24,5 +24,6 @@ class PlayerAction(BaseModel):
     target_npc_id: Optional[str] = Field(default=None, max_length=100)
     action_mode: ActionMode = ActionMode.DIALOGUE
     destination_scene_id: Optional[str] = Field(default=None, max_length=100)
+    story_choice_id: Optional[str] = Field(default=None, max_length=100)
     expected_state_version: int = Field(default=1, ge=1)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
