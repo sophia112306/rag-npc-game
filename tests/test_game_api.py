@@ -5,18 +5,14 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.api.game import get_orchestrator
-from backend.main import app
-from backend.orchestration.game_orchestrator import GameOrchestrator
+from backend.main import create_app
 
 
 @pytest.fixture
-def client() -> TestClient:
-    orchestrator = GameOrchestrator()
-    app.dependency_overrides[get_orchestrator] = lambda: orchestrator
-    with TestClient(app) as test_client:
+def client(tmp_path) -> TestClient:
+    application = create_app(f"sqlite+aiosqlite:///{tmp_path / 'api.db'}")
+    with TestClient(application) as test_client:
         yield test_client
-    app.dependency_overrides.clear()
 
 
 def start_session(client: TestClient, session_id: str = "m1-session") -> dict:
@@ -88,6 +84,19 @@ def test_repeated_action_id_does_not_advance_the_turn_twice(client: TestClient) 
     assert second.json()["state"]["turn_count"] == 1
 
 
+def test_reused_action_id_with_different_content_returns_conflict(client: TestClient) -> None:
+    state = start_session(client, "digest-conflict-session")
+    payload = action_payload(state["session_id"])
+    first = client.post("/api/game/turn", json=payload)
+    assert first.status_code == 200
+
+    changed_payload = {**payload, "message": "這是不同的內容"}
+    conflict = client.post("/api/game/turn", json=changed_payload)
+
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["code"] == "ACTION_ID_CONFLICT"
+
+
 def test_stale_state_version_returns_conflict(client: TestClient) -> None:
     state = start_session(client, "version-session")
     first = client.post("/api/game/turn", json=action_payload(state["session_id"]))
@@ -115,3 +124,24 @@ def test_local_frontend_origin_passes_cors_preflight(client: TestClient) -> None
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:3200"
+
+
+def test_session_and_idempotent_response_survive_app_restart(tmp_path) -> None:
+    database_url = f"sqlite+aiosqlite:///{tmp_path / 'restart.db'}"
+    payload = action_payload("restart-session")
+
+    with TestClient(create_app(database_url)) as first_client:
+        start_session(first_client, payload["session_id"])
+        first_response = first_client.post("/api/game/turn", json=payload)
+        assert first_response.status_code == 200
+        expected_response = first_response.json()
+
+    with TestClient(create_app(database_url)) as restarted_client:
+        state = restarted_client.get(f"/api/game/{payload['session_id']}/state")
+        replay = restarted_client.post("/api/game/turn", json=payload)
+
+    assert state.status_code == 200
+    assert state.json()["turn_count"] == 1
+    assert state.json()["state_version"] == 2
+    assert replay.status_code == 200
+    assert replay.json() == expected_response

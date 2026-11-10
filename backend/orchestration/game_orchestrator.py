@@ -1,9 +1,15 @@
 """Coordinate the deterministic M1 game-turn flow."""
 
-import asyncio
 from datetime import datetime, timezone
+from typing import Protocol
 from uuid import UUID
 
+from backend.database.repository import (
+    ActionIdConflictError as RepositoryActionIdConflictError,
+    PersistentSessionNotFoundError,
+    PersistentStateVersionConflictError,
+    action_request_digest,
+)
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState, PlayerState
 from backend.schemas.parsed_action import ActionType, ParsedAction
@@ -28,48 +34,44 @@ class StateVersionConflictError(RuntimeError):
         super().__init__(f"Expected state version {expected}, but the current version is {actual}")
 
 
-class InMemoryGameStateStore:
-    """M1-only state store; M2 will replace this with a transactional database."""
+class ActionIdConflictError(RuntimeError):
+    """Raised when one action ID is reused with different effective content."""
 
-    def __init__(self) -> None:
-        self._states: dict[str, GameState] = {}
-        self._turns: dict[tuple[str, UUID], GameTurnResponse] = {}
-        self._locks: dict[str, asyncio.Lock] = {}
+    def __init__(self, action_id: UUID) -> None:
+        self.action_id = action_id
+        super().__init__(f"Action '{action_id}' was already used with different content")
 
-    async def get(self, session_id: str) -> GameState | None:
-        state = self._states.get(session_id)
-        return state.model_copy(deep=True) if state else None
 
-    async def save(self, state: GameState) -> GameState:
-        self._states[state.session_id] = state.model_copy(deep=True)
-        return state.model_copy(deep=True)
+class GameRepository(Protocol):
+    """Persistence operations required by the orchestrator."""
 
-    async def get_turn(self, session_id: str, action_id: UUID) -> GameTurnResponse | None:
-        response = self._turns.get((session_id, action_id))
-        return response.model_copy(deep=True) if response else None
+    async def create_or_get_session(self, initial_state: GameState) -> GameState: ...
 
-    async def save_turn(self, action_id: UUID, response: GameTurnResponse) -> GameTurnResponse:
-        self._turns[(response.session_id, action_id)] = response.model_copy(deep=True)
-        return response.model_copy(deep=True)
+    async def get_state(self, session_id: str) -> GameState | None: ...
 
-    def lock_for(self, session_id: str) -> asyncio.Lock:
-        """Serialize turns within one in-memory session."""
+    async def get_completed_action(
+        self,
+        session_id: str,
+        action_id: UUID,
+        request_digest: str,
+    ) -> GameTurnResponse | None: ...
 
-        return self._locks.setdefault(session_id, asyncio.Lock())
+    async def commit_turn(
+        self,
+        action: PlayerAction,
+        request_digest: str,
+        response: GameTurnResponse,
+    ) -> GameTurnResponse: ...
 
 
 class GameOrchestrator:
     """Coordinate input parsing, story generation, and state updates."""
 
-    def __init__(self, state_store: InMemoryGameStateStore | None = None) -> None:
-        self._state_store = state_store or InMemoryGameStateStore()
+    def __init__(self, repository: GameRepository) -> None:
+        self._repository = repository
 
     async def start_game(self, session_id: str) -> GameState:
         """Create a deterministic initial state or resume an existing session."""
-
-        existing_state = await self._state_store.get(session_id)
-        if existing_state is not None:
-            return existing_state
 
         initial_state = GameState(
             session_id=session_id,
@@ -80,42 +82,51 @@ class GameOrchestrator:
             ),
         )
         initial_state.npc_states["vidalia"].met = True
-        return await self._state_store.save(initial_state)
+        return await self._repository.create_or_get_session(initial_state)
 
     async def process_turn(self, action: PlayerAction) -> GameTurnResponse:
         """Process one turn through the temporary integration pipeline."""
 
-        cached = await self._state_store.get_turn(action.session_id, action.action_id)
-        if cached is not None:
-            return cached
-
-        async with self._state_store.lock_for(action.session_id):
-            cached = await self._state_store.get_turn(action.session_id, action.action_id)
+        request_digest = action_request_digest(action)
+        try:
+            cached = await self._repository.get_completed_action(
+                action.session_id,
+                action.action_id,
+                request_digest,
+            )
             if cached is not None:
                 return cached
+        except RepositoryActionIdConflictError as exc:
+            raise ActionIdConflictError(exc.action_id) from exc
 
-            state = await self.get_state(action.session_id)
-            if action.expected_state_version != state.state_version:
-                raise StateVersionConflictError(action.expected_state_version, state.state_version)
+        state = await self.get_state(action.session_id)
+        if action.expected_state_version != state.state_version:
+            raise StateVersionConflictError(action.expected_state_version, state.state_version)
 
-            parsed_action = self._parse_action(action)
-            updated_state = self._apply_action(state)
-            story = self._build_placeholder_story(action, updated_state)
-            response = GameTurnResponse(
-                session_id=action.session_id,
-                turn_number=updated_state.turn_count,
-                parsed_action=parsed_action,
-                story=story,
-                state=updated_state,
-            )
+        parsed_action = self._parse_action(action)
+        updated_state = self._apply_action(state)
+        story = self._build_placeholder_story(action, updated_state)
+        response = GameTurnResponse(
+            session_id=action.session_id,
+            turn_number=updated_state.turn_count,
+            parsed_action=parsed_action,
+            story=story,
+            state=updated_state,
+        )
 
-            await self._state_store.save(updated_state)
-            return await self._state_store.save_turn(action.action_id, response)
+        try:
+            return await self._repository.commit_turn(action, request_digest, response)
+        except RepositoryActionIdConflictError as exc:
+            raise ActionIdConflictError(exc.action_id) from exc
+        except PersistentSessionNotFoundError as exc:
+            raise SessionNotFoundError(str(exc)) from exc
+        except PersistentStateVersionConflictError as exc:
+            raise StateVersionConflictError(exc.expected, exc.actual) from exc
 
     async def get_state(self, session_id: str) -> GameState:
         """Load a state snapshot from the temporary store."""
 
-        state = await self._state_store.get(session_id)
+        state = await self._repository.get_state(session_id)
         if state is None:
             raise SessionNotFoundError(f"Session '{session_id}' does not exist")
         return state

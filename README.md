@@ -1,8 +1,8 @@
 # RAG NPC Game
 
-生成式 NPC 遊戲的 A／D 整合專案。現階段 M1 已串接既有 Next.js＋Phaser 前端與 FastAPI：可以建立暫存 Session、送出文字並顯示明確標示的開發替身回覆。
+生成式 NPC 遊戲的 A／D 整合專案。現階段 M2a 已串接既有 Next.js＋Phaser 前端、FastAPI 與 SQLite：可以建立持久化 Session、送出文字並顯示明確標示的開發替身回覆。
 
-> 真實模型、RAG、持久化資料庫、NPC 私人記憶與語音服務尚未接入。開發替身不會修改背包、角色設定或遊戲規則數值。
+> 真實模型、RAG、NPC 私人記憶與語音服務尚未接入。開發替身不會修改背包、角色設定或遊戲規則數值。
 
 ## 環境
 
@@ -19,6 +19,14 @@ python3.12 -m venv .venv
 ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/uvicorn backend.main:app --reload --port 8300
 ```
+
+後端啟動時會自動執行 Alembic migration，預設資料庫為 `data/game.db`。部署或手動升級也可執行：
+
+```bash
+./.venv/bin/alembic upgrade head
+```
+
+可用 `DATABASE_URL` 改變資料庫位置，例如 `sqlite+aiosqlite:////absolute/path/game.db`。
 
 前端：
 
@@ -37,14 +45,14 @@ npm run dev
 
 前端預設呼叫 `http://localhost:8300`。需要改用其他後端時，將 `frontend/.env.example` 複製為 `.env.local` 後修改 `NEXT_PUBLIC_API_URL`。
 
-## M1 API
+## 目前 API
 
 - `GET /api/characters/{npc_id}`：玩家可見的公開角色資料
-- `POST /api/game/start`：建立或恢復記憶體 Session
+- `POST /api/game/start`：建立或恢復持久化 Session
 - `POST /api/game/turn`：提交 `action_id`、訊息與預期狀態版本
 - `GET /api/game/{session_id}/state`：取得玩家可見狀態
 
-同一個 `action_id` 在目前程序內重送不會重複增加回合；過期的 `expected_state_version` 會得到 HTTP 409。這些資料目前仍在記憶體中，重啟後會消失，M2 才會加入交易式資料庫保存。
+同一個 `action_id`、同一內容重送會回傳原結果；同 ID 換成不同內容或提交過期的 `expected_state_version` 會得到 HTTP 409。Session、狀態、對話、核准事件與完整回應會以單一交易保存，後端重啟後仍可接續。
 
 ## 驗證
 
