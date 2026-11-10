@@ -14,7 +14,10 @@ from backend.database.repository import (
     action_request_digest,
 )
 from backend.modules.proposal_resolver import ProposalResolution, ProposalResolver
-from backend.orchestration.player_choices import build_player_choices
+from backend.orchestration.player_choices import (
+    build_player_choices,
+    player_choice_action_matches,
+)
 from backend.orchestration.demo_story_director import (
     build_demo_story_proposal,
     story_choice_action_matches,
@@ -150,19 +153,38 @@ class GameOrchestrator:
 
         parsed_action = self._parse_action(action)
         if action.story_choice_id:
+            try:
+                quests = await self._repository.get_player_quests(action.session_id)
+            except PersistentSessionNotFoundError as exc:
+                raise SessionNotFoundError(str(exc)) from exc
+            player_choice = next(
+                (
+                    choice
+                    for choice in build_player_choices(state, quests)
+                    if choice.choice_id == action.story_choice_id
+                ),
+                None,
+            )
+            if player_choice is None:
+                raise StoryChoiceUnavailableError(
+                    f"Story choice '{action.story_choice_id}' is not available in the current state"
+                )
+            if not player_choice_action_matches(action, player_choice):
+                raise StoryChoiceMismatchError(
+                    f"Story choice '{action.story_choice_id}' does not match its authoritative action"
+                )
             story_choice = find_available_demo_story_choice(
                 state,
                 action.story_choice_id,
             )
-            if story_choice is None:
-                raise StoryChoiceUnavailableError(
-                    f"Story choice '{action.story_choice_id}' is not available in the current state"
+            if story_choice and story_choice_action_matches(action, story_choice):
+                proposal = build_demo_story_proposal(action, state, story_choice)
+            else:
+                proposal = await self._story_planner.propose(
+                    action,
+                    parsed_action,
+                    state.model_copy(deep=True),
                 )
-            if not story_choice_action_matches(action, story_choice):
-                raise StoryChoiceMismatchError(
-                    f"Story choice '{action.story_choice_id}' does not match its authoritative action"
-                )
-            proposal = build_demo_story_proposal(action, state, story_choice)
         else:
             proposal = await self._story_planner.propose(
                 action,

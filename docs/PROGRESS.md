@@ -98,7 +98,7 @@
 
 ## M3 目前驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：92 passed（目前全套；含 M4、語音、OpenAI 相容 adapter、規則動態、場景切換、權威故事選項與兩條 Demo 分支回歸測試）。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：97 passed（目前全套；含 M4、語音、OpenAI 相容 adapter、規則動態、場景切換、權威故事選項、舊 Session 相容與兩條 Demo 分支回歸測試）。
 - 格式錯誤可有限修正，timeout 達上限後停止，永久設定錯誤不重試。
 - fake Gateway 的動態台詞已通過完整 API 流程，玩家端不再顯示開發替身。
 - 外部模型失敗的 503、Retry-After、狀態不推進均有自動化測試。
@@ -120,11 +120,12 @@
 - 選項只包裝一般 `PlayerAction`，仍使用 `action_id`、`state_version`、resolver 與完整回合交易；自由文字輸入不受限制。
 - 新增有狀態的 Demo Story Director；玩家可由命脈之泉線索解鎖烈燚原，或由符石林取得裂隙地圖後解鎖流塵谷，兩條分支會保存不同公開線索與下一組選項。
 - `story_choice_id` 只接受當前節點可用的權威選項；竄改文字、目的地或模式會回傳 409，避免只靠前端隱藏選項。
+- 舊 Session 可能已有任務與位置、但尚無 Demo 節點；其舊版對話／旅行選項會先與後端當下發出的完整 action 比對，再走既有規則流程，不會被誤判成過期 Demo 選項。
 - 新增 `advance_story` 白名單操作；推進節點、揭露公開線索、解鎖特殊場景、換場、事件及對話沿用單一交易，後續操作失敗時不留下半個故事節點。
 
 ## M3a 驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：92 passed。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：97 passed。
 - 單元測試涵蓋回合化招呼、記憶承接、秘密隔離、任務去重、承諾及物品持有權提案。
 - API 端到端測試證明規則任務會保存，下一回合承接且不重複新增。
 - Choices API 測試涵蓋初始選項、任務後選項更新及不存在 Session 的 404；前端 TypeScript production build 通過。
@@ -185,7 +186,7 @@
 
 ## A2 驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：96 passed；涵蓋資產／Registry 完整性、合法換場、特殊路線、Scene Profile、圖片 job 去重、成功、timeout fallback、Session 隔離、migration 與跨 app 重啟承接。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：97 passed；涵蓋資產／Registry 完整性、合法換場、特殊路線、舊 Session 返回路線、Scene Profile、圖片 job 去重、成功、timeout fallback、Session 隔離、migration 與跨 app 重啟承接。
 - `npm run build`：Next.js 16.4.4、TypeScript、`/` 與 `/experiments/babylon` production build 通過。
 - Live Demo：火焰與風沙兩條分支均到達特殊場景；Headless Chrome 以 1600×913 WebGL 載入烈燚原／流塵谷，hard refresh 保持位置，無 JavaScript exception。
 - 3D live 驗收發現動態遠景 Y 軸方向不一致，已修正並重新截圖確認遠景正向。

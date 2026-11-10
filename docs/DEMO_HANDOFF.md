@@ -104,12 +104,13 @@ npm run dev
 
 ## 驗收紀錄
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：96 passed，1 個既有 Starlette deprecation warning。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：97 passed，1 個既有 Starlette deprecation warning。
 - `npm run build`：Next.js 16.4.4 production build passed。
 - Live 火焰分支：平衡議會 → 命脈之泉 → 烈燚原，重啟後 `state_version=4` 且仍在烈燚原。
 - Live 風沙分支：平衡議會 → 符石林 → 流塵谷，公開線索含 `fissure_map`，profile 為 `liuchen_dust_valley`。
 - Headless Chrome：烈燚原與流塵谷皆以 1600×913 WebGL 載入，hard refresh 後位置正確，無 JavaScript exception。
 - 實機驗收曾發現遠景上下顛倒，已由 `087e82e` 修正並重新截圖確認。
+- 舊 Session＋既有任務曾使 `travel_to_minglin` 被誤判成過期 Demo choice；已補 action 完整比對與 live 返回路線驗收。
 
 ## 穩定 commits
 

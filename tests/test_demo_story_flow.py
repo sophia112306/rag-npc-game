@@ -189,3 +189,48 @@ def test_stale_or_altered_story_choice_is_rejected_without_turn(tmp_path) -> Non
         assert altered.json()["detail"]["code"] == "STORY_CHOICE_MISMATCH"
         assert unchanged.json()["turn_count"] == 0
         assert unchanged.json()["state_version"] == 1
+
+
+def test_legacy_quest_choices_remain_clickable_in_resumed_story_state(tmp_path) -> None:
+    """Existing sessions may have a quest and location from before Demo nodes existed."""
+
+    with TestClient(
+        create_app(f"sqlite+aiosqlite:///{tmp_path / 'legacy-choice.db'}")
+    ) as client:
+        session_id = "legacy-choice"
+        state = _start(client, session_id)
+        quest = client.post(
+            "/api/game/turn",
+            json={
+                "session_id": session_id,
+                "action_id": str(uuid4()),
+                "message": "有什麼需要我幫忙的任務？",
+                "input_type": "text",
+                "target_npc_id": "vidalia",
+                "action_mode": "dialogue",
+                "destination_scene_id": None,
+                "story_choice_id": None,
+                "expected_state_version": state["state_version"],
+            },
+        ).json()
+
+        grove = _submit_choice(
+            client,
+            session_id,
+            quest["state"]["state_version"],
+            "travel_to_minglin_rune_grove",
+        )
+        returned = _submit_choice(
+            client,
+            session_id,
+            grove["state"]["state_version"],
+            "travel_to_minglin",
+        )
+
+        assert grove["state"]["current_scene_id"] == "minglin_rune_grove"
+        assert grove["state"]["story_progress"]["node_id"] == "minglin_arrival"
+        assert returned["state"]["current_scene_id"] == "minglin"
+        assert (
+            returned["story"]["established_events"][0]["event_type"]
+            == "scene_change_requested"
+        )
