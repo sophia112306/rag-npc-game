@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.content.scenes import SCENES
@@ -23,16 +24,18 @@ def test_scene_registry_references_existing_assets_and_destinations() -> None:
         "minglin_life_spring",
         "minglin_rune_grove",
         "liuchen_valley",
+        "lieyi_plains",
     }
     for scene in SCENES.values():
         assert (public_root / scene.background_url.removeprefix("/")).is_file()
         assert (public_root / scene.horizon_url.removeprefix("/")).is_file()
         assert all(destination in SCENES for destination in scene.allowed_destinations)
 
-    assert all(
-        "liuchen_valley" not in scene.allowed_destinations
-        for scene in SCENES.values()
-    )
+    for isolated_scene_id in ("liuchen_valley", "lieyi_plains"):
+        assert all(
+            isolated_scene_id not in scene.allowed_destinations
+            for scene in SCENES.values()
+        )
 
 
 def test_valid_scene_change_is_saved_and_resumed_after_restart(tmp_path) -> None:
@@ -122,11 +125,19 @@ def test_unconnected_scene_change_is_rejected_without_mutating_location(tmp_path
         assert rejected.json()["story"]["established_events"] == []
 
 
-def test_liuchen_valley_is_not_an_ordinary_travel_destination(tmp_path) -> None:
+@pytest.mark.parametrize(
+    ("scene_id", "display_name"),
+    (("liuchen_valley", "流塵谷"), ("lieyi_plains", "烈燚原")),
+)
+def test_isolated_story_scene_is_not_an_ordinary_travel_destination(
+    tmp_path,
+    scene_id: str,
+    display_name: str,
+) -> None:
     """A registered story scene must not become reachable merely by knowing its ID."""
 
-    database_url = f"sqlite+aiosqlite:///{tmp_path / 'liuchen-boundary.db'}"
-    session_id = "liuchen-boundary"
+    database_url = f"sqlite+aiosqlite:///{tmp_path / f'{scene_id}-boundary.db'}"
+    session_id = f"{scene_id}-boundary"
     action_id = str(uuid4())
 
     with TestClient(create_app(database_url)) as client:
@@ -135,18 +146,18 @@ def test_liuchen_valley_is_not_an_ordinary_travel_destination(tmp_path) -> None:
         payload = {
             "session_id": session_id,
             "action_id": action_id,
-            "message": "我直接前往流塵谷。",
+            "message": f"我直接前往{display_name}。",
             "input_type": "text",
             "target_npc_id": None,
             "action_mode": "movement",
-            "destination_scene_id": "liuchen_valley",
+            "destination_scene_id": scene_id,
             "expected_state_version": started["state_version"],
         }
         rejected = client.post("/api/game/turn", json=payload)
         replay = client.post("/api/game/turn", json=payload)
 
         assert all(
-            choice["destination_scene_id"] != "liuchen_valley"
+            choice["destination_scene_id"] != scene_id
             for choice in choices
         )
         assert rejected.status_code == 200

@@ -14,6 +14,9 @@
     ],
     "liuchen_valley": [
       "user-provided visual reference in the 2026-11-10 project conversation"
+    ],
+    "lieyi_plains": [
+      "user-provided visual reference in the 2026-11-10 project conversation"
     ]
   },
   "assets": [
@@ -43,6 +46,15 @@
       "height": 941,
       "canon_status": "provisional",
       "prompt_summary": "Adapt the user-provided Liuchen Valley reference into a game-ready hand-painted fantasy background: an ochre desert canyon with cracked earth, funerary ruins, dead trees, deep fissures, a central drifting-dust column, a clear traversable route, and only a few small distant mummy wanderers. Keep the lower center open for the player; no close character, UI, text, logo, watermark, gore, modern objects, science-fiction machinery, or exact copying of the reference composition."
+    },
+    {
+      "scene_id": "lieyi_plains",
+      "file": "/game/scenes/lieyi-plains-v1.png",
+      "sha256": "057e66a66b2391cccb0249bfc5a405a03d9d2b425d9644ed9f32e0f6c6ec30cf",
+      "width": 1672,
+      "height": 941,
+      "canon_status": "provisional",
+      "prompt_summary": "Adapt the user-provided Lieyi Plains reference into a game-ready hand-painted fantasy background: a volcanic plain of dark basalt, branching magma streams, heat-scarred ruins, ember-orange trees, and a monumental living flame rising from a stepped obsidian altar. Preserve a clear cooled-stone route through the lower center; no people, babies, children, bodies, creatures, UI, text, logo, watermark, modern objects, science-fiction machinery, or exact copying of the reference composition."
     }
   ]
 }
