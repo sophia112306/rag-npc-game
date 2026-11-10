@@ -83,11 +83,11 @@ npm run dev
 
 ## 畫面與圖片素材
 
-第一版採用「建置期生成、遊戲期只引用版本化資產」：命脈之泉與符石林由 OpenAI 內建圖片生成工具製作，工具沒有回傳底層模型名稱，因此不在文件中猜測型號。檔案、尺寸、SHA-256、提示摘要與 provisional 狀態記錄於 [`frontend/public/game/scenes/manifest.json`](frontend/public/game/scenes/manifest.json)，完整提示在 [`docs/SCENE_ASSET_PROMPTS.md`](docs/SCENE_ASSET_PROMPTS.md)。每回合不會重新生圖，也不會讓文字模型覆寫圖片。
+第一版採用「建置期生成、遊戲期只引用版本化資產」：命脈之泉、符石林與流塵谷由 OpenAI 內建圖片生成工具製作，工具沒有回傳底層模型名稱，因此不在文件中猜測型號。檔案、尺寸、SHA-256、提示摘要與 provisional 狀態記錄於 [`frontend/public/game/scenes/manifest.json`](frontend/public/game/scenes/manifest.json)，完整提示在 [`docs/SCENE_ASSET_PROMPTS.md`](docs/SCENE_ASSET_PROMPTS.md)。每回合不會重新生圖，也不會讓文字模型覆寫圖片。
 
 後端的單一 Scene Registry 位於 `backend/content/scenes.py`，同時提供 2D 背景、3D 遠景、玩家可見名稱與合法出口。Phaser 主頁會切換完整背景；Babylon.js 3D 試玩保留原有幾何、燈光與相機，並依同一個 Session 切換遠景貼圖與場景名稱。`current_scene_id`、成立事件、對話與版本會在同一交易保存，重新整理或重啟後仍可承接。
 
-符石林及兩張生成圖的具體美術內容目前仍標記為暫定資產；完整在場 NPC、正式進出條件及 E1／E2／E3 對應仍須由故事與規則資料確認。若未來需要即時圖片生成，應另建有預算、快取、審核與失敗回復的 ImageGateway，不和文字回合交易綁死。
+符石林及生成圖的具體美術內容目前仍標記為暫定資產；完整在場 NPC、正式進出條件及 E1／E2／E3 對應仍須由故事與規則資料確認。流塵谷名稱已出現在 C 的 E3-1 規則，且本版依使用者提供的參考設計製作場景，但目前不會被加入普通旅行選項：只有之後整合「持有裂隙地圖逃入流塵谷」的危險事件流程後才可進入。若未來需要即時圖片生成，應另建有預算、快取、審核與失敗回復的 ImageGateway，不和文字回合交易綁死。
 
 ## 驗證
 

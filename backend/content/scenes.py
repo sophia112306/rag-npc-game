@@ -55,6 +55,17 @@ SCENES: dict[str, SceneDefinition] = {
         canon_status="provisional",
         allowed_destinations=("minglin",),
     ),
+    "liuchen_valley": SceneDefinition(
+        scene_id="liuchen_valley",
+        region_name="流塵谷",
+        display_name="流塵谷",
+        subtitle="風沙與裂谷交錯的葬地",
+        description="遍布龜裂道路、墓葬遺跡與復生者足跡的風沙峽谷。",
+        background_url="/game/scenes/liuchen-valley-v1.png",
+        horizon_url="/game/scenes/liuchen-valley-v1.png",
+        canon_status="confirmed",
+        allowed_destinations=(),
+    ),
 }
 
 

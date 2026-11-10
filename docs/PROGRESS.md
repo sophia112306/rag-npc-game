@@ -96,7 +96,7 @@
 
 ## M3 目前驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：85 passed（目前全套；含 M4、語音、OpenAI 相容 adapter、規則動態、場景切換與玩家選項回歸測試）。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：87 passed（目前全套；含 M4、語音、OpenAI 相容 adapter、規則動態、場景切換與玩家選項回歸測試）。
 - 格式錯誤可有限修正，timeout 達上限後停止，永久設定錯誤不重試。
 - fake Gateway 的動態台詞已通過完整 API 流程，玩家端不再顯示開發替身。
 - 外部模型失敗的 503、Retry-After、狀態不推進均有自動化測試。
@@ -119,7 +119,7 @@
 
 ## M3a 驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：85 passed。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：87 passed。
 - 單元測試涵蓋回合化招呼、記憶承接、秘密隔離、任務去重、承諾及物品持有權提案。
 - API 端到端測試證明規則任務會保存，下一回合承接且不重複新增。
 - Choices API 測試涵蓋初始選項、任務後選項更新及不存在 Session 的 404；前端 TypeScript production build 通過。
@@ -159,16 +159,18 @@
 ## A2 圖片／場景生成與切換
 
 - 使用 OpenAI 內建圖片生成工具製作命脈之泉與符石林兩張 1672×941 場景圖；工具未揭露底層模型名稱，因此只記錄實際工具，不猜測型號。
+- 依使用者提供的流塵谷參考設計新增 1672×941 場景圖；保留峽谷、龜裂道路、風沙柱、墓葬遺跡、枯木與遠景木乃伊，並避開大型前景角色以利遊戲疊加。
 - 生成提示摘要、版本、尺寸、SHA-256、風格參考及 provisional 狀態保存在 `frontend/public/game/scenes/manifest.json`；舊資產未被覆蓋。
 - 圖片採建置期生成與版本化提交；遊戲每回合只引用已存在資產，不重複呼叫圖片模型。
 - 新增單一 Scene Registry，同時供後端合法路線驗證、PlayerViewState、Phaser 2D 完整背景及 Babylon 3D 遠景使用，沒有前後端各維護一份場景表。
 - 新增 `change_scene` 白名單操作；只有玩家、已登記目的地與 Scene Registry 允許的出口可以成立，不可直達或不存在場景會原子拒絕。
 - `destination_scene_id` 納入 action digest；場景狀態、成立事件、對話與版本以同一交易保存，後端重啟後仍可承接。
+- 流塵谷地名由 C 的 E3-1 規則確認，但不列入普通場景出口；待 C 的危險事件操作整合後，才依「持有裂隙地圖」條件進入。
 - 玩家選項建構已從 Orchestrator 抽離；共用前端 API 型別與請求函式，避免在 2D／3D 頁重複定義契約。
 
 ## A2 驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：85 passed；涵蓋資產／Registry 完整性、合法換場、非法直達不改位置、目的地去重內容、當前場景敘事與跨 app 重啟承接。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：87 passed；涵蓋資產／Registry 完整性、合法換場、非法直達不改位置、目的地去重內容、E3-1 裂隙地圖邊界、當前場景敘事與跨 app 重啟承接。
 - `npm run build`：Next.js 16.4.4、TypeScript、`/` 與 `/experiments/babylon` production build 通過。
 - Live HTTP：起始場景回傳平衡議會與四個選項；提交「前往命脈之泉」後建立 `change_scene` 成立事件、版本 1→2，重新 GET 仍為命脈之泉。
 - `http://localhost:3200/experiments/babylon` 與兩張生成圖片均回 HTTP 200；瀏覽器控制主機不可用，未能用自動化工具完成畫面點擊，須由使用者在現有瀏覽器實機確認視覺切換。
