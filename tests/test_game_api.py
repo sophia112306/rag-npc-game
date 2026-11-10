@@ -1,0 +1,117 @@
+"""M1 API contract tests for the existing frontend integration."""
+
+from uuid import uuid4
+
+import pytest
+from fastapi.testclient import TestClient
+
+from backend.api.game import get_orchestrator
+from backend.main import app
+from backend.orchestration.game_orchestrator import GameOrchestrator
+
+
+@pytest.fixture
+def client() -> TestClient:
+    orchestrator = GameOrchestrator()
+    app.dependency_overrides[get_orchestrator] = lambda: orchestrator
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+def start_session(client: TestClient, session_id: str = "m1-session") -> dict:
+    response = client.post("/api/game/start", json={"session_id": session_id})
+    assert response.status_code == 201
+    return response.json()
+
+
+def action_payload(
+    session_id: str,
+    *,
+    action_id: str | None = None,
+    expected_state_version: int = 1,
+) -> dict:
+    return {
+        "session_id": session_id,
+        "action_id": action_id or str(uuid4()),
+        "message": "你好，維達利亞",
+        "input_type": "text",
+        "target_npc_id": "vidalia",
+        "action_mode": "dialogue",
+        "expected_state_version": expected_state_version,
+    }
+
+
+def test_public_character_profile_is_available(client: TestClient) -> None:
+    response = client.get("/api/characters/vidalia")
+
+    assert response.status_code == 200
+    assert response.json()["npc_id"] == "vidalia"
+    assert "memory" not in response.json()
+    assert "secrets" not in response.json()
+
+
+def test_start_turn_and_read_current_state(client: TestClient) -> None:
+    state = start_session(client)
+
+    assert state["turn_count"] == 0
+    assert state["state_version"] == 1
+    assert state["current_scene_id"] == "minglin"
+    assert state["npc_states"]["vidalia"]["met"] is True
+
+    response = client.post("/api/game/turn", json=action_payload(state["session_id"]))
+
+    assert response.status_code == 200
+    turn = response.json()
+    assert turn["turn_number"] == 1
+    assert turn["state"]["turn_count"] == 1
+    assert turn["state"]["state_version"] == 2
+    assert turn["parsed_action"]["action_type"] == "dialogue"
+    assert "開發替身" in turn["story"]["dialogue"][0]["text"]
+    assert turn["story"]["event_proposals"] == []
+
+    state_response = client.get(f"/api/game/{state['session_id']}/state")
+    assert state_response.status_code == 200
+    assert state_response.json()["state_version"] == 2
+
+
+def test_repeated_action_id_does_not_advance_the_turn_twice(client: TestClient) -> None:
+    state = start_session(client, "idempotent-session")
+    payload = action_payload(state["session_id"])
+
+    first = client.post("/api/game/turn", json=payload)
+    second = client.post("/api/game/turn", json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json() == first.json()
+    assert second.json()["state"]["turn_count"] == 1
+
+
+def test_stale_state_version_returns_conflict(client: TestClient) -> None:
+    state = start_session(client, "version-session")
+    first = client.post("/api/game/turn", json=action_payload(state["session_id"]))
+    assert first.status_code == 200
+
+    stale = client.post(
+        "/api/game/turn",
+        json=action_payload(state["session_id"], expected_state_version=1),
+    )
+
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["code"] == "STATE_VERSION_CONFLICT"
+    assert stale.json()["detail"]["actual_state_version"] == 2
+
+
+def test_local_frontend_origin_passes_cors_preflight(client: TestClient) -> None:
+    response = client.options(
+        "/api/game/start",
+        headers={
+            "Origin": "http://localhost:3200",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3200"

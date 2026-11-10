@@ -1,6 +1,8 @@
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StoryPhase(str, Enum):
@@ -42,7 +44,11 @@ class PlayerState(BaseModel):
 
 class GameState(BaseModel):
     """遊戲核心狀態模型 (草案 v3 規格)[cite: 53, 55]"""
+
+    model_config = ConfigDict(extra="forbid")
+
     session_id: str
+    state_version: int = Field(default=1, ge=1)
     turn_count: int = 0                  # 總遊戲回合計數
     phase_turns: int = 0                 # 當前階段已消耗的回合數
     current_scene_id: str = "fissure"    # 當前場景 ID (初始在屏障裂隙)
@@ -67,7 +73,7 @@ class GameState(BaseModel):
     )
     
     # 關鍵劇情旗標 (Flags)
-    flags: Dict[str, bool] = Field(
+    flags: Dict[str, Any] = Field(
         default_factory=lambda: {
             "elder_cooperation": False,   # 長老協力
             "library_path": False,        # 圖書館路徑
@@ -78,3 +84,5 @@ class GameState(BaseModel):
     )
     
     player: PlayerState = Field(default_factory=PlayerState)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -1,15 +1,15 @@
-"""Coordinate the game-turn flow while domain modules are being integrated."""
+"""Coordinate the deterministic M1 game-turn flow."""
 
+import asyncio
 from datetime import datetime, timezone
-from typing import Any
+from uuid import UUID
 
 from backend.schemas.api_response import GameTurnResponse
-from backend.schemas.game_state import GameState, NPCState, PlayerState, SceneState
+from backend.schemas.game_state import GameState, PlayerState
 from backend.schemas.parsed_action import ActionType, ParsedAction
-from backend.schemas.player_action import PlayerAction
+from backend.schemas.player_action import ActionMode, PlayerAction
 from backend.schemas.story import (
     DialogueLine,
-    EventProposal,
     SpeakerType,
     StoryProposal,
 )
@@ -19,11 +19,22 @@ class SessionNotFoundError(LookupError):
     """Raised when an API request references an unknown game session."""
 
 
+class StateVersionConflictError(RuntimeError):
+    """Raised when a player action was created from a stale state snapshot."""
+
+    def __init__(self, expected: int, actual: int) -> None:
+        self.expected = expected
+        self.actual = actual
+        super().__init__(f"Expected state version {expected}, but the current version is {actual}")
+
+
 class InMemoryGameStateStore:
-    """Temporary state store used until the database repositories are ready."""
+    """M1-only state store; M2 will replace this with a transactional database."""
 
     def __init__(self) -> None:
         self._states: dict[str, GameState] = {}
+        self._turns: dict[tuple[str, UUID], GameTurnResponse] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
 
     async def get(self, session_id: str) -> GameState | None:
         state = self._states.get(session_id)
@@ -32,6 +43,19 @@ class InMemoryGameStateStore:
     async def save(self, state: GameState) -> GameState:
         self._states[state.session_id] = state.model_copy(deep=True)
         return state.model_copy(deep=True)
+
+    async def get_turn(self, session_id: str, action_id: UUID) -> GameTurnResponse | None:
+        response = self._turns.get((session_id, action_id))
+        return response.model_copy(deep=True) if response else None
+
+    async def save_turn(self, action_id: UUID, response: GameTurnResponse) -> GameTurnResponse:
+        self._turns[(response.session_id, action_id)] = response.model_copy(deep=True)
+        return response.model_copy(deep=True)
+
+    def lock_for(self, session_id: str) -> asyncio.Lock:
+        """Serialize turns within one in-memory session."""
+
+        return self._locks.setdefault(session_id, asyncio.Lock())
 
 
 class GameOrchestrator:
@@ -49,44 +73,44 @@ class GameOrchestrator:
 
         initial_state = GameState(
             session_id=session_id,
+            current_scene_id="minglin",
             player=PlayerState(
                 player_id=f"{session_id}-player",
-                display_name="玩家",
-                current_scene_id="minglin",
-            ),
-            npcs={
-                "guide": NPCState(
-                    npc_id="guide",
-                    name="引路人",
-                    current_scene_id="minglin",
-                    emotion="neutral",
-                )
-            },
-            current_scene=SceneState(
-                scene_id="minglin",
-                name="鳴霖",
-                available_exit_ids=["liuchen_valley", "lieyi_plain"],
-                active_npc_ids=["guide"],
+                name="玩家",
             ),
         )
+        initial_state.npc_states["vidalia"].met = True
         return await self._state_store.save(initial_state)
 
     async def process_turn(self, action: PlayerAction) -> GameTurnResponse:
         """Process one turn through the temporary integration pipeline."""
 
-        state = await self.get_state(action.session_id)
-        parsed_action = self._parse_action(action)
-        updated_state = self._apply_action(state, action, parsed_action)
-        story = self._build_placeholder_story(action, parsed_action, updated_state)
+        cached = await self._state_store.get_turn(action.session_id, action.action_id)
+        if cached is not None:
+            return cached
 
-        await self._state_store.save(updated_state)
-        return GameTurnResponse(
-            session_id=action.session_id,
-            turn_number=updated_state.turn_number,
-            parsed_action=parsed_action,
-            story=story,
-            state=updated_state,
-        )
+        async with self._state_store.lock_for(action.session_id):
+            cached = await self._state_store.get_turn(action.session_id, action.action_id)
+            if cached is not None:
+                return cached
+
+            state = await self.get_state(action.session_id)
+            if action.expected_state_version != state.state_version:
+                raise StateVersionConflictError(action.expected_state_version, state.state_version)
+
+            parsed_action = self._parse_action(action)
+            updated_state = self._apply_action(state)
+            story = self._build_placeholder_story(action, updated_state)
+            response = GameTurnResponse(
+                session_id=action.session_id,
+                turn_number=updated_state.turn_count,
+                parsed_action=parsed_action,
+                story=story,
+                state=updated_state,
+            )
+
+            await self._state_store.save(updated_state)
+            return await self._state_store.save_turn(action.action_id, response)
 
     async def get_state(self, session_id: str) -> GameState:
         """Load a state snapshot from the temporary store."""
@@ -98,78 +122,64 @@ class GameOrchestrator:
 
     @staticmethod
     def _parse_action(action: PlayerAction) -> ParsedAction:
-        """Parse a few common phrases without calling an AI model yet."""
+        """Create an M1 deterministic placeholder until C's parser is integrated."""
 
-        text = action.text.strip().lower()
-        action_type = ActionType.ASK
-        confidence = 0.55
+        text = action.message.strip().lower()
+        action_type = ActionType.DIALOGUE
+        intent = "dialogue"
 
-        if any(keyword in text for keyword in ("幫助", "指令", "help")):
-            action_type, confidence = ActionType.HELP, 0.95
-        elif any(keyword in text for keyword in ("移動", "前往", "去", "move", "go ")):
-            action_type, confidence = ActionType.MOVE, 0.85
-        elif any(keyword in text for keyword in ("使用", "使用道具", "use")):
-            action_type, confidence = ActionType.USE_ITEM, 0.8
-        elif any(keyword in text for keyword in ("攻擊", "攻打", "attack")):
-            action_type, confidence = ActionType.ATTACK, 0.8
-        elif any(keyword in text for keyword in ("互動", "交談", "詢問", "問", "ask")):
-            action_type, confidence = ActionType.INTERACT, 0.75
+        if action.action_mode == ActionMode.MOVEMENT:
+            action_type, intent = ActionType.MOVEMENT, "move"
+        elif action.action_mode == ActionMode.INTERACTION:
+            action_type, intent = ActionType.INTERACTION, "interact"
+        elif any(keyword in text for keyword in ("使用", "道具", "use")):
+            action_type, intent = ActionType.USE_ITEM, "use_item"
+        elif any(keyword in text for keyword in ("查看", "觀察", "調查", "inspect")):
+            action_type, intent = ActionType.INSPECT, "inspect"
 
         return ParsedAction(
-            source_action_id=action.action_id,
+            intent=intent,
             action_type=action_type,
-            target=action.text if action_type == ActionType.MOVE else None,
-            parameters={"input_type": action.input_type.value},
-            confidence=confidence,
+            target_ids=[action.target_npc_id] if action.target_npc_id else [],
+            parameters={
+                "action_id": str(action.action_id),
+                "input_type": action.input_type.value,
+                "action_mode": action.action_mode.value,
+            },
+            confidence=1.0,
         )
 
     @staticmethod
-    def _apply_action(
-        state: GameState,
-        action: PlayerAction,
-        parsed_action: ParsedAction,
-    ) -> GameState:
-        """Apply only safe demo state changes until C's rules are connected."""
+    def _apply_action(state: GameState) -> GameState:
+        """Advance only integration metadata; no AI proposal may mutate game facts."""
 
         updated_state = state.model_copy(deep=True)
-        updated_state.turn_number += 1
+        updated_state.turn_count += 1
+        updated_state.phase_turns += 1
+        updated_state.state_version += 1
         updated_state.updated_at = datetime.now(timezone.utc)
-        updated_state.world_flags.update(
-            {
-                "last_action_id": str(action.action_id),
-                "last_action_type": parsed_action.action_type.value,
-                "last_action_text": action.text,
-            }
-        )
         return updated_state
 
     @staticmethod
     def _build_placeholder_story(
         action: PlayerAction,
-        parsed_action: ParsedAction,
         state: GameState,
     ) -> StoryProposal:
-        """Return a typed placeholder until B's story engine is connected."""
+        """Return an explicit development stub until B's model gateway is connected."""
 
         dialogue = DialogueLine(
             speaker_type=SpeakerType.NPC,
-            speaker_id="guide",
-            speaker_name="引路人",
+            speaker_id=action.target_npc_id or "vidalia",
+            speaker_name="維達利亞",
             text=(
-                f"我收到你的行動：「{action.text}」。"
-                "目前先以測試流程回應，之後會接上 AI 劇情生成。"
+                f"（開發替身）我收到你的話：「{action.message}」。"
+                "目前只驗證前後端流程，真實模型、RAG 與遊戲規則尚未接入。"
             ),
             emotion="neutral",
         )
-        event = EventProposal(
-            event_type="player_action_received",
-            description="The backend received a player action in the integration skeleton.",
-            actor_id=state.player.player_id,
-            payload={"action_type": parsed_action.action_type.value},
-        )
         return StoryProposal(
             session_id=action.session_id,
-            turn_number=state.turn_number,
+            turn_number=state.turn_count,
             dialogue=[dialogue],
-            event_proposals=[event],
+            event_proposals=[],
         )

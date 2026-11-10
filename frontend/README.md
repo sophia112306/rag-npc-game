@@ -1,0 +1,37 @@
+# 鳴霖森林遊戲場景
+
+在專案根目錄先啟動後端：
+
+```bash
+python3.12 -m venv .venv
+./.venv/bin/pip install -r requirements.txt
+./.venv/bin/uvicorn backend.main:app --reload --port 8300
+```
+
+另開終端機啟動前端：
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+開啟 http://localhost:3200 。前端會呼叫 http://localhost:8300 的角色資料和遊戲 API。若後端使用其他位置，可複製 `.env.example` 為 `.env.local` 並修改 `NEXT_PUBLIC_API_URL`。
+
+Phaser 會載入 [`public/game/minglin.tmj`](public/game/minglin.tmj) 內的 `Actors` 與 `Walkable` 物件圖層，並顯示 [`public/game/forest-council.png`](public/game/forest-council.png) 作為場景。可用 Tiled 編輯 NPC 出生點及多邊形可行走區；背景圖與 Tiled 的 `Background` 影像圖層使用同一張圖。調整背景構圖時，請一併校正地圖中的角色座標和可行走區。
+
+操作：左鍵點擊可行走的地面，角色會轉向並走向點擊位置；右鍵點擊可讓角色原地面向該方向，Q／R 可逐步轉身。WASD 或方向鍵依畫面方向移動，角色會跟著轉向。滑鼠滾輪、畫面右側 ＋／－ 或手機雙指可縮放地圖，倍率範圍為 100%～220%；點倍率可回到全景。放大後鏡頭會在地圖範圍內隨角色移動，視角方向保持固定。點擊維達利亞，角色會走近並開始對話；靠近她後也可按 E。按 Esc 關閉對話。小螢幕另有移動及轉身按鈕。玩家與 NPC 是獨立的透明圖片，可以在背景上移動或替換。
+
+PoC 介面提供操作說明、重新開始確認、初次載入及斷線重試畫面。對話文字會暫存在目前瀏覽器；只有當後端 Session 的回合與更新時間相符時才恢復，避免服務重啟後顯示不屬於新進度的舊紀錄。遊戲回合仍由後端的記憶體 Session 管理。
+
+目前對話由後端明確標示的「開發替身」產生；真實模型、RAG、規則結果計算與 NPC 記憶尚未接入。Session 暫存在後端記憶體中，後端重新啟動後會重設。前端每次送出都包含 `action_id` 與 `expected_state_version`，後端可在目前程序內避免重複回合並拒絕過期狀態。
+
+## 第一人稱 3D 試玩
+
+開啟 `http://localhost:3200/experiments/babylon` 進入 Babylon.js 幽藍遺跡版。`/experiments` 會直接轉到此頁；原本的 Phaser 場景仍在 `/`。
+
+點擊石板路或目標，角色會沿預設路線前進；點地面可走到該路段，點畫面按鈕可走到下一個任務點。行走時從角色眼睛看出去，腳步帶動視角輕微上下起伏，路線轉彎時鏡頭自動轉向。抵達維達利亞或符石後自動觸發定點觀察，這時才可拖曳環顧四周、點擊符石記錄線索；Esc 結束觀察。WASD／方向鍵不控制這個版本的移動。
+
+維達利亞使用 [`public/game/vidalia-cutout.png`](public/game/vidalia-cutout.png) 原圖材質，貼在輕微彎曲、會面向鏡頭的表面上；對話時角色會輕微上下晃動。這能保留正面的原圖細節，但仍屬 2.5D 呈現，無法提供完整的角色背面模型。
+
+3D 版本目前是前端互動原型，NPC 對白與符石線索為固定示範內容，尚未接入後端劇情 API。只在進入此頁時載入 Babylon.js，渲染解析度也設上限。

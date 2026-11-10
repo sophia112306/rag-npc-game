@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+.pytest_cache/
 
 # 環境變數與個人設定
 .env
@@ -10,3 +12,8 @@ __pycache__/
 
 # 本機測試腳本
 test_pipeline.py
+
+# 本機資料庫與執行資料
+*.db
+*.db-shm
+*.db-wal

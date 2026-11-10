@@ -1,0 +1,73 @@
+.stage { position: relative; height: 100svh; min-height: 520px; overflow: hidden; color: #fff4d6; background: #1c3128 url('/game/forest-eye-backdrop.png') center / cover; font-family: 'Noto Serif TC', 'Songti TC', serif; }
+.cool { color: #e4ffff; background-color: #102b34; }
+.canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.vignette { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, #07180fd9, transparent 25%, transparent 60%, #09160bdc), linear-gradient(90deg, #06120880, transparent 28%, transparent 72%, #06120880); }
+.cool .vignette { background: linear-gradient(180deg, #04191ed9, transparent 24%, transparent 60%, #04171fe6), linear-gradient(90deg, #05161d90, transparent 30%, transparent 70%, #05161d90); }
+.topbar { position: absolute; z-index: 2; top: 0; left: 0; right: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 24px 30px; pointer-events: none; }
+.brand { display: flex; align-items: center; gap: 13px; padding: 7px 23px 10px 2px; border-bottom: 1px solid #e6c788a8; background: linear-gradient(90deg, #0d180fdf, #0d180f00); text-shadow: 0 2px 5px #000; }
+.brand div { display: flex; flex-direction: column; gap: 1px; }
+.brand small { color: #d2bc85; font-size: 10px; letter-spacing: .2em; }
+.brand strong { font-size: clamp(21px, 2.1vw, 30px); font-weight: 500; letter-spacing: .12em; }
+.compass { display: grid; place-items: center; width: 55px; height: 55px; border: 1px solid #e8d49b; border-radius: 50%; color: #ecd18c; font: 39px Georgia, serif; }
+.cool .compass, .cool .brand { border-color: #8bdacfa8; }
+.toplinks { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; align-items: center; pointer-events: auto; }
+.toplinks span, .toplinks a { padding: 9px 14px; border: 1px solid #c8ab73a6; background: #0a170de0; color: #f7e9c6; font: 11px Georgia, serif; text-decoration: none; letter-spacing: .08em; }
+.toplinks a:hover, .toplinks a:focus-visible { background: #5a4a27; color: #fff; }
+.cool .toplinks span, .cool .toplinks a { border-color: #68b8bea6; background: #081d24e0; color: #d5f8f1; }
+.cool .toplinks a:hover { background: #205663; }
+.reticle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; color: #f6e9bb; font-size: 25px; text-shadow: 0 0 8px #000, 0 0 18px #fff; opacity: .72; }
+.mission { position: absolute; z-index: 2; top: 112px; right: 30px; width: min(285px, 32vw); padding: 15px 19px; border: 1px solid #cbb478ad; background: #0d1a13d9; box-shadow: inset 0 0 0 3px #203025a8, 0 8px 18px #0008; display: flex; flex-direction: column; gap: 5px; text-shadow: 0 1px 3px #000; }
+.mission small { color: #d6bd82; font-size: 10px; letter-spacing: .2em; }
+.mission strong { color: #ffe5a8; font-size: 17px; font-weight: 500; letter-spacing: .08em; }
+.mission span { color: #e4e1d0; font-size: 11px; line-height: 1.55; }
+.cool .mission { border-color: #7acdc2ad; background: #0a2630e0; box-shadow: inset 0 0 0 3px #173a42a8, 0 8px 18px #0008; }
+.cool .mission small, .cool .mission strong { color: #a8f2e1; }
+.notice { position: absolute; z-index: 2; left: 30px; bottom: 84px; max-width: min(520px, 58vw); padding: 12px 16px; border-left: 2px solid #dfc078; background: #0d1a12dc; color: #f4ead1; box-shadow: 0 4px 15px #0008; font-size: 13px; line-height: 1.65; }
+.cool .notice { border-left-color: #72d6c8; background: #0c2631e5; color: #dff7f4; }
+.loading { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; padding: 30px; background: #091a16d8; color: #f9e5b0; font-size: 23px; text-align: center; letter-spacing: .1em; }
+.action { position: absolute; z-index: 3; left: 50%; bottom: 130px; transform: translateX(-50%); padding: 13px 24px; white-space: nowrap; border: 1px solid #efcd85; color: #ffedc0; background: linear-gradient(#685532ed, #252b1fe8); box-shadow: 0 6px 23px #000b; font-size: 15px; letter-spacing: .08em; }
+.action:hover { background: #8a6e35; }
+.action:disabled { cursor: progress; opacity: .7; }
+.action kbd { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 7px; border: 1px solid currentColor; font: 14px Georgia, serif; }
+.cool .action { border-color: #9ce6df; color: #e0f7f2; background: #174552e8; }
+.inspect { position: absolute; z-index: 4; left: 9%; right: 9%; bottom: 65px; min-height: 162px; display: flex; align-items: stretch; border: 1px solid #d8bc7a; background: #101911ef; box-shadow: inset 0 0 0 3px #33301f, 0 16px 32px #000b; backdrop-filter: blur(7px); }
+.cool .inspect { border-color: #75c8c5; background: #0c2631ee; box-shadow: inset 0 0 0 3px #1b4650, 0 16px 32px #000b; }
+.inspectPortrait { width: 137px; flex: 0 0 137px; height: 160px; overflow: hidden; border-right: 1px solid #c8aa66; background: #32442d; }
+.inspectPortrait img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 16%; }
+.inspectBody { min-width: 0; flex: 1; padding: 16px 20px; }
+.inspectBody small { display: block; padding-bottom: 7px; border-bottom: 1px solid #b89b6399; color: #f2d99f; font-size: 13px; letter-spacing: .1em; }
+.inspectBody p { margin: 13px 0 10px; color: #fff6e6; font-size: clamp(13px, 1.2vw, 17px); line-height: 1.7; }
+.inspectBody span { color: #c5b895; font-size: 11px; }
+.cool .inspectBody small, .cool .inspectBody span { color: #9ad9d2; }
+.inspectActions { display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; min-width: 136px; padding: 16px; }
+.inspectActions button { padding: 9px 12px; border: 1px solid #e4c57c; color: #fff0c6; background: #5b4828; cursor: pointer; white-space: nowrap; font-size: 12px; }
+.inspectActions button:hover { background: #806736; }
+.cool .inspectActions button { border-color: #8cdcd0; background: #1d5860; color: #ebfffc; }
+.footer { position: absolute; z-index: 2; left: 30px; right: 30px; bottom: 18px; display: flex; justify-content: space-between; gap: 20px; color: #e7debb; font-size: 11px; letter-spacing: .08em; text-shadow: 0 2px 4px #000; }
+.footer button { border: 0; color: inherit; background: transparent; cursor: pointer; font-size: 11px; text-decoration: underline; text-underline-offset: 4px; }
+.footer button:hover { color: #fff; }
+@media (max-width: 760px) {
+  .topbar { padding: 12px; align-items: flex-start; }
+  .brand { gap: 6px; padding-right: 8px; }
+  .brand strong { font-size: 16px; }
+  .brand small { font-size: 8px; }
+  .compass { width: 37px; height: 37px; font-size: 26px; }
+  .toplinks { gap: 4px; max-width: 48%; }
+  .toplinks span { display: none; }
+  .toplinks a { padding: 6px 8px; font-size: 9px; }
+  .mission { top: 83px; right: 12px; width: 178px; padding: 9px; }
+  .mission strong { font-size: 13px; }
+  .mission span { font-size: 9px; }
+  .notice { left: 12px; bottom: 236px; max-width: 65vw; padding: 8px; font-size: 10px; }
+  .action { bottom: 226px; padding: 9px 10px; font-size: 11px; }
+  .inspect { left: 8px; right: 8px; bottom: 45px; min-height: 190px; }
+  .inspectPortrait { width: 72px; flex-basis: 72px; height: auto; }
+  .inspectBody { padding: 9px; }
+  .inspectBody small { font-size: 10px; }
+  .inspectBody p { margin: 8px 0; font-size: 11px; }
+  .inspectBody span { font-size: 9px; }
+  .inspectActions { position: absolute; right: 8px; bottom: 8px; flex-direction: row; min-width: auto; padding: 0; }
+  .inspectActions button { padding: 5px 8px; font-size: 10px; }
+  .footer { left: 12px; right: 12px; bottom: 8px; font-size: 9px; }
+  .footer span { max-width: 67%; line-height: 1.45; }
+}
