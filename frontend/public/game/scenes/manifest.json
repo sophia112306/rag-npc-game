@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-10",
+  "generator": {
+    "mode": "openai-built-in-image-generation",
+    "model": null,
+    "model_note": "The built-in tool did not expose an underlying model identifier."
+  },
+  "style_references": [
+    "/game/forest-council.png",
+    "/game/forest-eye-backdrop.png"
+  ],
+  "assets": [
+    {
+      "scene_id": "minglin_life_spring",
+      "file": "/game/scenes/minglin-life-spring-v1.png",
+      "sha256": "9f44226807897d1bdbb72a6099db37ae5de602a9703284e80e3d2090bcc482e4",
+      "width": 1672,
+      "height": 941,
+      "canon_status": "provisional",
+      "prompt": "Create a new location in the same visual family as the references: the sacred Life Spring inside Minglin forest. Show an ancient forest sanctuary centered on a clear turquoise spring and small natural cascade, with mossy pale stone terraces, old tree roots, ferns, wildflowers, and a walkable foreground path. Use a richly detailed hand-painted fantasy-game style, elevated three-quarter view, warm luminous greens and teal water. Environment only; no characters, creatures, UI, text, banners, logos, watermark, giant-eye motif, or copied council layout."
+    },
+    {
+      "scene_id": "minglin_rune_grove",
+      "file": "/game/scenes/minglin-rune-grove-v1.png",
+      "sha256": "42af46582723d33806562134edd80391621dede903ee6ddff84927fc5335ec57",
+      "width": 1672,
+      "height": 941,
+      "canon_status": "provisional",
+      "prompt": "Create a second Minglin location in the same visual family as the references: a quiet grove of ancient rune stones around one restrained blue-green luminous stone. Keep an open walkable clearing in the center and foreground, with a subtle rear path. Use richly detailed hand-painted fantasy-game art, elevated three-quarter view, warm forest light balanced by a subtle cyan glow. Environment only; no characters, creatures, UI, text, readable letters, banners, logos, watermark, giant-eye motif, copied council layout, portal rings, or science-fiction machinery."
+    }
+  ]
+}
