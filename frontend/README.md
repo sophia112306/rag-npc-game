@@ -12,7 +12,7 @@ python3.12 -m venv .venv
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -24,7 +24,7 @@ Phaser 會載入 [`public/game/minglin.tmj`](public/game/minglin.tmj) 內的 `Ac
 
 PoC 介面提供操作說明、重新開始確認、初次載入及斷線重試畫面。對話文字會暫存在目前瀏覽器；只有當後端 Session 的回合與更新時間相符時才恢復，避免服務重啟後顯示不屬於新進度的舊紀錄。遊戲回合仍由後端的記憶體 Session 管理。
 
-目前對話由後端的測試流程產生；接入 B 的 LoRA 模型服務後，畫面會直接顯示新的 NPC 台詞。Session 暫存在後端記憶體中，後端重新啟動後會重設。
+目前對話由後端明確標示的「開發替身」產生；真實模型、RAG、規則結果計算與 NPC 記憶尚未接入。Session 暫存在後端記憶體中，後端重新啟動後會重設。前端每次送出都包含 `action_id` 與 `expected_state_version`，後端可在目前程序內避免重複回合並拒絕過期狀態。
 
 ## 第一人稱 3D 試玩
 

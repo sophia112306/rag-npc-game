@@ -17,8 +17,14 @@ type CharacterProfile = {
 
 type GameTurnResponse = {
   turn_number: number;
-  state: { updated_at: string };
+  state: { state_version: number; updated_at: string };
   story: { dialogue: { speaker_name: string; text: string }[] };
+};
+
+type GameStateSummary = {
+  turn_count: number;
+  state_version: number;
+  updated_at: string;
 };
 
 type ChatMessage = {
@@ -67,6 +73,7 @@ export default function Home() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [restartConfirm, setRestartConfirm] = useState(false);
   const [turnNumber, setTurnNumber] = useState(0);
+  const [stateVersion, setStateVersion] = useState(1);
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -101,19 +108,20 @@ export default function Home() {
     try {
       const [character, state] = await Promise.all([
         requestJson<CharacterProfile>("/api/characters/vidalia"),
-        requestJson<{ turn_number: number; updated_at: string }>("/api/game/start", {
+        requestJson<GameStateSummary>("/api/game/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ session_id: id }),
         }),
       ]);
       setProfile(character);
-      setTurnNumber(state.turn_number);
+      setTurnNumber(state.turn_count);
+      setStateVersion(state.state_version);
       const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: character.name, text: character.greeting, kind: "npc" }];
       let restored = fallback;
       try {
         const cached = JSON.parse(window.localStorage.getItem(conversationKey(id)) ?? "null");
-        if (cached?.turn_number === state.turn_number && cached?.updated_at === state.updated_at &&
+        if (cached?.turn_number === state.turn_count && cached?.updated_at === state.updated_at &&
           Array.isArray(cached.messages) && cached.messages.length > 0 &&
           cached.messages.every((message: ChatMessage) => typeof message.id === "string" &&
             typeof message.speaker === "string" && typeof message.text === "string" &&
@@ -151,9 +159,18 @@ export default function Home() {
       const turn = await requestJson<GameTurnResponse>("/api/game/turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, text, input_type: "text" }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          action_id: window.crypto.randomUUID(),
+          message: text,
+          input_type: "text",
+          target_npc_id: "vidalia",
+          action_mode: "dialogue",
+          expected_state_version: stateVersion,
+        }),
       });
       setTurnNumber(turn.turn_number);
+      setStateVersion(turn.state.state_version);
       const nextMessages: ChatMessage[] = [...messages, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }, ...turn.story.dialogue.map((line) => ({
         id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const,
       }))];

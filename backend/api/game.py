@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.orchestration.game_orchestrator import (
     GameOrchestrator,
     SessionNotFoundError,
+    StateVersionConflictError,
 )
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState
@@ -62,6 +63,16 @@ async def submit_player_action(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "SESSION_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    except StateVersionConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "STATE_VERSION_CONFLICT",
+                "message": str(exc),
+                "expected_state_version": exc.expected,
+                "actual_state_version": exc.actual,
+            },
         ) from exc
 
 
