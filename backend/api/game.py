@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.generation.planner import StoryGenerationUnavailableError
 from backend.orchestration.game_orchestrator import (
     ActionIdConflictError,
     GameOrchestrator,
@@ -83,6 +84,17 @@ async def submit_player_action(
                 "message": str(exc),
                 "action_id": str(exc.action_id),
             },
+        ) from exc
+    except StoryGenerationUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "STORY_GENERATION_UNAVAILABLE",
+                "message": str(exc),
+                "reason": exc.code,
+                "attempts": exc.attempts,
+            },
+            headers={"Retry-After": "2"},
         ) from exc
 
 

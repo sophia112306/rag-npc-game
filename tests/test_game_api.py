@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.generation.planner import StoryGenerationUnavailableError
 from backend.main import create_app
 
 
@@ -155,3 +156,33 @@ def test_session_and_idempotent_response_survive_app_restart(tmp_path) -> None:
     assert state.json()["state_version"] == 2
     assert replay.status_code == 200
     assert replay.json() == expected_response
+
+
+def test_generation_failure_returns_503_without_committing_turn(tmp_path) -> None:
+    class FailingPlanner:
+        async def propose(self, action, parsed_action, state):
+            raise StoryGenerationUnavailableError("model_timeout", 2)
+
+    application = create_app(
+        f"sqlite+aiosqlite:///{tmp_path / 'model-failure.db'}",
+        story_planner_factory=lambda _context: FailingPlanner(),
+    )
+    with TestClient(application) as failing_client:
+        state = start_session(failing_client, "model-failure-session")
+        failed = failing_client.post(
+            "/api/game/turn",
+            json=action_payload(state["session_id"]),
+        )
+        unchanged = failing_client.get(f"/api/game/{state['session_id']}/state")
+
+    assert failed.status_code == 503
+    assert failed.headers["retry-after"] == "2"
+    assert failed.json()["detail"] == {
+        "code": "STORY_GENERATION_UNAVAILABLE",
+        "message": "Story generation is temporarily unavailable",
+        "reason": "model_timeout",
+        "attempts": 2,
+    }
+    assert unchanged.status_code == 200
+    assert unchanged.json()["turn_count"] == 0
+    assert unchanged.json()["state_version"] == 1
