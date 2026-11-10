@@ -3,8 +3,12 @@
 import os
 from pathlib import Path
 
+from sqlalchemy import event
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+
+from .base import Base
+from . import models  # noqa: F401
 
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./data/game.db"
@@ -30,10 +34,24 @@ def create_database_engine(database_url: str | None = None, *, echo: bool = Fals
 
     url = database_url or get_database_url()
     ensure_sqlite_directory(url)
-    return create_async_engine(url, echo=echo)
+    engine = create_async_engine(url, echo=echo)
+    if make_url(url).drivername.startswith("sqlite"):
+        @event.listens_for(engine.sync_engine, "connect")
+        def enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+    return engine
 
 
 def create_async_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     """Create sessions that keep ORM state available after commits."""
 
     return async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def create_schema(engine: AsyncEngine) -> None:
+    """Create tables for tests and local development; deployments use Alembic."""
+
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
