@@ -1,6 +1,6 @@
 # RAG NPC Game
 
-生成式 NPC 遊戲的 A／D 整合專案。現階段 M2c 已串接既有 Next.js＋Phaser 前端、FastAPI 與 SQLite：可以建立持久化 Session、送出文字並顯示明確標示的開發替身回覆；玩家 API、NPC 私有生成背景及事件核准流程已分開。
+生成式 NPC 遊戲的 A／D 整合專案。現階段 M3 整合基礎已串接既有 Next.js＋Phaser 前端、FastAPI 與 SQLite：可以建立持久化 Session、送出文字，並依設定顯示開發替身或外部 Gateway 的動態 NPC 台詞；玩家 API、NPC 私有生成背景及事件核准流程已分開。
 
 > 真實模型、RAG、自動記憶寫入與語音服務尚未接入。開發替身不會修改背包、角色設定或遊戲規則數值。
 
@@ -50,6 +50,7 @@ npm run dev
 ## 目前 API
 
 - `GET /api/characters/{npc_id}`：玩家可見的公開角色資料
+- `GET /api/capabilities`：目前使用開發替身或外部模型，以及已開放的操作類型
 - `POST /api/game/start`：建立或恢復持久化 Session
 - `POST /api/game/turn`：提交 `action_id`、訊息與預期狀態版本
 - `GET /api/game/{session_id}/state`：取得玩家可見狀態
