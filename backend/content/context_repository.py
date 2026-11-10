@@ -1,9 +1,15 @@
 """Persistence and authorization boundary for future NPC generation context."""
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from backend.database.models import CharacterDefinitionRecord, KnowledgeRecord, MemoryRecord
+from backend.database.models import (
+    CharacterDefinitionRecord,
+    CommitmentRecord,
+    KnowledgeRecord,
+    MemoryRecord,
+    NPCGoalRecord,
+)
 from backend.schemas.content import (
     CharacterDefinition,
     KnowledgeItem,
@@ -11,6 +17,14 @@ from backend.schemas.content import (
     MemoryItem,
     MemoryRecordInput,
     NPCGenerationContext,
+)
+from backend.schemas.progression import (
+    CommitmentItem,
+    CommitmentRecordInput,
+    CommitmentStatus,
+    GoalStatus,
+    NPCGoalItem,
+    NPCGoalRecordInput,
 )
 
 
@@ -84,6 +98,45 @@ class NPCContextRepository:
             )
             await database.commit()
 
+    async def add_goal(self, item: NPCGoalRecordInput) -> None:
+        async with self._session_factory() as database:
+            database.add(
+                NPCGoalRecord(
+                    goal_id=str(item.goal_id),
+                    session_id=item.session_id,
+                    npc_id=item.npc_id,
+                    summary=item.summary,
+                    priority=item.priority,
+                    status=item.status.value,
+                    created_turn=item.created_turn,
+                    next_review_turn=item.next_review_turn,
+                    source_kind=item.source_kind.value,
+                    source_id=item.source_id,
+                    provenance_json=item.provenance,
+                )
+            )
+            await database.commit()
+
+    async def add_commitment(self, item: CommitmentRecordInput) -> None:
+        async with self._session_factory() as database:
+            database.add(
+                CommitmentRecord(
+                    commitment_id=str(item.commitment_id),
+                    session_id=item.session_id,
+                    summary=item.summary,
+                    promisor_id=item.promisor_id,
+                    promisee_id=item.promisee_id,
+                    status=item.status.value,
+                    created_turn=item.created_turn,
+                    due_turn=item.due_turn,
+                    source_kind=item.source_kind.value,
+                    source_id=item.source_id,
+                    visibility=item.visibility,
+                    provenance_json=item.provenance,
+                )
+            )
+            await database.commit()
+
     async def get_generation_context(
         self,
         session_id: str,
@@ -119,6 +172,33 @@ class NPCContextRepository:
             )
             knowledge = list(knowledge_result.scalars())
             memories = list(memory_result.scalars())
+            goals_result = await database.execute(
+                select(NPCGoalRecord)
+                .where(
+                    NPCGoalRecord.session_id == session_id,
+                    NPCGoalRecord.npc_id == npc_id,
+                    NPCGoalRecord.status == GoalStatus.ACTIVE.value,
+                    NPCGoalRecord.next_review_turn <= current_turn,
+                )
+                .order_by(NPCGoalRecord.priority.desc(), NPCGoalRecord.next_review_turn)
+                .limit(2)
+            )
+            commitments_result = await database.execute(
+                select(CommitmentRecord)
+                .where(
+                    CommitmentRecord.session_id == session_id,
+                    CommitmentRecord.status == CommitmentStatus.ACTIVE.value,
+                    CommitmentRecord.created_turn <= current_turn,
+                    or_(
+                        CommitmentRecord.promisor_id == npc_id,
+                        CommitmentRecord.promisee_id == npc_id,
+                    ),
+                )
+                .order_by(CommitmentRecord.created_turn.desc())
+                .limit(3)
+            )
+            goals = list(goals_result.scalars())
+            commitments = list(commitments_result.scalars())
 
         missing_data: list[str] = []
         if definition.completeness_status != "complete":
@@ -158,6 +238,35 @@ class NPCContextRepository:
                     provenance=item.provenance_json,
                 )
                 for item in memories
+            ],
+            active_goals=[
+                NPCGoalItem(
+                    goal_id=item.goal_id,
+                    npc_id=item.npc_id,
+                    summary=item.summary,
+                    priority=item.priority,
+                    created_turn=item.created_turn,
+                    next_review_turn=item.next_review_turn,
+                    source_kind=item.source_kind,
+                    source_id=item.source_id,
+                    provenance=item.provenance_json,
+                )
+                for item in goals
+            ],
+            active_commitments=[
+                CommitmentItem(
+                    commitment_id=item.commitment_id,
+                    summary=item.summary,
+                    promisor_id=item.promisor_id,
+                    promisee_id=item.promisee_id,
+                    created_turn=item.created_turn,
+                    due_turn=item.due_turn,
+                    source_kind=item.source_kind,
+                    source_id=item.source_id,
+                    visibility=item.visibility,
+                    provenance=item.provenance_json,
+                )
+                for item in commitments
             ],
             missing_data=missing_data,
         )

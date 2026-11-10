@@ -199,3 +199,58 @@ class MemoryRecord(Base):
     is_private: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     provenance_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class NPCGoalRecord(Base):
+    """A sourced, session-scoped NPC objective eligible for turn-clock review."""
+
+    __tablename__ = "npc_goals"
+    __table_args__ = (
+        Index("ix_npc_goals_due", "session_id", "npc_id", "status", "next_review_turn"),
+    )
+
+    goal_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        String(100),
+        ForeignKey("game_sessions.session_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    npc_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_turn: Mapped[int] = mapped_column(Integer, nullable=False)
+    next_review_turn: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    provenance_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class CommitmentRecord(Base):
+    """A sourced promise or obligation that can influence later turns."""
+
+    __tablename__ = "commitments"
+    __table_args__ = (
+        Index("ix_commitments_active", "session_id", "status", "created_turn"),
+    )
+
+    commitment_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        String(100),
+        ForeignKey("game_sessions.session_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    promisor_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    promisee_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_turn: Mapped[int] = mapped_column(Integer, nullable=False)
+    due_turn: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False)
+    provenance_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

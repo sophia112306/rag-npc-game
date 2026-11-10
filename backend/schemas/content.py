@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 from .character import CharacterProfile
+from .progression import CommitmentItem, NPCGoalItem
 
 
 class SettingCertainty(str, Enum):
@@ -130,4 +131,6 @@ class NPCGenerationContext(BaseModel):
     private_profile: dict[str, Any]
     knowledge: list[KnowledgeItem]
     memories: list[MemoryItem]
+    active_goals: list[NPCGoalItem] = Field(default_factory=list)
+    active_commitments: list[CommitmentItem] = Field(default_factory=list)
     missing_data: list[str]

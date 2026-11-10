@@ -9,6 +9,13 @@ from backend.database import create_async_session_factory, create_database_engin
 from backend.database.repository import SqlAlchemyGameRepository
 from backend.schemas.content import DisclosureScope, KnowledgeRecordInput, MemoryRecordInput
 from backend.schemas.game_state import GameState
+from backend.schemas.progression import (
+    CommitmentRecordInput,
+    CommitmentStatus,
+    GoalStatus,
+    NPCGoalRecordInput,
+    ProgressionSourceKind,
+)
 
 
 @pytest_asyncio.fixture
@@ -141,3 +148,99 @@ async def test_context_only_contains_active_memories_for_the_target_npc(context_
 async def test_unregistered_character_cannot_receive_generation_context(context_repository) -> None:
     with pytest.raises(CharacterDefinitionNotFoundError):
         await context_repository.get_generation_context("context-session", "unknown", 1)
+
+
+@pytest.mark.asyncio
+async def test_turn_context_limits_goals_to_due_active_target_records(context_repository) -> None:
+    repository = context_repository
+    for item in (
+        NPCGoalRecordInput(
+            session_id="context-session",
+            npc_id="vidalia",
+            summary="目前應重新檢視的高優先目標。",
+            priority=90,
+            created_turn=0,
+            next_review_turn=1,
+            source_kind=ProgressionSourceKind.AUTHOR,
+            source_id="team-goal-1",
+        ),
+        NPCGoalRecordInput(
+            session_id="context-session",
+            npc_id="vidalia",
+            summary="未來回合才檢視。",
+            priority=100,
+            created_turn=0,
+            next_review_turn=5,
+            source_kind=ProgressionSourceKind.AUTHOR,
+            source_id="team-goal-future",
+        ),
+        NPCGoalRecordInput(
+            session_id="context-session",
+            npc_id="vidalia",
+            summary="已完成的舊目標。",
+            priority=100,
+            status=GoalStatus.COMPLETED,
+            created_turn=0,
+            next_review_turn=0,
+            source_kind=ProgressionSourceKind.ESTABLISHED_EVENT,
+            source_id="event-completed-goal",
+        ),
+        NPCGoalRecordInput(
+            session_id="context-session",
+            npc_id="andre",
+            summary="其他 NPC 的目標。",
+            priority=100,
+            created_turn=0,
+            next_review_turn=0,
+            source_kind=ProgressionSourceKind.AUTHOR,
+            source_id="andre-goal",
+        ),
+    ):
+        await repository.add_goal(item)
+
+    context = await repository.get_generation_context("context-session", "vidalia", 1)
+
+    assert [goal.summary for goal in context.active_goals] == ["目前應重新檢視的高優先目標。"]
+
+
+@pytest.mark.asyncio
+async def test_turn_context_only_includes_active_commitments_for_target_npc(context_repository) -> None:
+    repository = context_repository
+    for item in (
+        CommitmentRecordInput(
+            session_id="context-session",
+            summary="玩家答應下回合帶回線索。",
+            promisor_id="context-session-player",
+            promisee_id="vidalia",
+            created_turn=1,
+            due_turn=2,
+            source_kind=ProgressionSourceKind.ESTABLISHED_EVENT,
+            source_id="event-visible-promise",
+        ),
+        CommitmentRecordInput(
+            session_id="context-session",
+            summary="已履行的承諾。",
+            promisor_id="vidalia",
+            promisee_id="context-session-player",
+            status=CommitmentStatus.FULFILLED,
+            created_turn=0,
+            source_kind=ProgressionSourceKind.ESTABLISHED_EVENT,
+            source_id="event-fulfilled-promise",
+        ),
+        CommitmentRecordInput(
+            session_id="context-session",
+            summary="與目標 NPC 無關的承諾。",
+            promisor_id="andre",
+            promisee_id="menmesvento",
+            created_turn=1,
+            source_kind=ProgressionSourceKind.ESTABLISHED_EVENT,
+            source_id="event-other-promise",
+        ),
+    ):
+        await repository.add_commitment(item)
+
+    context = await repository.get_generation_context("context-session", "vidalia", 2)
+
+    assert [item.summary for item in context.active_commitments] == [
+        "玩家答應下回合帶回線索。"
+    ]

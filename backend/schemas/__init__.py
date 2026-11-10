@@ -18,6 +18,15 @@ from .game_state import GameState, InventoryItem, NPCState, PlayerState, SceneSt
 from .parsed_action import ActionType, ParsedAction
 from .player_action import ActionMode, InputType, PlayerAction
 from .player_view import NPCPublicStateView, PlayerIdentityView, PlayerViewState
+from .progression import (
+    CommitmentItem,
+    CommitmentRecordInput,
+    CommitmentStatus,
+    GoalStatus,
+    NPCGoalItem,
+    NPCGoalRecordInput,
+    ProgressionSourceKind,
+)
 from .story import (
     DialogueLine,
     EstablishedEvent,
@@ -37,6 +46,9 @@ __all__ = [
     "ApiError",
     "CharacterProfile",
     "CharacterDefinition",
+    "CommitmentItem",
+    "CommitmentRecordInput",
+    "CommitmentStatus",
     "DisclosureScope",
     "DeltaPayload",
     "DialogueLine",
@@ -44,6 +56,7 @@ __all__ = [
     "EventProposal",
     "GameState",
     "GameTurnResponse",
+    "GoalStatus",
     "InputType",
     "InventoryItem",
     "NarrativeAIResponse",
@@ -52,6 +65,8 @@ __all__ = [
     "MemoryItem",
     "MemoryRecordInput",
     "NPCGenerationContext",
+    "NPCGoalItem",
+    "NPCGoalRecordInput",
     "NPCState",
     "NPCPublicStateView",
     "OperationType",
@@ -62,6 +77,7 @@ __all__ = [
     "PlayerViewState",
     "ProposalDecision",
     "ProposalStatus",
+    "ProgressionSourceKind",
     "ResolvedStory",
     "SceneState",
     "SpeakerType",
