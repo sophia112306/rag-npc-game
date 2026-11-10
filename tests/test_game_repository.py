@@ -7,7 +7,13 @@ import pytest_asyncio
 from sqlalchemy import func, select
 
 from backend.database import create_async_session_factory, create_database_engine, create_schema
-from backend.database.models import ActionRecord, DialogueRecord, GameEventRecord, GameSessionRecord
+from backend.database.models import (
+    ActionRecord,
+    DialogueRecord,
+    GameEventRecord,
+    GameSessionRecord,
+    MemoryRecord,
+)
 from backend.database.repository import (
     ActionIdConflictError,
     CommittedGameEvent,
@@ -188,9 +194,11 @@ async def test_failed_event_serialization_rolls_back_entire_turn(repository_cont
         action_count = await database.scalar(select(func.count()).select_from(ActionRecord))
         dialogue_count = await database.scalar(select(func.count()).select_from(DialogueRecord))
         event_count = await database.scalar(select(func.count()).select_from(GameEventRecord))
+        memory_count = await database.scalar(select(func.count()).select_from(MemoryRecord))
     assert session is not None
     assert session.state_version == 1
     assert session.turn_count == 0
     assert action_count == 0
     assert dialogue_count == 0
     assert event_count == 0
+    assert memory_count == 0

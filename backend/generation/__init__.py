@@ -1,6 +1,7 @@
 """Replaceable model-generation boundaries."""
 
 from .gateway import (
+    GenerationBudget,
     ModelGateway,
     ModelGatewayPermanentError,
     ModelGatewayTransientError,
@@ -13,6 +14,7 @@ from .planner import GatewayStoryPlanner, StoryGenerationUnavailableError
 
 __all__ = [
     "GatewayStoryPlanner",
+    "GenerationBudget",
     "HttpModelGateway",
     "ModelGateway",
     "ModelGatewayPermanentError",

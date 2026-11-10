@@ -7,7 +7,12 @@ from sqlalchemy import func, select
 import pytest
 
 from backend.database import create_async_session_factory, create_database_engine, create_schema
-from backend.database.models import ActionRecord, CommitmentRecord, GameEventRecord
+from backend.database.models import (
+    ActionRecord,
+    CommitmentRecord,
+    GameEventRecord,
+    MemoryRecord,
+)
 from backend.database.repository import SqlAlchemyGameRepository
 from backend.orchestration.game_orchestrator import GameOrchestrator
 from backend.schemas.game_state import GameState, PlayerState
@@ -179,10 +184,13 @@ async def test_approved_commitment_is_saved_once_with_source_event(tmp_path) -> 
     async with session_factory() as database:
         commitments = list((await database.execute(select(CommitmentRecord))).scalars())
         events = list((await database.execute(select(GameEventRecord))).scalars())
+        memories = list((await database.execute(select(MemoryRecord))).scalars())
     assert len(commitments) == 1
     assert len(events) == 1
     assert commitments[0].summary == "玩家答應在三回合內帶回地圖碎片。"
     assert commitments[0].created_turn == 1
     assert commitments[0].due_turn == 4
     assert commitments[0].source_id == events[0].event_id
+    assert {memory.memory_type for memory in memories} == {"interaction", "observed_event"}
+    assert all(memory.npc_id == "vidalia" for memory in memories)
     await engine.dispose()

@@ -11,6 +11,17 @@ from backend.schemas.player_action import ActionMode
 from backend.schemas.story import EventProposal, OperationType
 
 
+class GenerationBudget(BaseModel):
+    """Hard first-version limits for one player-triggered world tick."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    max_model_calls: int = Field(default=2, ge=1, le=3)
+    max_event_proposals: int = Field(default=1, ge=0, le=1)
+    max_active_goals: int = Field(default=2, ge=0, le=2)
+    max_active_commitments: int = Field(default=3, ge=0, le=3)
+
+
 class ModelTurnRequest(BaseModel):
     """Minimal authorized context sent to a model adapter for one turn."""
 
@@ -27,6 +38,7 @@ class ModelTurnRequest(BaseModel):
     parsed_action: ParsedAction
     target_context: NPCGenerationContext
     allowed_operations: list[OperationType]
+    generation_budget: GenerationBudget = Field(default_factory=GenerationBudget)
 
 
 class ModelNPCDialogue(BaseModel):
@@ -45,7 +57,7 @@ class ModelStoryOutput(BaseModel):
 
     intent_summary: str = Field(default="", max_length=1_000)
     npc_dialogue: list[ModelNPCDialogue] = Field(..., min_length=1, max_length=3)
-    event_proposals: list[EventProposal] = Field(default_factory=list, max_length=3)
+    event_proposals: list[EventProposal] = Field(default_factory=list, max_length=1)
 
 
 class ModelGatewayTransientError(RuntimeError):

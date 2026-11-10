@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from backend.content.context_repository import CharacterDefinitionNotFoundError
 from backend.generation.gateway import (
+    GenerationBudget,
     ModelGateway,
     ModelGatewayPermanentError,
     ModelGatewayTransientError,
@@ -90,6 +91,7 @@ class GatewayStoryPlanner:
                 OperationType.TRANSFER_ITEM,
                 OperationType.ESTABLISH_COMMITMENT,
             ],
+            generation_budget=GenerationBudget(max_model_calls=self._max_attempts),
         )
         output = await self._generate_valid_output(request)
         return StoryProposal(

@@ -67,6 +67,12 @@ async def test_http_gateway_posts_contract_json_with_optional_bearer_token() -> 
     assert result["intent_summary"] == "A valid response"
     assert captured["authorization"] == "Bearer test-token"
     assert captured["payload"]["target_context"]["npc_id"] == "vidalia"
+    assert captured["payload"]["generation_budget"] == {
+        "max_model_calls": 2,
+        "max_event_proposals": 1,
+        "max_active_goals": 2,
+        "max_active_commitments": 3,
+    }
     assert "truth_level" not in captured["payload"]
 
 

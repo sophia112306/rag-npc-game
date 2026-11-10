@@ -235,3 +235,76 @@ def test_configured_gateway_dialogue_reaches_player_after_validation(tmp_path) -
     assert line["speaker_name"] == "維達利亞"
     assert "命脈之泉" in line["text"]
     assert "開發替身" not in line["text"]
+
+
+def test_next_model_turn_receives_committed_memory_and_commitment(tmp_path) -> None:
+    class ContinuityGateway:
+        def __init__(self) -> None:
+            self.requests = []
+
+        async def generate_story(self, request):
+            self.requests.append(request)
+            if request.turn_number == 1:
+                return {
+                    "intent_summary": "Record the player's explicit promise.",
+                    "npc_dialogue": [{"text": "我會記得你的承諾。"}],
+                    "event_proposals": [
+                        {
+                            "event_type": "commitment_created",
+                            "description": "Untrusted wording.",
+                            "actor_id": request.player_id,
+                            "target_id": request.target_context.npc_id,
+                            "operations": [
+                                {
+                                    "operation_type": "establish_commitment",
+                                    "summary": "玩家答應帶回地圖碎片。",
+                                    "promisor_id": request.player_id,
+                                    "promisee_id": request.target_context.npc_id,
+                                    "due_in_turns": 3,
+                                }
+                            ],
+                            "witness_ids": [request.player_id, request.target_context.npc_id],
+                            "visible_to_player": True,
+                        }
+                    ],
+                }
+            return {
+                "intent_summary": "Continue from persisted context.",
+                "npc_dialogue": [{"text": "你的承諾仍未完成。"}],
+                "event_proposals": [],
+            }
+
+    gateway = ContinuityGateway()
+    application = create_app(
+        f"sqlite+aiosqlite:///{tmp_path / 'continuity.db'}",
+        story_planner_factory=lambda context: GatewayStoryPlanner(gateway, context),
+    )
+    with TestClient(application) as continuity_client:
+        state = start_session(continuity_client, "continuity-session")
+        first = continuity_client.post(
+            "/api/game/turn",
+            json={
+                **action_payload(state["session_id"]),
+                "message": "我答應帶回地圖碎片",
+            },
+        )
+        second = continuity_client.post(
+            "/api/game/turn",
+            json={
+                **action_payload(state["session_id"], expected_state_version=2),
+                "message": "你還記得嗎？",
+            },
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert len(gateway.requests) == 2
+    next_context = gateway.requests[1].target_context
+    assert [item.summary for item in next_context.active_commitments] == [
+        "玩家答應帶回地圖碎片。"
+    ]
+    assert {memory.memory_type for memory in next_context.memories} == {
+        "interaction",
+        "observed_event",
+    }
+    assert any("我答應帶回地圖碎片" in memory.content for memory in next_context.memories)

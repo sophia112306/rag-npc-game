@@ -23,6 +23,7 @@ from .models import (
     DialogueRecord,
     GameEventRecord,
     GameSessionRecord,
+    MemoryRecord,
 )
 
 
@@ -215,6 +216,27 @@ class SqlAlchemyGameRepository:
                                 created_at=completed_at,
                             )
                         )
+                    if (
+                        action.target_npc_id is not None
+                        and action.target_npc_id in updated_state.npc_states
+                    ):
+                        database.add(
+                            MemoryRecord(
+                                memory_id=str(uuid4()),
+                                session_id=action.session_id,
+                                npc_id=action.target_npc_id,
+                                content=f"玩家說：「{action.message}」",
+                                memory_type="interaction",
+                                source_event_id=None,
+                                source_action_id=str(action.action_id),
+                                occurred_turn=response.turn_number,
+                                importance=10,
+                                is_active=True,
+                                is_private=True,
+                                provenance_json={"input_type": action.input_type.value},
+                                created_at=completed_at,
+                            )
+                        )
                     for event in approved_events:
                         event_id = event.event_id or str(uuid4())
                         database.add(
@@ -234,6 +256,27 @@ class SqlAlchemyGameRepository:
                                 created_at=completed_at,
                             )
                         )
+                        witness_ids = (event.visibility or {}).get("witness_ids", [])
+                        for witness_id in dict.fromkeys(witness_ids):
+                            if witness_id not in updated_state.npc_states:
+                                continue
+                            database.add(
+                                MemoryRecord(
+                                    memory_id=str(uuid4()),
+                                    session_id=action.session_id,
+                                    npc_id=witness_id,
+                                    content=event.description,
+                                    memory_type="observed_event",
+                                    source_event_id=event_id,
+                                    source_action_id=str(action.action_id),
+                                    occurred_turn=response.turn_number,
+                                    importance=20,
+                                    is_active=True,
+                                    is_private=True,
+                                    provenance_json={"event_type": event.event_type},
+                                    created_at=completed_at,
+                                )
+                            )
                         for operation in (event.effect or {}).get("operations", []):
                             if operation.get("operation_type") != "establish_commitment":
                                 continue

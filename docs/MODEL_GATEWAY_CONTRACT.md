@@ -44,9 +44,17 @@ API key 有值時以 `Authorization: Bearer <token>` 傳送。timeout 必須大�
     "private_profile": {},
     "knowledge": [],
     "memories": [],
+    "active_goals": [],
+    "active_commitments": [],
     "missing_data": ["character_definition_incomplete"]
   },
-  "allowed_operations": ["transfer_item"]
+  "allowed_operations": ["transfer_item", "establish_commitment"],
+  "generation_budget": {
+    "max_model_calls": 2,
+    "max_event_proposals": 1,
+    "max_active_goals": 2,
+    "max_active_commitments": 3
+  }
 }
 ```
 
@@ -71,7 +79,7 @@ API key 有值時以 `Authorization: Bearer <token>` 傳送。timeout 必須大�
 
 `npc_dialogue` 必須有 1～3 行。模型只產生文字與情緒；後端會把說話者固定為 request 中已授權的目標 NPC，模型不能冒充系統旁白或其他角色。NPC 台詞屬於角色的主觀發言，不會直接修改世界；客觀效果仍由後端以核准操作產生確定性系統敘事。
 
-後端目前最多接受三個 `event_proposals`。第一版唯一可執行 operation 是已列於 request 的 `transfer_item`：
+後端目前每回合最多接受一個 `event_proposals`；Gateway transport 最多依設定嘗試 1～3 次。可執行 operation 只限 request 的白名單。`transfer_item` 範例：
 
 ```json
 {
@@ -99,6 +107,20 @@ API key 有值時以 `Authorization: Bearer <token>` 傳送。timeout 必須大�
 ```
 
 模型不能指定 Session、狀態版本或實際成立結果。後端會驗證角色、持有權與操作白名單；拒絕的提案不改狀態，也不進入最終敘事。
+
+`establish_commitment` 可建立之後回合能承接的正式承諾，但行動者必須等於承諾者，雙方必須是已登記實體，期限只能是 1～20 回合後：
+
+```json
+{
+  "operation_type": "establish_commitment",
+  "summary": "玩家答應帶回地圖碎片。",
+  "promisor_id": "session-123-player",
+  "promisee_id": "vidalia",
+  "due_in_turns": 3
+}
+```
+
+核准後，Commitment、來源 GameEvent、NPC 目擊記憶、對話與狀態在同一交易保存；下一回合會出現在相關 NPC 的 `active_commitments` 或 `memories`。模型不能直接寫入這些資料表。
 
 ## 錯誤與重試
 
