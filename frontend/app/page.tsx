@@ -34,6 +34,18 @@ type ChatMessage = {
   kind: "npc" | "player";
 };
 
+type PendingAction = {
+  actionId: string;
+  text: string;
+  expectedStateVersion: number;
+};
+
+class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: string) {
+    super(message);
+  }
+}
+
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8300";
 const storageKey = "vidalia-game-session";
 const conversationKey = (id: string) => `vidalia-conversation:${id}`;
@@ -55,7 +67,18 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new Error("無法連線到遊戲服務，請確認後端已啟動。");
   }
-  if (!response.ok) throw new Error(`遊戲服務回應 ${response.status}，請稍後重試。`);
+  if (!response.ok) {
+    let detail: { code?: string; message?: string } | undefined;
+    try {
+      const payload = (await response.json()) as { detail?: { code?: string; message?: string } };
+      detail = payload.detail;
+    } catch { /* Non-JSON failures use the generic status message below. */ }
+    throw new ApiRequestError(
+      detail?.message ?? `遊戲服務回應 ${response.status}，請稍後重試。`,
+      response.status,
+      detail?.code,
+    );
+  }
   return (await response.json()) as T;
 }
 
@@ -76,6 +99,7 @@ export default function Home() {
   const [stateVersion, setStateVersion] = useState(1);
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
+  const pendingActionRef = useRef<PendingAction | null>(null);
 
   useEffect(() => {
     const id = window.localStorage.getItem(storageKey) ?? window.crypto.randomUUID();
@@ -154,6 +178,10 @@ export default function Home() {
     setBusy(true);
     setError("");
     setMessages((current) => [...current, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }]);
+    const pending = pendingActionRef.current;
+    const canRetryPending = pending?.text === text && pending.expectedStateVersion === stateVersion;
+    const actionId = canRetryPending ? pending.actionId : window.crypto.randomUUID();
+    pendingActionRef.current = { actionId, text, expectedStateVersion: stateVersion };
 
     try {
       const turn = await requestJson<GameTurnResponse>("/api/game/turn", {
@@ -161,7 +189,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: sessionId,
-          action_id: window.crypto.randomUUID(),
+          action_id: actionId,
           message: text,
           input_type: "text",
           target_npc_id: "vidalia",
@@ -169,6 +197,7 @@ export default function Home() {
           expected_state_version: stateVersion,
         }),
       });
+      pendingActionRef.current = null;
       setTurnNumber(turn.turn_number);
       setStateVersion(turn.state.state_version);
       const nextMessages: ChatMessage[] = [...messages, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }, ...turn.story.dialogue.map((line) => ({
@@ -179,7 +208,22 @@ export default function Home() {
         window.localStorage.setItem(conversationKey(sessionId), JSON.stringify({ turn_number: turn.turn_number, updated_at: turn.state.updated_at, messages: nextMessages }));
       } catch { /* The current conversation still works when browser storage is unavailable. */ }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "送出失敗，請稍後再試。");
+      if (cause instanceof ApiRequestError && cause.code === "STATE_VERSION_CONFLICT") {
+        pendingActionRef.current = null;
+        try {
+          const latest = await requestJson<GameStateSummary>(`/api/game/${sessionId}/state`);
+          setTurnNumber(latest.turn_count);
+          setStateVersion(latest.state_version);
+          setError("遊戲進度已在其他請求中更新，請確認內容後重新送出。");
+        } catch {
+          setError("遊戲進度版本衝突，且無法重新取得最新狀態。請稍後重試。");
+        }
+      } else {
+        if (cause instanceof ApiRequestError && cause.code === "ACTION_ID_CONFLICT") {
+          pendingActionRef.current = null;
+        }
+        setError(cause instanceof Error ? cause.message : "送出失敗，請稍後再試。");
+      }
       setInput(text);
       setMessages(messages);
     } finally {
@@ -195,6 +239,7 @@ export default function Home() {
     setHelpOpen(false);
     setNearNpc(false);
     setInput("");
+    pendingActionRef.current = null;
     void initialize(id);
   }
 
