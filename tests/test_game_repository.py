@@ -121,7 +121,7 @@ async def test_session_and_completed_turn_survive_new_engine(repository_context)
 @pytest.mark.asyncio
 async def test_same_action_id_with_different_content_is_rejected(repository_context) -> None:
     repository, _session_factory, _database_url = repository_context
-    initial = GameState(session_id="digest-session")
+    initial = GameState(session_id="digest-session", current_scene_id="minglin")
     await repository.create_or_get_session(initial)
     action = make_action(initial.session_id)
     updated, response = make_turn(action, initial)
@@ -139,7 +139,7 @@ async def test_same_action_id_with_different_content_is_rejected(repository_cont
 @pytest.mark.asyncio
 async def test_stale_version_does_not_create_a_second_turn(repository_context) -> None:
     repository, session_factory, _database_url = repository_context
-    initial = GameState(session_id="version-session")
+    initial = GameState(session_id="version-session", current_scene_id="minglin")
     await repository.create_or_get_session(initial)
     first = make_action(initial.session_id)
     first_updated, first_response = make_turn(first, initial)
@@ -170,7 +170,7 @@ async def test_stale_version_does_not_create_a_second_turn(repository_context) -
 @pytest.mark.asyncio
 async def test_failed_event_serialization_rolls_back_entire_turn(repository_context) -> None:
     repository, session_factory, _database_url = repository_context
-    initial = GameState(session_id="rollback-session")
+    initial = GameState(session_id="rollback-session", current_scene_id="minglin")
     await repository.create_or_get_session(initial)
     action = make_action(initial.session_id)
     invalid_event = CommittedGameEvent(

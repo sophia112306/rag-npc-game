@@ -91,6 +91,36 @@ async def test_planner_sends_only_explicit_authorized_context() -> None:
     assert '"axis"' not in request_json
     assert "character_definition_incomplete" in request_json
     assert "map_fragment" in request_json
+    assert "change_scene" not in gateway.requests[0].allowed_operations
+
+
+@pytest.mark.asyncio
+async def test_movement_request_limits_model_to_scene_change_operation() -> None:
+    gateway = SequenceGateway(
+        {
+            "intent_summary": "Acknowledge the requested movement.",
+            "npc_dialogue": [{"text": "我會在這裡等你。"}],
+            "event_proposals": [],
+        }
+    )
+    planner = GatewayStoryPlanner(gateway, FixedContextProvider())
+    action, _parsed, state = make_inputs()
+    action = action.model_copy(
+        update={
+            "action_mode": "movement",
+            "destination_scene_id": "minglin_life_spring",
+        }
+    )
+    parsed = ParsedAction(
+        intent="move",
+        action_type="movement",
+        target_ids=["minglin_life_spring"],
+        parameters={"destination_scene_id": "minglin_life_spring"},
+    )
+
+    await planner.propose(action, parsed, state)
+
+    assert gateway.requests[0].allowed_operations == ["change_scene"]
 
 
 @pytest.mark.asyncio

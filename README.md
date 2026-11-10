@@ -42,9 +42,9 @@ export MODEL_GATEWAY_API_KEY='<本機金鑰>'
 
 程式不會替團隊選定模型，也不會自動讀取或提交本機 `.env`。未設定 URL 時使用可直接遊玩的「規則動態」；完整格式、JSON schema fallback 與 B 需確認的項目見 [`docs/MODEL_GATEWAY_CONTRACT.md`](docs/MODEL_GATEWAY_CONTRACT.md)。
 
-規則動態目前能處理招呼、場景觀察、任務詢問、明確承諾、物品交付與先前對話回想。任務、承諾及物品移轉仍需通過後端白名單驗證，並與完整回合同一交易保存。它是可驗收的程序式故事系統，不宣稱具備 LLM 的自由創作能力。
+規則動態目前能處理招呼、場景觀察、任務詢問、明確承諾、物品交付、先前對話回想與場景移動。任務、承諾、物品移轉及換場仍需通過後端白名單驗證，並與完整回合同一交易保存。它是可驗收的程序式故事系統，不宣稱具備 LLM 的自由創作能力。
 
-對話介面也會顯示後端依 Session 產生的三個可點選行動。初始提供所在地、委託與異象選項；任務成立後會改為任務追問、承諾回報與回想前文。點選選項會提交一般 `PlayerAction`，沿用相同的去重、版本及規則驗證，不是只在前端切換假畫面。
+對話介面最多顯示四個由後端依 Session 產生的可點選行動，包含情境對話及目前場景可到達的地點。點選換場選項會提交含 `destination_scene_id` 的一般 `PlayerAction`，沿用相同的去重、版本、規則驗證與資料庫交易，不是只在前端切換假畫面。
 
 前端：
 
@@ -77,17 +77,17 @@ npm run dev
 
 玩家 API 只回傳 `PlayerViewState`，不包含角色私有設定、NPC 關係數值、未解鎖知識或私人記憶。後端已建立 WorldCanon、角色設定、KnowledgeRecord 與 MemoryRecord 結構；NPC 生成背景會依 NPC、Session、解鎖狀態和可用回合過濾。這些結構已能送入 ModelGateway，但尚未用 B 的真實模型／RAG 服務驗收。
 
-未受信任的 `StoryProposal` 會先通過固定操作白名單。目前第一個可執行操作是 `transfer_item`：後端確認行動者、接收者及實際持有權後才更新狀態。不存在的物品、角色或冒用他人物品會整件拒絕；核准／拒絕紀錄只存後端，玩家只會看見已成立且可公開的事件與最終敘事。
+未受信任的 `StoryProposal` 會先通過固定操作白名單。`transfer_item` 會確認行動者、接收者及實際持有權；`change_scene` 會確認目的地已登記且與目前場景相連。不存在的物品、角色、場景或不可直達的路線會整件拒絕；核准／拒絕紀錄只存後端，玩家只會看見已成立且可公開的事件與最終敘事。
 
 目前白名單也支援 `establish_commitment` 與 `offer_quest`。承諾、任務、玩家發言記憶與目擊事件會和回合同一交易保存，下一回合放入相關 NPC 的授權 context。生成任務只能先成為待接受提議，不能由模型自行標記為已接受或完成。
 
 ## 畫面與圖片素材
 
-目前沒有執行中的圖片生成模型。Phaser 2D 主遊戲載入 `frontend/public/game/forest-council.png`、玩家方向圖及 NPC 透明圖；Babylon.js 3D 原型則由程式建立幾何、燈光與相機，再貼上 repository 內的固定 PNG 材質。現有 Git 歷史只記錄素材由前端原型 commit 匯入，沒有保存原始生圖模型與 prompt，因此不能確認這批圖最初由哪個模型製作。
+第一版採用「建置期生成、遊戲期只引用版本化資產」：命脈之泉與符石林由 OpenAI 內建圖片生成工具製作，工具沒有回傳底層模型名稱，因此不在文件中猜測型號。檔案、尺寸、SHA-256、提示摘要與 provisional 狀態記錄於 [`frontend/public/game/scenes/manifest.json`](frontend/public/game/scenes/manifest.json)，完整提示在 [`docs/SCENE_ASSET_PROMPTS.md`](docs/SCENE_ASSET_PROMPTS.md)。每回合不會重新生圖，也不會讓文字模型覆寫圖片。
 
-未來若加入場景生圖，應由 A 的前端資產流程呼叫獨立 ImageGateway，先生成並審核版本化素材，再把核准的 asset ID 放入遊戲狀態；不應讓每回合文字模型直接覆寫目前場景圖片。
+後端的單一 Scene Registry 位於 `backend/content/scenes.py`，同時提供 2D 背景、3D 遠景、玩家可見名稱與合法出口。Phaser 主頁會切換完整背景；Babylon.js 3D 試玩保留原有幾何、燈光與相機，並依同一個 Session 切換遠景貼圖與場景名稱。`current_scene_id`、成立事件、對話與版本會在同一交易保存，重新整理或重啟後仍可承接。
 
-目前尚未實作正式換場。repository 只有鳴霖主畫面與 Babylon 試玩場景，C 的 E1／E2／E3 多數只有事件 ID、數值效果與階段門檻，沒有完整的場景 ID、進出條件、地圖素材及每個選項的敘事內容。這些資料確認後，才能新增受規則驗證的 `change_scene` 操作，讓背景、在場 NPC、可選行動與後續生成一起切換。
+符石林及兩張生成圖的具體美術內容目前仍標記為暫定資產；完整在場 NPC、正式進出條件及 E1／E2／E3 對應仍須由故事與規則資料確認。若未來需要即時圖片生成，應另建有預算、快取、審核與失敗回復的 ImageGateway，不和文字回合交易綁死。
 
 ## 驗證
 

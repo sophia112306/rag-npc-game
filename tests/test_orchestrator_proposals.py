@@ -87,6 +87,7 @@ async def test_approved_proposal_updates_state_and_event_in_one_commit(tmp_path)
     repository = SqlAlchemyGameRepository(session_factory)
     initial = GameState(
         session_id="approved-session",
+        current_scene_id="minglin",
         player=PlayerState(player_id="player", inventory=["dust_token"]),
     )
     await repository.create_or_get_session(initial)
@@ -125,6 +126,7 @@ async def test_rejected_proposal_advances_turn_without_mutating_facts(tmp_path) 
     repository = SqlAlchemyGameRepository(session_factory)
     initial = GameState(
         session_id="rejected-session",
+        current_scene_id="minglin",
         player=PlayerState(player_id="player", inventory=[]),
     )
     await repository.create_or_get_session(initial)
@@ -165,6 +167,7 @@ async def test_approved_commitment_is_saved_once_with_source_event(tmp_path) -> 
     repository = SqlAlchemyGameRepository(session_factory)
     initial = GameState(
         session_id="commitment-session",
+        current_scene_id="minglin",
         player=PlayerState(player_id="player"),
     )
     await repository.create_or_get_session(initial)

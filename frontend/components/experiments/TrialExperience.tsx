@@ -2,6 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import {
+  GAME_SESSION_STORAGE_KEY,
+  requestJson,
+  type GameStateSummary,
+  type GameTurnResponse,
+  type PlayerChoice,
+  type PlayerScene,
+} from "../../lib/game-api";
 import { COUNCIL_ROUTE, easeAngle, RELIC_ROUTE, routeDistanceToPoint, routeHeading, routePoint } from "./route";
 import { NPC, RELIC, START, type Pick, type TrialDriver } from "./world";
 import styles from "./TrialExperience.module.css";
@@ -9,9 +17,22 @@ import styles from "./TrialExperience.module.css";
 type Focus = "npc" | "relic";
 type Controller = { advance: () => void; exit: () => void; reset: () => void; record: () => void };
 
+const previewScene: PlayerScene = {
+  scene_id: "minglin",
+  region_name: "鳴霖",
+  display_name: "平衡議會",
+  subtitle: "古林中的議會庭",
+  description: "維達利亞接見旅人的林間議會庭。",
+  background_url: "/game/forest-council.png",
+  horizon_url: "/game/forest-eye-backdrop.png",
+  canon_status: "confirmed",
+};
+
 export default function TrialExperience() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const controllerRef = useRef<Controller | null>(null);
+  const driverRef = useRef<TrialDriver | null>(null);
+  const sceneRef = useRef<PlayerScene>(previewScene);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [step, setStep] = useState<0 | 1 | 2>(0);
@@ -19,7 +40,76 @@ export default function TrialExperience() {
   const [focus, setFocus] = useState<Focus | null>(null);
   const [found, setFound] = useState(false);
   const [notice, setNotice] = useState("點擊石板路或維達利亞，角色會沿固定路線前進。");
-  const title = "幽藍發光遺跡";
+  const [sessionId, setSessionId] = useState("");
+  const [gameState, setGameState] = useState<GameStateSummary | null>(null);
+  const [choices, setChoices] = useState<PlayerChoice[]>([]);
+  const [storyLine, setStoryLine] = useState("「旅人，請看看四周。這裡留下的光，或許能告訴我們泉水發生了什麼。」");
+  const [turnBusy, setTurnBusy] = useState(false);
+  const [turnError, setTurnError] = useState("");
+  const currentScene = gameState?.current_scene ?? previewScene;
+  const title = currentScene.display_name;
+
+  useEffect(() => {
+    const id = window.localStorage.getItem(GAME_SESSION_STORAGE_KEY) ?? window.crypto.randomUUID();
+    window.localStorage.setItem(GAME_SESSION_STORAGE_KEY, id);
+    setSessionId(id);
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const state = await requestJson<GameStateSummary>("/api/game/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: id }),
+        });
+        const initialChoices = await requestJson<PlayerChoice[]>(`/api/game/${id}/choices`);
+        if (cancelled) return;
+        sceneRef.current = state.current_scene;
+        setGameState(state);
+        setChoices(initialChoices);
+        driverRef.current?.setBackdrop?.(state.current_scene.horizon_url);
+      } catch (cause) {
+        if (!cancelled) setTurnError(cause instanceof Error ? cause.message : "無法連線到遊戲服務。");
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, []);
+
+  async function selectStoryChoice(choice: PlayerChoice) {
+    if (!sessionId || !gameState || turnBusy) return;
+    setTurnBusy(true);
+    setTurnError("");
+    try {
+      const turn = await requestJson<GameTurnResponse>("/api/game/turn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          action_id: window.crypto.randomUUID(),
+          message: choice.message,
+          input_type: "text",
+          target_npc_id: choice.target_npc_id,
+          action_mode: choice.action_mode,
+          destination_scene_id: choice.destination_scene_id,
+          expected_state_version: gameState.state_version,
+        }),
+      });
+      const nextChoices = await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`);
+      sceneRef.current = turn.state.current_scene;
+      setGameState(turn.state);
+      setChoices(nextChoices);
+      driverRef.current?.setBackdrop?.(turn.state.current_scene.horizon_url);
+      const responseText = turn.story.dialogue.map((line) => line.text).join(" ");
+      if (responseText) setStoryLine(`「${responseText}」`);
+      setNotice(`第 ${turn.turn_number} 回合完成 · 目前位於${turn.state.current_scene.display_name}`);
+      if (choice.action_mode === "movement") controllerRef.current?.exit();
+    } catch (cause) {
+      setTurnError(cause instanceof Error ? cause.message : "行動送出失敗。");
+    } finally {
+      setTurnBusy(false);
+    }
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -211,6 +301,8 @@ export default function TrialExperience() {
       .then((loaded) => {
         if (cancelled) { loaded.dispose(); return; }
         driver = loaded;
+        driverRef.current = loaded;
+        loaded.setBackdrop?.(sceneRef.current.horizon_url);
         driver.resize();
         driver.setView(player.x, player.z, 0, -0.13);
         setReady(true);
@@ -227,6 +319,7 @@ export default function TrialExperience() {
       canvas.removeEventListener("pointerup", pointerUp);
       canvas.removeEventListener("pointercancel", pointerCancel);
       controllerRef.current = null;
+      driverRef.current = null;
       driver?.dispose();
     };
   }, []);
@@ -238,7 +331,7 @@ export default function TrialExperience() {
       <canvas ref={canvasRef} className={styles.canvas} aria-label={`${title}第一人稱 3D 場景；點擊路面沿固定路線前進`} />
       <div className={styles.vignette} aria-hidden="true" />
       <header className={styles.topbar}>
-        <div className={styles.brand}><span className={styles.compass}>✧</span><div><small>鳴霖 · 第一人稱試玩</small><strong>{title}</strong></div></div>
+        <div className={styles.brand}><span className={styles.compass}>✧</span><div><small>{currentScene.region_name} · 第一人稱試玩</small><strong>{title}</strong></div></div>
         <div className={styles.toplinks}><span>BABYLON.JS</span><Link href="/">返回原版</Link></div>
       </header>
       <div className={styles.reticle} aria-hidden="true">◇</div>
@@ -251,8 +344,11 @@ export default function TrialExperience() {
       {ready && !focus && step < 2 && <button className={styles.action} type="button" disabled={moving} onClick={() => controllerRef.current?.advance()}>{moving ? "沿路前進中…" : `點擊${nextAction} ↗`}</button>}
       {focus && <section className={styles.inspect} aria-label="定點觀察">
         <div className={styles.inspectPortrait}><img src="/images/vidalia.png" alt="維達利亞" /></div>
-        <div className={styles.inspectBody}><small>{focus === "npc" ? "維達利亞 · 議會調解人" : "命脈符石 · 調查線索"}</small><p>{focus === "npc" ? "「旅人，請看看四周。這裡留下的光，或許能告訴我們泉水發生了什麼。」" :
-          found ? "符石的紋路已記錄。光芒仍在引導你。" : "這枚符石閃著青色微光。拖曳畫面轉頭，仔細看看它的刻痕。"}</p><span>拖曳畫面環顧四周 · 此時無法移動</span></div>
+        <div className={styles.inspectBody}><small>{focus === "npc" ? `維達利亞 · 第 ${gameState?.turn_count ?? 0} 回合` : "命脈符石 · 調查線索"}</small><p>{focus === "npc" ? storyLine :
+          found ? "符石的紋路已記錄。光芒仍在引導你。" : "這枚符石閃著青色微光。拖曳畫面轉頭，仔細看看它的刻痕。"}</p>
+          {focus === "npc" && choices.length > 0 && <div className={styles.storyChoices} aria-label="動態行動選項">{choices.map((choice) => <button key={choice.choice_id} type="button" disabled={turnBusy} onClick={() => void selectStoryChoice(choice)}>{choice.label}</button>)}</div>}
+          {turnError && <span className={styles.turnError} role="alert">{turnError}</span>}
+          <span>目前場景：{currentScene.display_name} · {currentScene.canon_status === "provisional" ? "暫定內容" : "已確認設定"}</span></div>
         <div className={styles.inspectActions}>{focus === "relic" && !found && <button type="button" onClick={() => controllerRef.current?.record()}>記錄符石</button>}<button type="button" onClick={() => controllerRef.current?.exit()}>結束觀察</button></div>
       </section>}
       <footer className={styles.footer}><span>點擊路面或目標，角色會沿固定路線行走；抵達對話或任務時才能拖曳轉頭</span><button type="button" onClick={() => controllerRef.current?.reset()}>回到入口 ↺</button></footer>

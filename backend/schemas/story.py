@@ -32,6 +32,7 @@ class OperationType(str, Enum):
     TRANSFER_ITEM = "transfer_item"
     ESTABLISH_COMMITMENT = "establish_commitment"
     OFFER_QUEST = "offer_quest"
+    CHANGE_SCENE = "change_scene"
 
 
 class TransferItemOperation(BaseModel):
@@ -72,8 +73,20 @@ class OfferQuestOperation(BaseModel):
     due_in_turns: int | None = Field(default=None, ge=1, le=30)
 
 
+class ChangeSceneOperation(BaseModel):
+    """Request travel to a registered scene connected to the current scene."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation_type: Literal[OperationType.CHANGE_SCENE] = OperationType.CHANGE_SCENE
+    destination_scene_id: str = Field(..., min_length=1, max_length=100)
+
+
 ProposedOperation = Annotated[
-    TransferItemOperation | EstablishCommitmentOperation | OfferQuestOperation,
+    TransferItemOperation
+    | EstablishCommitmentOperation
+    | OfferQuestOperation
+    | ChangeSceneOperation,
     Field(discriminator="operation_type"),
 ]
 

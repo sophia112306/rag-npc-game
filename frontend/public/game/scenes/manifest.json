@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "generated_at": "2026-11-10",
+  "prompt_document": "docs/SCENE_ASSET_PROMPTS.md",
   "generator": {
     "mode": "openai-built-in-image-generation",
     "model": null,
@@ -18,7 +19,7 @@
       "width": 1672,
       "height": 941,
       "canon_status": "provisional",
-      "prompt": "Create a new location in the same visual family as the references: the sacred Life Spring inside Minglin forest. Show an ancient forest sanctuary centered on a clear turquoise spring and small natural cascade, with mossy pale stone terraces, old tree roots, ferns, wildflowers, and a walkable foreground path. Use a richly detailed hand-painted fantasy-game style, elevated three-quarter view, warm luminous greens and teal water. Environment only; no characters, creatures, UI, text, banners, logos, watermark, giant-eye motif, or copied council layout."
+      "prompt_summary": "Create a new location in the same visual family as the references: the sacred Life Spring inside Minglin forest. Show an ancient forest sanctuary centered on a clear turquoise spring and small natural cascade, with mossy pale stone terraces, old tree roots, ferns, wildflowers, and a walkable foreground path. Use a richly detailed hand-painted fantasy-game style, elevated three-quarter view, warm luminous greens and teal water. Environment only; no characters, creatures, UI, text, banners, logos, watermark, giant-eye motif, or copied council layout."
     },
     {
       "scene_id": "minglin_rune_grove",
@@ -27,7 +28,7 @@
       "width": 1672,
       "height": 941,
       "canon_status": "provisional",
-      "prompt": "Create a second Minglin location in the same visual family as the references: a quiet grove of ancient rune stones around one restrained blue-green luminous stone. Keep an open walkable clearing in the center and foreground, with a subtle rear path. Use richly detailed hand-painted fantasy-game art, elevated three-quarter view, warm forest light balanced by a subtle cyan glow. Environment only; no characters, creatures, UI, text, readable letters, banners, logos, watermark, giant-eye motif, copied council layout, portal rings, or science-fiction machinery."
+      "prompt_summary": "Create a second Minglin location in the same visual family as the references: a quiet grove of ancient rune stones around one restrained blue-green luminous stone. Keep an open walkable clearing in the center and foreground, with a subtle rear path. Use richly detailed hand-painted fantasy-game art, elevated three-quarter view, warm forest light balanced by a subtle cyan glow. Environment only; no characters, creatures, UI, text, readable letters, banners, logos, watermark, giant-eye motif, copied council layout, portal rings, or science-fiction machinery."
     }
   ]
 }

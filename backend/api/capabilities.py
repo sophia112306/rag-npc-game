@@ -35,5 +35,6 @@ def get_capabilities(request: Request) -> CapabilitiesResponse:
             OperationType.TRANSFER_ITEM,
             OperationType.ESTABLISH_COMMITMENT,
             OperationType.OFFER_QUEST,
+            OperationType.CHANGE_SCENE,
         ],
     )

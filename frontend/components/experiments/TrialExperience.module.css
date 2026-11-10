@@ -38,6 +38,11 @@
 .inspectBody small { display: block; padding-bottom: 7px; border-bottom: 1px solid #b89b6399; color: #f2d99f; font-size: 13px; letter-spacing: .1em; }
 .inspectBody p { margin: 13px 0 10px; color: #fff6e6; font-size: clamp(13px, 1.2vw, 17px); line-height: 1.7; }
 .inspectBody span { color: #c5b895; font-size: 11px; }
+.storyChoices { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.storyChoices button { padding: 6px 9px; border: 1px solid #8cdcd0; color: #e9fffb; background: #174852; font-size: 11px; cursor: pointer; }
+.storyChoices button:hover:not(:disabled) { background: #26707a; }
+.storyChoices button:disabled { opacity: .55; cursor: progress; }
+.inspectBody .turnError { display: block; margin: 5px 0; color: #ffd2bc; }
 .cool .inspectBody small, .cool .inspectBody span { color: #9ad9d2; }
 .inspectActions { display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; min-width: 136px; padding: 16px; }
 .inspectActions button { padding: 9px 12px; border: 1px solid #e4c57c; color: #fff0c6; background: #5b4828; cursor: pointer; white-space: nowrap; font-size: 12px; }

@@ -3,8 +3,10 @@
 from dataclasses import dataclass
 from uuid import uuid4
 
+from backend.content.scenes import can_travel, get_scene
 from backend.schemas.game_state import GameState
 from backend.schemas.story import (
+    ChangeSceneOperation,
     EstablishedEvent,
     EstablishCommitmentOperation,
     EventProposal,
@@ -103,9 +105,16 @@ class ProposalResolver:
         self,
         state: GameState,
         event: EventProposal,
-        operation: TransferItemOperation | EstablishCommitmentOperation | OfferQuestOperation,
+        operation: (
+            TransferItemOperation
+            | EstablishCommitmentOperation
+            | OfferQuestOperation
+            | ChangeSceneOperation
+        ),
         turn_number: int,
     ) -> tuple[str, dict[str, object]]:
+        if isinstance(operation, ChangeSceneOperation):
+            return self._change_scene(state, event, operation)
         if isinstance(operation, EstablishCommitmentOperation):
             return self._establish_commitment(state, event, operation, turn_number)
         if isinstance(operation, OfferQuestOperation):
@@ -201,6 +210,52 @@ class ProposalResolver:
                 f"「{promisor_name}」已向「{promisee_name}」"
                 f"建立承諾：{operation.summary}"
             ),
+            effect,
+        )
+
+    def _change_scene(
+        self,
+        state: GameState,
+        event: EventProposal,
+        operation: ChangeSceneOperation,
+    ) -> tuple[str, dict[str, object]]:
+        if event.actor_id != state.player.player_id:
+            raise ProposalRuleViolation(
+                "actor_not_player",
+                "Only the player can execute a player-triggered scene transition.",
+            )
+        if event.target_id is not None and event.target_id != operation.destination_scene_id:
+            raise ProposalRuleViolation(
+                "target_mismatch",
+                "The event target does not match the scene destination.",
+            )
+
+        source_scene_id = state.current_scene_id
+        destination = get_scene(operation.destination_scene_id)
+        if destination is None:
+            raise ProposalRuleViolation(
+                "unknown_scene",
+                f"Scene '{operation.destination_scene_id}' is not registered.",
+            )
+        if source_scene_id == destination.scene_id:
+            raise ProposalRuleViolation(
+                "same_scene",
+                "A scene transition requires a different destination.",
+            )
+        if not can_travel(source_scene_id, destination.scene_id):
+            raise ProposalRuleViolation(
+                "scene_not_connected",
+                f"Scene '{destination.scene_id}' is not reachable from '{source_scene_id}'.",
+            )
+
+        state.current_scene_id = destination.scene_id
+        effect: dict[str, object] = {
+            "operation_type": OperationType.CHANGE_SCENE.value,
+            "source_scene_id": source_scene_id,
+            "destination_scene_id": destination.scene_id,
+        }
+        return (
+            f"「{state.player.name}」已抵達「{destination.display_name}」。",
             effect,
         )
 

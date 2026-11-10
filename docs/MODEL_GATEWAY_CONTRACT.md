@@ -73,7 +73,7 @@ MODEL_GATEWAY_MAX_ATTEMPTS=2
     "active_quests": [],
     "missing_data": ["character_definition_incomplete"]
   },
-  "allowed_operations": ["transfer_item", "establish_commitment", "offer_quest"],
+  "allowed_operations": ["transfer_item", "establish_commitment", "offer_quest", "change_scene"],
   "generation_budget": {
     "max_model_calls": 2,
     "max_event_proposals": 1,
@@ -166,6 +166,17 @@ OpenAI 相容服務外層須使用 Chat Completions 的 `choices[0].message.cont
 ```
 
 任務必須由已登記角色提供給不同的已登記對象。核准後會保存為有來源的 Quest，玩家可從 `/api/game/{session_id}/quests` 取得，相關 NPC 下一回合則由 `active_quests` 承接。
+
+`change_scene` 只能提出結構化目的地，不能自行建立新場景或宣告已抵達：
+
+```json
+{
+  "operation_type": "change_scene",
+  "destination_scene_id": "minglin_life_spring"
+}
+```
+
+後端會比對 Scene Registry、目前位置與合法出口；通過後才更新 `current_scene_id` 並產生確定性的抵達敘事。玩家選項送出的 `destination_scene_id` 也會放入 action 去重內容，避免同一 action ID 被換成不同目的地。
 
 ## 錯誤與重試
 

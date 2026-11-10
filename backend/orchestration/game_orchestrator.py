@@ -13,6 +13,7 @@ from backend.database.repository import (
     action_request_digest,
 )
 from backend.modules.proposal_resolver import ProposalResolution, ProposalResolver
+from backend.orchestration.player_choices import build_player_choices
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState, PlayerState
 from backend.schemas.parsed_action import ActionType, ParsedAction
@@ -187,63 +188,7 @@ class GameOrchestrator:
         except PersistentSessionNotFoundError as exc:
             raise SessionNotFoundError(str(exc)) from exc
 
-        target_npc_id = "vidalia"
-        if quests:
-            current_quest = quests[0]
-            return [
-                PlayerChoice(
-                    choice_id="ask_current_quest",
-                    label=f"詢問「{current_quest.title}」",
-                    message="請再告訴我目前任務的內容。",
-                    target_npc_id=target_npc_id,
-                ),
-                PlayerChoice(
-                    choice_id="promise_to_report",
-                    label="承諾完成後回報",
-                    message="我答應會調查這項異常，完成後回來報告。",
-                    target_npc_id=target_npc_id,
-                ),
-                PlayerChoice(
-                    choice_id="recall_conversation",
-                    label="回想先前對話",
-                    message="你還記得我們之前說過什麼嗎？",
-                    target_npc_id=target_npc_id,
-                ),
-            ]
-
-        choices = [
-            PlayerChoice(
-                choice_id="ask_location",
-                label="詢問目前所在地",
-                message="這裡是什麼地方？我應該觀察什麼？",
-                target_npc_id=target_npc_id,
-            ),
-            PlayerChoice(
-                choice_id="ask_for_task",
-                label="詢問能幫什麼忙",
-                message="有什麼需要我幫忙的任務？",
-                target_npc_id=target_npc_id,
-            ),
-        ]
-        if state.turn_count > 0:
-            choices.append(
-                PlayerChoice(
-                    choice_id="recall_conversation",
-                    label="回想先前對話",
-                    message="你還記得我們之前說過什麼嗎？",
-                    target_npc_id=target_npc_id,
-                )
-            )
-        else:
-            choices.append(
-                PlayerChoice(
-                    choice_id="ask_about_anomaly",
-                    label="詢問世界異象",
-                    message="你提到世界出現異象，目前能確認的是什麼？",
-                    target_npc_id=target_npc_id,
-                )
-            )
-        return choices
+        return build_player_choices(state, quests)
 
     @staticmethod
     def _parse_action(action: PlayerAction) -> ParsedAction:
@@ -262,15 +207,25 @@ class GameOrchestrator:
         elif any(keyword in text for keyword in ("查看", "觀察", "調查", "inspect")):
             action_type, intent = ActionType.INSPECT, "inspect"
 
+        target_ids = []
+        if action.action_mode == ActionMode.MOVEMENT and action.destination_scene_id:
+            target_ids.append(action.destination_scene_id)
+        elif action.target_npc_id:
+            target_ids.append(action.target_npc_id)
+
+        parameters = {
+            "action_id": str(action.action_id),
+            "input_type": action.input_type.value,
+            "action_mode": action.action_mode.value,
+        }
+        if action.destination_scene_id:
+            parameters["destination_scene_id"] = action.destination_scene_id
+
         return ParsedAction(
             intent=intent,
             action_type=action_type,
-            target_ids=[action.target_npc_id] if action.target_npc_id else [],
-            parameters={
-                "action_id": str(action.action_id),
-                "input_type": action.input_type.value,
-                "action_mode": action.action_mode.value,
-            },
+            target_ids=target_ids,
+            parameters=parameters,
             confidence=1.0,
         )
 

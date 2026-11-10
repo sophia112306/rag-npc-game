@@ -84,7 +84,9 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
 
   const backgroundTexture = new Texture("/game/forest-eye-backdrop.png", scene);
   const backgroundMat = material("painted forest horizon", "#ffffff");
-  backgroundMat.diffuseTexture = backgroundTexture;
+  let activeBackgroundTexture = backgroundTexture;
+  let requestedBackgroundUrl = "/game/forest-eye-backdrop.png";
+  backgroundMat.diffuseTexture = activeBackgroundTexture;
   backgroundMat.emissiveColor = new Color3(0.4, 0.42, 0.4);
   backgroundMat.disableLighting = true;
   backgroundMat.fogEnabled = false;
@@ -245,6 +247,20 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
 
   const started = performance.now();
   return {
+    setBackdrop(url) {
+      if (requestedBackgroundUrl === url) return;
+      requestedBackgroundUrl = url;
+      const nextTexture = new Texture(url, scene, false, false, Texture.TRILINEAR_SAMPLINGMODE, () => {
+        if (requestedBackgroundUrl !== url) {
+          nextTexture.dispose();
+          return;
+        }
+        const previousTexture = activeBackgroundTexture;
+        activeBackgroundTexture = nextTexture;
+        backgroundMat.diffuseTexture = nextTexture;
+        previousTexture.dispose();
+      });
+    },
     setTalking(talking) {
       npcTalking = talking;
     },

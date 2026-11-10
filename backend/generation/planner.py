@@ -19,7 +19,7 @@ from backend.generation.gateway import (
 from backend.schemas.content import NPCGenerationContext
 from backend.schemas.game_state import GameState
 from backend.schemas.parsed_action import ParsedAction
-from backend.schemas.player_action import PlayerAction
+from backend.schemas.player_action import ActionMode, PlayerAction
 from backend.schemas.story import DialogueLine, OperationType, SpeakerType, StoryProposal
 
 
@@ -77,6 +77,15 @@ class GatewayStoryPlanner:
         except CharacterDefinitionNotFoundError as exc:
             raise StoryGenerationUnavailableError("character_context_missing", 0) from exc
 
+        allowed_operations = (
+            [OperationType.CHANGE_SCENE]
+            if action.action_mode == ActionMode.MOVEMENT
+            else [
+                OperationType.TRANSFER_ITEM,
+                OperationType.ESTABLISH_COMMITMENT,
+                OperationType.OFFER_QUEST,
+            ]
+        )
         request = ModelTurnRequest(
             session_id=action.session_id,
             turn_number=state.turn_count + 1,
@@ -88,11 +97,7 @@ class GatewayStoryPlanner:
             action_mode=action.action_mode,
             parsed_action=parsed_action,
             target_context=target_context,
-            allowed_operations=[
-                OperationType.TRANSFER_ITEM,
-                OperationType.ESTABLISH_COMMITMENT,
-                OperationType.OFFER_QUEST,
-            ],
+            allowed_operations=allowed_operations,
             generation_budget=GenerationBudget(max_model_calls=self._max_attempts),
         )
         output = await self._generate_valid_output(request)

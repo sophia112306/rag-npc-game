@@ -120,6 +120,44 @@ async def test_help_request_proposes_one_persistable_quest() -> None:
 
 
 @pytest.mark.asyncio
+async def test_scene_observation_uses_authoritative_current_scene() -> None:
+    planner = RuleBasedStoryPlanner(FixedContextProvider(make_context()))
+    action, parsed, state = make_inputs("查看這裡")
+    state.current_scene_id = "minglin_life_spring"
+    parsed.action_type = "inspect"
+
+    proposal = await planner.propose(action, parsed, state)
+
+    assert "鳴霖・命脈之泉" in proposal.proposed_dialogue[0].text
+    assert "平衡議會" not in proposal.proposed_dialogue[0].text
+
+
+@pytest.mark.asyncio
+async def test_movement_proposal_uses_structured_destination_without_npc_context() -> None:
+    provider = FixedContextProvider(make_context())
+    planner = RuleBasedStoryPlanner(provider)
+    action, _parsed, state = make_inputs("前往符石林")
+    action.action_mode = "movement"
+    action.destination_scene_id = "minglin_rune_grove"
+    action.target_npc_id = None
+    parsed = ParsedAction(
+        intent="move",
+        action_type="movement",
+        target_ids=["minglin_rune_grove"],
+        parameters={"destination_scene_id": "minglin_rune_grove"},
+    )
+
+    proposal = await planner.propose(action, parsed, state)
+
+    assert provider.calls == []
+    assert proposal.event_proposals[0].operations[0].operation_type == "change_scene"
+    assert (
+        proposal.event_proposals[0].operations[0].destination_scene_id
+        == "minglin_rune_grove"
+    )
+
+
+@pytest.mark.asyncio
 async def test_existing_player_visible_quest_is_referenced_without_duplicate() -> None:
     quest = QuestItem(
         quest_id="quest-1",

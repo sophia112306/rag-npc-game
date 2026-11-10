@@ -26,6 +26,7 @@ export function interactWithNpc() {
 }
 
 type Props = {
+  backgroundUrl: string;
   paused: boolean;
   onNearChange: (near: boolean) => void;
   onInteract: () => void;
@@ -45,7 +46,7 @@ const directions = [
   { texture: "traveler", flipX: true },
 ] as const;
 
-export default function MinglinGame({ paused, onNearChange, onInteract, onZoomChange }: Props) {
+export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInteract, onZoomChange }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused);
   const nearRef = useRef(onNearChange);
@@ -83,7 +84,7 @@ export default function MinglinGame({ paused, onNearChange, onInteract, onZoomCh
 
         preload() {
           this.load.tilemapTiledJSON("minglin-map", "/game/minglin.tmj");
-          this.load.image("minglin-forest", "/game/forest-council.png");
+          this.load.image("minglin-forest", backgroundUrl);
           this.load.image("traveler", "/game/traveler.png");
           this.load.image("traveler-back", "/game/traveler-back.png");
           this.load.image("traveler-front", "/game/traveler-front.png");
@@ -394,7 +395,7 @@ export default function MinglinGame({ paused, onNearChange, onInteract, onZoomCh
       cancelled = true;
       game?.destroy(true);
     };
-  }, []);
+  }, [backgroundUrl]);
 
   return <div className="game-canvas" ref={mountRef} aria-label="鳴霖森林遊戲地圖，點擊地面可移動，滾輪或雙指可縮放" />;
 }

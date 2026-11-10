@@ -13,5 +13,6 @@ class PlayerChoice(BaseModel):
     choice_id: str = Field(..., min_length=1, max_length=100)
     label: str = Field(..., min_length=1, max_length=100)
     message: str = Field(..., min_length=1, max_length=2_000)
-    target_npc_id: str = Field(..., min_length=1, max_length=100)
+    target_npc_id: str | None = Field(default=None, max_length=100)
     action_mode: ActionMode = ActionMode.DIALOGUE
+    destination_scene_id: str | None = Field(default=None, max_length=100)

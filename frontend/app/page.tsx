@@ -3,6 +3,17 @@
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import MinglinGame, { interactWithNpc, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP } from "../components/MinglinGame";
+import {
+  ApiRequestError,
+  GAME_SESSION_STORAGE_KEY,
+  requestJson,
+  type Capabilities,
+  type GameStateSummary,
+  type GameTurnResponse,
+  type PlayerChoice,
+  type PlayerQuest,
+  type PlayerScene,
+} from "../lib/game-api";
 
 type CharacterProfile = {
   npc_id: string;
@@ -13,37 +24,6 @@ type CharacterProfile = {
   portrait_url: string;
   description: string;
   greeting: string;
-};
-
-type GameTurnResponse = {
-  turn_number: number;
-  state: { state_version: number; updated_at: string };
-  story: { dialogue: { speaker_name: string; text: string }[] };
-};
-
-type GameStateSummary = {
-  turn_count: number;
-  state_version: number;
-  updated_at: string;
-};
-
-type Capabilities = {
-  generation_mode: "rule_based" | "external_model";
-  dynamic_dialogue: boolean;
-};
-
-type PlayerQuest = {
-  quest_id: string;
-  title: string;
-  status: "offered" | "active" | "completed" | "failed" | "cancelled";
-};
-
-type PlayerChoice = {
-  choice_id: string;
-  label: string;
-  message: string;
-  target_npc_id: string;
-  action_mode: "dialogue" | "interaction" | "movement";
 };
 
 type ChatMessage = {
@@ -57,8 +37,9 @@ type PendingAction = {
   actionId: string;
   text: string;
   inputType: "text" | "speech_transcript";
-  targetNpcId: string;
+  targetNpcId: string | null;
   actionMode: PlayerChoice["action_mode"];
+  destinationSceneId: string | null;
   expectedStateVersion: number;
 };
 
@@ -75,14 +56,6 @@ type BrowserSpeechRecognition = {
 
 type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
-class ApiRequestError extends Error {
-  constructor(message: string, readonly status: number, readonly code?: string) {
-    super(message);
-  }
-}
-
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8300";
-const storageKey = "vidalia-game-session";
 const conversationKey = (id: string) => `vidalia-conversation:${id}`;
 const previewProfile: CharacterProfile = {
   npc_id: "vidalia",
@@ -95,27 +68,16 @@ const previewProfile: CharacterProfile = {
   greeting: "旅人，歡迎來到鳴霖。命脈之泉近來沉默得太久了；你願意告訴我，你沿途看見了什麼嗎？",
 };
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${apiBase}${path}`, init);
-  } catch {
-    throw new Error("無法連線到遊戲服務，請確認後端已啟動。");
-  }
-  if (!response.ok) {
-    let detail: { code?: string; message?: string } | undefined;
-    try {
-      const payload = (await response.json()) as { detail?: { code?: string; message?: string } };
-      detail = payload.detail;
-    } catch { /* Non-JSON failures use the generic status message below. */ }
-    throw new ApiRequestError(
-      detail?.message ?? `遊戲服務回應 ${response.status}，請稍後重試。`,
-      response.status,
-      detail?.code,
-    );
-  }
-  return (await response.json()) as T;
-}
+const previewScene: PlayerScene = {
+  scene_id: "minglin",
+  region_name: "鳴霖",
+  display_name: "平衡議會",
+  subtitle: "古林中的議會庭",
+  description: "維達利亞接見旅人的林間議會庭。",
+  background_url: "/game/forest-council.png",
+  horizon_url: "/game/forest-eye-backdrop.png",
+  canon_status: "confirmed",
+};
 
 export default function Home() {
   const [profile, setProfile] = useState(previewProfile);
@@ -138,6 +100,7 @@ export default function Home() {
   const [restartConfirm, setRestartConfirm] = useState(false);
   const [turnNumber, setTurnNumber] = useState(0);
   const [stateVersion, setStateVersion] = useState(1);
+  const [scene, setScene] = useState<PlayerScene>(previewScene);
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
   const [questLabel, setQuestLabel] = useState("與維達利亞交談");
   const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
@@ -147,8 +110,8 @@ export default function Home() {
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
   useEffect(() => {
-    const id = window.localStorage.getItem(storageKey) ?? window.crypto.randomUUID();
-    window.localStorage.setItem(storageKey, id);
+    const id = window.localStorage.getItem(GAME_SESSION_STORAGE_KEY) ?? window.crypto.randomUUID();
+    window.localStorage.setItem(GAME_SESSION_STORAGE_KEY, id);
     const speechWindow = window as typeof window & {
       SpeechRecognition?: SpeechRecognitionConstructor;
       webkitSpeechRecognition?: SpeechRecognitionConstructor;
@@ -204,6 +167,7 @@ export default function Home() {
       setPlayerChoices(choices);
       setTurnNumber(state.turn_count);
       setStateVersion(state.state_version);
+      setScene(state.current_scene);
       const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: character.name, text: character.greeting, kind: "npc" }];
       let restored = fallback;
       try {
@@ -304,18 +268,26 @@ export default function Home() {
       inputType,
       retryingPending ? pending.targetNpcId : "vidalia",
       retryingPending ? pending.actionMode : "dialogue",
+      retryingPending ? pending.destinationSceneId : null,
     );
   }
 
   function selectChoice(choice: PlayerChoice) {
-    void sendAction(choice.message, "text", choice.target_npc_id, choice.action_mode);
+    void sendAction(
+      choice.message,
+      "text",
+      choice.target_npc_id,
+      choice.action_mode,
+      choice.destination_scene_id,
+    );
   }
 
   async function sendAction(
     text: string,
     actionInputType: "text" | "speech_transcript",
-    targetNpcId: string,
+    targetNpcId: string | null,
     actionMode: PlayerChoice["action_mode"],
+    destinationSceneId: string | null,
   ) {
     if (!text || !ready || busy) return;
 
@@ -325,9 +297,9 @@ export default function Home() {
     setError("");
     setMessages((current) => [...current, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }]);
     const pending = pendingActionRef.current;
-    const canRetryPending = pending?.text === text && pending.inputType === actionInputType && pending.targetNpcId === targetNpcId && pending.actionMode === actionMode && pending.expectedStateVersion === stateVersion;
+    const canRetryPending = pending?.text === text && pending.inputType === actionInputType && pending.targetNpcId === targetNpcId && pending.actionMode === actionMode && pending.destinationSceneId === destinationSceneId && pending.expectedStateVersion === stateVersion;
     const actionId = canRetryPending ? pending.actionId : window.crypto.randomUUID();
-    pendingActionRef.current = { actionId, text, inputType: actionInputType, targetNpcId, actionMode, expectedStateVersion: stateVersion };
+    pendingActionRef.current = { actionId, text, inputType: actionInputType, targetNpcId, actionMode, destinationSceneId, expectedStateVersion: stateVersion };
 
     try {
       const turn = await requestJson<GameTurnResponse>("/api/game/turn", {
@@ -340,12 +312,14 @@ export default function Home() {
           input_type: actionInputType,
           target_npc_id: targetNpcId,
           action_mode: actionMode,
+          destination_scene_id: destinationSceneId,
           expected_state_version: stateVersion,
         }),
       });
       pendingActionRef.current = null;
       setTurnNumber(turn.turn_number);
       setStateVersion(turn.state.state_version);
+      setScene(turn.state.current_scene);
       try {
         const [quests, choices] = await Promise.all([
           requestJson<PlayerQuest[]>(`/api/game/${sessionId}/quests`),
@@ -369,6 +343,7 @@ export default function Home() {
           const latest = await requestJson<GameStateSummary>(`/api/game/${sessionId}/state`);
           setTurnNumber(latest.turn_count);
           setStateVersion(latest.state_version);
+          setScene(latest.current_scene);
           setError("遊戲進度已在其他請求中更新，請確認內容後重新送出。");
         } catch {
           setError("遊戲進度版本衝突，且無法重新取得最新狀態。請稍後重試。");
@@ -388,7 +363,7 @@ export default function Home() {
 
   function restart() {
     const id = window.crypto.randomUUID();
-    window.localStorage.setItem(storageKey, id);
+    window.localStorage.setItem(GAME_SESSION_STORAGE_KEY, id);
     setDialogueOpen(false);
     setRestartConfirm(false);
     setHelpOpen(false);
@@ -406,7 +381,7 @@ export default function Home() {
   return (
     <main className="game-page">
       <section className="map-stage" aria-label="斜俯視的鳴霖遊戲地圖">
-        {sessionId && <MinglinGame key={sessionId} paused={dialogueOpen || helpOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpc} onInteract={openDialogue} onZoomChange={setMapZoom} />}
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}`} backgroundUrl={scene.background_url} paused={dialogueOpen || helpOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpc} onInteract={openDialogue} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
 
         <header className="location-banner" aria-label="目前場景">
@@ -416,7 +391,7 @@ export default function Home() {
             <path d="M36 3l6 27 27 6-27 6-6 27-6-27L3 36l27-6L36 3Z" stroke="currentColor" strokeWidth="1.7" />
             <path d="M36 22l4 10 10 4-10 4-4 10-4-10-10-4 10-4 4-10Z" fill="currentColor" />
           </svg>
-          <div className="location-copy"><strong>鳴霖</strong><span>命脈之泉 · 平衡議會</span></div>
+          <div className="location-copy"><strong>{scene.region_name}</strong><span>{scene.display_name} · {scene.subtitle}</span></div>
           <span className="location-ornament" aria-hidden="true">✧</span>
         </header>
 

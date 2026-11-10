@@ -1,6 +1,7 @@
 """Deterministic dynamic story planner used before a live model is configured."""
 
 from backend.content.context_repository import CharacterDefinitionNotFoundError
+from backend.content.scenes import get_scene
 from backend.generation.planner import NPCContextProvider
 from backend.schemas.content import MemoryItem, NPCGenerationContext
 from backend.schemas.game_state import GameState
@@ -8,6 +9,7 @@ from backend.schemas.parsed_action import ActionType, ParsedAction
 from backend.schemas.player_action import PlayerAction
 from backend.schemas.progression import CommitmentItem, QuestItem
 from backend.schemas.story import (
+    ChangeSceneOperation,
     DialogueLine,
     EstablishCommitmentOperation,
     EventProposal,
@@ -30,6 +32,9 @@ class RuleBasedStoryPlanner:
         parsed_action: ParsedAction,
         state: GameState,
     ) -> StoryProposal:
+        if parsed_action.action_type == ActionType.MOVEMENT:
+            return self._movement_proposal(action, state)
+
         npc_id = action.target_npc_id or "vidalia"
         try:
             context = await self._context_provider.get_generation_context(
@@ -65,7 +70,7 @@ class RuleBasedStoryPlanner:
             else:
                 intent_summary = "依目前公開場景提出可驗證的觀察任務。"
                 text, event = self._offer_observation_quest(
-                    context,
+                    self._scene_label(state),
                     npc_name,
                     npc_id,
                     player_id,
@@ -116,9 +121,7 @@ class RuleBasedStoryPlanner:
             normalized,
             ("查看", "觀察", "調查", "這裡", "哪裡"),
         ):
-            scene_name = str(
-                context.public_profile.get("scene_name") or state.current_scene_id
-            )
+            scene_name = self._scene_label(state)
             intent_summary = "使用公開角色資料回應場景觀察。"
             text = (
                 f"你目前能確認的是「{scene_name}」。先描述你實際看見的異常，"
@@ -154,6 +157,53 @@ class RuleBasedStoryPlanner:
         )
 
     @staticmethod
+    def _movement_proposal(action: PlayerAction, state: GameState) -> StoryProposal:
+        """Propose only the explicit destination; rules decide whether travel succeeds."""
+
+        destination_id = action.destination_scene_id
+        destination = get_scene(destination_id) if destination_id else None
+        destination_name = destination.display_name if destination else destination_id
+        if not destination_id:
+            return StoryProposal(
+                session_id=action.session_id,
+                turn_number=state.turn_count + 1,
+                intent_summary="移動行動缺少結構化目的地，未提出狀態變更。",
+                proposed_dialogue=[
+                    DialogueLine(
+                        speaker_type=SpeakerType.NARRATOR,
+                        speaker_name="系統",
+                        text="這次移動沒有指定可驗證的目的地，因此世界狀態未改變。",
+                    )
+                ],
+            )
+
+        return StoryProposal(
+            session_id=action.session_id,
+            turn_number=state.turn_count + 1,
+            intent_summary=f"要求由目前場景移動到 {destination_id}。",
+            proposed_dialogue=[
+                DialogueLine(
+                    speaker_type=SpeakerType.NARRATOR,
+                    speaker_name="系統",
+                    text=f"你選擇前往「{destination_name or destination_id}」，系統正在確認路線。",
+                )
+            ],
+            event_proposals=[
+                EventProposal(
+                    event_type="scene_change_requested",
+                    description="Player requested a registered scene transition.",
+                    actor_id=state.player.player_id,
+                    target_id=destination_id,
+                    operations=[
+                        ChangeSceneOperation(destination_scene_id=destination_id)
+                    ],
+                    witness_ids=[state.player.player_id],
+                    visible_to_player=True,
+                )
+            ],
+        )
+
+    @staticmethod
     def _npc_name(context: NPCGenerationContext, state: GameState) -> str:
         public_name = context.public_profile.get("name")
         if isinstance(public_name, str) and public_name.strip():
@@ -164,6 +214,13 @@ class RuleBasedStoryPlanner:
     @staticmethod
     def _contains_any(text: str, keywords: tuple[str, ...]) -> bool:
         return any(keyword in text for keyword in keywords)
+
+    @staticmethod
+    def _scene_label(state: GameState) -> str:
+        scene = get_scene(state.current_scene_id)
+        if scene is None:
+            return state.current_scene_id
+        return f"{scene.region_name}・{scene.display_name}"
 
     @staticmethod
     def _visible_player_quests(
@@ -247,13 +304,12 @@ class RuleBasedStoryPlanner:
 
     @staticmethod
     def _offer_observation_quest(
-        context: NPCGenerationContext,
+        scene_name: str,
         npc_name: str,
         npc_id: str,
         player_id: str,
         player_message: str,
     ) -> tuple[str, EventProposal]:
-        scene_name = str(context.public_profile.get("scene_name") or "目前場景")
         title = f"記錄{scene_name}的異常"
         summary = f"在{scene_name}觀察一項可核實的異常，之後向{npc_name}回報。"
         text = f"如果你願意幫忙，請先在{scene_name}記錄一項能被核實的異常，再回來告訴我。"

@@ -18,7 +18,7 @@ from .game_state import GameState, InventoryItem, NPCState, PlayerState, SceneSt
 from .parsed_action import ActionType, ParsedAction
 from .player_action import ActionMode, InputType, PlayerAction
 from .player_choice import PlayerChoice
-from .player_view import NPCPublicStateView, PlayerIdentityView, PlayerViewState
+from .player_view import NPCPublicStateView, PlayerIdentityView, PlayerSceneView, PlayerViewState
 from .progression import (
     CommitmentItem,
     CommitmentRecordInput,
@@ -33,6 +33,7 @@ from .progression import (
     QuestStatus,
 )
 from .story import (
+    ChangeSceneOperation,
     DialogueLine,
     EstablishCommitmentOperation,
     EstablishedEvent,
@@ -53,6 +54,7 @@ __all__ = [
     "ApiError",
     "CharacterProfile",
     "CharacterDefinition",
+    "ChangeSceneOperation",
     "CommitmentItem",
     "CommitmentRecordInput",
     "CommitmentStatus",
@@ -83,6 +85,7 @@ __all__ = [
     "PlayerAction",
     "PlayerChoice",
     "PlayerIdentityView",
+    "PlayerSceneView",
     "PlayerState",
     "PlayerViewState",
     "PlayerQuestView",

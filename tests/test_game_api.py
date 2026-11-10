@@ -57,7 +57,12 @@ def test_default_capabilities_identify_rule_based_generation(client: TestClient)
         "dynamic_dialogue": True,
         "rag_integration": "pending",
         "voice_integration": "pending",
-        "allowed_operations": ["transfer_item", "establish_commitment", "offer_quest"],
+        "allowed_operations": [
+            "transfer_item",
+            "establish_commitment",
+            "offer_quest",
+            "change_scene",
+        ],
     }
 
 
@@ -68,6 +73,8 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert state["turn_count"] == 0
     assert state["state_version"] == 1
     assert state["current_scene_id"] == "minglin"
+    assert state["current_scene"]["display_name"] == "平衡議會"
+    assert state["current_scene"]["background_url"] == "/game/forest-council.png"
     assert state["npc_states"]["vidalia"]["met"] is True
     assert "truth_level" not in state
     assert "axis" not in state
@@ -78,9 +85,19 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert [choice["choice_id"] for choice in choices.json()] == [
         "ask_location",
         "ask_for_task",
-        "ask_about_anomaly",
+        "travel_to_minglin_life_spring",
+        "travel_to_minglin_rune_grove",
     ]
-    assert all(choice["target_npc_id"] == "vidalia" for choice in choices.json())
+    assert all(
+        choice["target_npc_id"] == "vidalia"
+        for choice in choices.json()[:2]
+    )
+    assert all(
+        choice["action_mode"] == "movement"
+        and choice["target_npc_id"] is None
+        and choice["destination_scene_id"]
+        for choice in choices.json()[2:]
+    )
 
     response = client.post("/api/game/turn", json=action_payload(state["session_id"]))
 
@@ -138,7 +155,8 @@ def test_default_rule_planner_offers_and_remembers_dynamic_quest(client: TestCli
     assert [choice["choice_id"] for choice in choices.json()] == [
         "ask_current_quest",
         "promise_to_report",
-        "recall_conversation",
+        "travel_to_minglin_life_spring",
+        "travel_to_minglin_rune_grove",
     ]
     assert quests.json()[0]["title"] in choices.json()[0]["label"]
     assert second.status_code == 200
