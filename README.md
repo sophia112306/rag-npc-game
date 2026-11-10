@@ -1,8 +1,8 @@
 # RAG NPC Game
 
-生成式 NPC 遊戲的 A／D 整合專案。現階段 M2a 已串接既有 Next.js＋Phaser 前端、FastAPI 與 SQLite：可以建立持久化 Session、送出文字並顯示明確標示的開發替身回覆。
+生成式 NPC 遊戲的 A／D 整合專案。現階段 M2b 已串接既有 Next.js＋Phaser 前端、FastAPI 與 SQLite：可以建立持久化 Session、送出文字並顯示明確標示的開發替身回覆；玩家 API 與 NPC 私有生成背景已分開。
 
-> 真實模型、RAG、NPC 私人記憶與語音服務尚未接入。開發替身不會修改背包、角色設定或遊戲規則數值。
+> 真實模型、RAG、自動記憶寫入與語音服務尚未接入。開發替身不會修改背包、角色設定或遊戲規則數值。
 
 ## 環境
 
@@ -54,13 +54,15 @@ npm run dev
 
 同一個 `action_id`、同一內容重送會回傳原結果；同 ID 換成不同內容或提交過期的 `expected_state_version` 會得到 HTTP 409。Session、狀態、對話、核准事件與完整回應會以單一交易保存，後端重啟後仍可接續。
 
+玩家 API 只回傳 `PlayerViewState`，不包含角色私有設定、NPC 關係數值、未解鎖知識或私人記憶。後端已建立 WorldCanon、角色設定、KnowledgeRecord 與 MemoryRecord 結構；NPC 生成背景會依 NPC、Session、解鎖狀態和可用回合過濾。這些結構尚未接到 B 的模型／RAG 服務。
+
 ## 驗證
 
 後端契約測試：
 
 ```bash
-python3.12 -m pip install -r requirements-dev.txt
-python3.12 -m pytest -q
+./.venv/bin/pip install -r requirements-dev.txt
+PYTHONPATH=. ./.venv/bin/pytest -q
 ```
 
 前端 production build：
