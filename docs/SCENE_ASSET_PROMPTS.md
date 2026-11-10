@@ -60,3 +60,23 @@ Materials/textures: layered sandstone cliffs, wind-carved ruins, cracked clay, l
 Constraints: no close-up character, no prominent foreground mummy, no named character, no gore, no combat pose, no UI, no text, no letters, no logos, no watermark; distant mummy figures must remain small and secondary; keep the playable path and ground visually clear.
 Avoid: exact copying of the reference composition, photorealism, modern objects, sci-fi machinery, neon colors, giant monsters, excessive debris covering the route.
 ```
+
+## 烈燚原 v1
+
+參考來源：使用者於 2026-11-10 專案對話提供的「烈燚原參考設計」。該圖只作為火焰地貌、中央地標、氣氛及色彩關係參考，不是修改目標，也不複製原構圖。參考圖中的人物不會帶入遊戲資產。
+
+```text
+Use case: stylized-concept
+Asset type: 2D game environment background
+Primary request: Create a game-ready interpretation of 烈燚原 (Lieyi Plains), using the supplied image only as a visual reference for its fiery biome, central landmark, atmosphere, and color relationships rather than copying the exact composition.
+Input images: Image 1 is the user's visual reference, not an edit target.
+Scene/backdrop: a vast volcanic plain enclosed by dark layered basalt cliffs and ancient heat-scarred ruins; narrow glowing magma streams branch naturally across cooled purple-black rock, with sparse ember-orange trees clinging to elevated terraces.
+Subject: a monumental twisting pillar of living flame rises from a broad stepped obsidian altar in the middle distance; it is the unmistakable focal landmark, while a safe-looking readable route winds through cooled stone toward the altar.
+Style/medium: richly detailed hand-painted fantasy game environment, crisp painterly basalt, magma, ruin, smoke, and foliage textures; polished narrative-adventure concept art with storybook realism, not photorealistic.
+Composition/framing: 16:9 wide environment, elevated three-quarter view suitable for a 2D game scene and a Babylon 3D horizon texture; keep the lower center and a connected middle-ground path open and readable for overlaying the player; create a distinct layout rather than reproducing Image 1.
+Lighting/mood: intense golden firelight against smoky violet shadow; dangerous, sacred, ancient, and visually readable rather than blinding.
+Color palette: molten gold, ember orange, deep crimson, charcoal basalt, muted violet-black stone, restrained ash-gray smoke.
+Materials/textures: stratified basalt, glassy obsidian steps, flowing magma, scorched masonry, dry heat-touched foliage.
+Constraints: environment only; no people, no babies, no children, no characters, no bodies, no creatures, no gore, no combat, no UI, no text, no letters, no logos, no watermark; the flame landmark must remain fully visible; preserve clear traversable ground and avoid lava covering every route.
+Avoid: exact copying of the reference composition, pasted or collage-like figures, photorealism, modern objects, sci-fi machinery, neon rainbow colors, giant monsters, excessive bloom, fully flooded lava foreground.
+```
