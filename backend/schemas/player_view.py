@@ -45,6 +45,18 @@ class PlayerSceneView(BaseModel):
     canon_status: Literal["confirmed", "provisional"]
 
 
+class PlayerStoryProgressView(BaseModel):
+    """Only story progress that has already been revealed to the player."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    arc_id: str
+    node_id: str
+    chapter_title: str
+    mode: Literal["demo_fallback"]
+    public_clue_ids: list[str]
+
+
 class PlayerViewState(BaseModel):
     """State projection safe to return through player-facing APIs."""
 
@@ -55,6 +67,7 @@ class PlayerViewState(BaseModel):
     turn_count: int
     current_scene_id: str
     current_scene: PlayerSceneView
+    story_progress: PlayerStoryProgressView
     player: PlayerIdentityView
     npc_states: dict[str, NPCPublicStateView]
     created_at: datetime
@@ -79,6 +92,13 @@ def project_player_view(state: GameState) -> PlayerViewState:
             background_url=scene.background_url,
             horizon_url=scene.horizon_url,
             canon_status=scene.canon_status,
+        ),
+        story_progress=PlayerStoryProgressView(
+            arc_id=state.story_progress.arc_id,
+            node_id=state.story_progress.node_id,
+            chapter_title=state.story_progress.chapter_title,
+            mode=state.story_progress.mode,
+            public_clue_ids=list(state.story_progress.public_clue_ids),
         ),
         player=PlayerIdentityView(
             player_id=state.player.player_id,

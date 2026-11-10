@@ -220,6 +220,8 @@ class GameOrchestrator:
         }
         if action.destination_scene_id:
             parameters["destination_scene_id"] = action.destination_scene_id
+        if action.story_choice_id:
+            parameters["story_choice_id"] = action.story_choice_id
 
         return ParsedAction(
             intent=intent,

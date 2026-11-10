@@ -40,6 +40,7 @@ type PendingAction = {
   targetNpcId: string | null;
   actionMode: PlayerChoice["action_mode"];
   destinationSceneId: string | null;
+  storyChoiceId: string | null;
   expectedStateVersion: number;
 };
 
@@ -269,6 +270,7 @@ export default function Home() {
       retryingPending ? pending.targetNpcId : "vidalia",
       retryingPending ? pending.actionMode : "dialogue",
       retryingPending ? pending.destinationSceneId : null,
+      retryingPending ? pending.storyChoiceId : null,
     );
   }
 
@@ -279,6 +281,7 @@ export default function Home() {
       choice.target_npc_id,
       choice.action_mode,
       choice.destination_scene_id,
+      choice.choice_id,
     );
   }
 
@@ -288,6 +291,7 @@ export default function Home() {
     targetNpcId: string | null,
     actionMode: PlayerChoice["action_mode"],
     destinationSceneId: string | null,
+    storyChoiceId: string | null,
   ) {
     if (!text || !ready || busy) return;
 
@@ -297,9 +301,9 @@ export default function Home() {
     setError("");
     setMessages((current) => [...current, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }]);
     const pending = pendingActionRef.current;
-    const canRetryPending = pending?.text === text && pending.inputType === actionInputType && pending.targetNpcId === targetNpcId && pending.actionMode === actionMode && pending.destinationSceneId === destinationSceneId && pending.expectedStateVersion === stateVersion;
+    const canRetryPending = pending?.text === text && pending.inputType === actionInputType && pending.targetNpcId === targetNpcId && pending.actionMode === actionMode && pending.destinationSceneId === destinationSceneId && pending.storyChoiceId === storyChoiceId && pending.expectedStateVersion === stateVersion;
     const actionId = canRetryPending ? pending.actionId : window.crypto.randomUUID();
-    pendingActionRef.current = { actionId, text, inputType: actionInputType, targetNpcId, actionMode, destinationSceneId, expectedStateVersion: stateVersion };
+    pendingActionRef.current = { actionId, text, inputType: actionInputType, targetNpcId, actionMode, destinationSceneId, storyChoiceId, expectedStateVersion: stateVersion };
 
     try {
       const turn = await requestJson<GameTurnResponse>("/api/game/turn", {
@@ -313,6 +317,7 @@ export default function Home() {
           target_npc_id: targetNpcId,
           action_mode: actionMode,
           destination_scene_id: destinationSceneId,
+          story_choice_id: storyChoiceId,
           expected_state_version: stateVersion,
         }),
       });

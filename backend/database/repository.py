@@ -74,6 +74,7 @@ def effective_action_payload(action: PlayerAction) -> dict[str, Any]:
         "target_npc_id": action.target_npc_id,
         "action_mode": action.action_mode.value,
         "destination_scene_id": action.destination_scene_id,
+        "story_choice_id": action.story_choice_id,
         "expected_state_version": action.expected_state_version,
     }
 

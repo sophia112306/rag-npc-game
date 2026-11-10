@@ -110,6 +110,7 @@ export default function TrialExperience() {
           target_npc_id: choice.target_npc_id,
           action_mode: choice.action_mode,
           destination_scene_id: choice.destination_scene_id,
+          story_choice_id: choice.choice_id,
           expected_state_version: gameState.state_version,
         }),
       });

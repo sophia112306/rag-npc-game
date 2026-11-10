@@ -75,6 +75,13 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert state["current_scene_id"] == "minglin"
     assert state["current_scene"]["display_name"] == "平衡議會"
     assert state["current_scene"]["background_url"] == "/game/forest-council.png"
+    assert state["story_progress"] == {
+        "arc_id": "vita_anomaly_demo_v1",
+        "node_id": "minglin_arrival",
+        "chapter_title": "鳴霖異象",
+        "mode": "demo_fallback",
+        "public_clue_ids": [],
+    }
     assert state["npc_states"]["vidalia"]["met"] is True
     assert "truth_level" not in state
     assert "axis" not in state

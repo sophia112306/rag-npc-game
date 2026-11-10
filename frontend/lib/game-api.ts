@@ -15,6 +15,13 @@ export type GameStateSummary = {
   updated_at: string;
   current_scene_id: string;
   current_scene: PlayerScene;
+  story_progress: {
+    arc_id: string;
+    node_id: string;
+    chapter_title: string;
+    mode: "demo_fallback";
+    public_clue_ids: string[];
+  };
 };
 
 export type GameTurnResponse = {
