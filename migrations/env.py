@@ -8,6 +8,7 @@ from sqlalchemy import engine_from_config, pool
 
 from backend.database.base import Base
 from backend.database import models  # noqa: F401
+from backend.database.session import ensure_sqlite_directory
 
 
 config = context.config
@@ -20,7 +21,12 @@ target_metadata = Base.metadata
 def migration_url() -> str:
     """Use a synchronous driver for Alembic's short-lived migration connection."""
 
-    url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+    url = (
+        config.attributes.get("database_url")
+        or os.getenv("DATABASE_URL")
+        or config.get_main_option("sqlalchemy.url")
+    )
+    ensure_sqlite_directory(url)
     return url.replace("sqlite+aiosqlite", "sqlite")
 
 

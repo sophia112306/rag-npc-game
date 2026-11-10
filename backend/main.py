@@ -7,7 +7,8 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.database import create_async_session_factory, create_database_engine, create_schema
+from backend.database import create_async_session_factory, create_database_engine, upgrade_database
+from backend.database.session import get_database_url
 from backend.database.repository import SqlAlchemyGameRepository
 from backend.orchestration.game_orchestrator import GameOrchestrator
 
@@ -21,8 +22,9 @@ def create_app(database_url: str | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-        engine = create_database_engine(database_url)
-        await create_schema(engine)
+        resolved_database_url = database_url or get_database_url()
+        await upgrade_database(resolved_database_url)
+        engine = create_database_engine(resolved_database_url)
         repository = SqlAlchemyGameRepository(create_async_session_factory(engine))
         application.state.database_engine = engine
         application.state.game_orchestrator = GameOrchestrator(repository)
