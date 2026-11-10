@@ -78,6 +78,7 @@
 
 ### D5 端到端 Demo
 
+- 狀態：`█████████░ 90%`。96 tests、production build、兩條 live API 分支、3D WebGL 載入與 hard refresh 已通過；待週四展示環境人工完整彩排。
 - Chrome 實際操作至少兩條分支，驗證場景、故事、圖片與重啟承接。
 - 建立一鍵啟動與 Demo 操作手冊，記錄使用哪個文字／圖片 provider。
 - 驗收：全套測試、Next production build、瀏覽器流程通過；每個小階段都有清楚 commit 並已推送。

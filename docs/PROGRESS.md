@@ -2,7 +2,7 @@
 
 整體里程碑：`█████████▌ 95%`（M0～M2c、M4、A2～A3 完成；M3 真實服務與 A1 實機語音待驗收）
 
-週四動態故事 Demo：`████████▌░ 85%`（D0～D3 完成；D4 圖片 job／polling／fallback 完成，待正式圖片 provider；D5 實機與交接接續）
+週四動態故事 Demo：`█████████▌ 95%`（D0～D3 完成；D4 provider 管線使用靜態 fallback；D5 兩條 live 分支與 3D 實機通過，待週四展示環境人工彩排）
 
 | 階段 | 狀態 | 可驗收成果 |
 | --- | --- | --- |
@@ -187,6 +187,8 @@
 
 - `PYTHONPATH=. ./.venv/bin/pytest -q`：96 passed；涵蓋資產／Registry 完整性、合法換場、特殊路線、Scene Profile、圖片 job 去重、成功、timeout fallback、Session 隔離、migration 與跨 app 重啟承接。
 - `npm run build`：Next.js 16.4.4、TypeScript、`/` 與 `/experiments/babylon` production build 通過。
+- Live Demo：火焰與風沙兩條分支均到達特殊場景；Headless Chrome 以 1600×913 WebGL 載入烈燚原／流塵谷，hard refresh 保持位置，無 JavaScript exception。
+- 3D live 驗收發現動態遠景 Y 軸方向不一致，已修正並重新截圖確認遠景正向。
 - Live HTTP：起始場景回傳平衡議會與四個選項；提交「前往命脈之泉」後建立 `change_scene` 成立事件、版本 1→2，重新 GET 仍為命脈之泉。
 - Chrome headless＋CDP 實際座標點擊「前往命脈之泉」：turn POST 與 choices GET 均為 200，場景標題及遠景更新、對話面板退出；hard refresh 後仍保留相同 Session 與位置。
 - 瀏覽器故障注入驗收：版本衝突 409 後可自動同步並重試成功；choices GET 被封鎖時已成立回合與場景仍會更新；遠景 PNG 被封鎖時顯示錯誤並保留舊景，解除後重新載入成功。

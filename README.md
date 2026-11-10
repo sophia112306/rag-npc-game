@@ -72,6 +72,8 @@ npm run dev
 - `GET /api/game/{session_id}/state`：取得玩家可見狀態
 - `GET /api/game/{session_id}/choices`：取得依目前公開狀態產生的可點選行動
 - `GET /api/game/{session_id}/quests`：取得玩家可見且尚未結束的動態任務
+- `POST /api/game/{session_id}/scene-image`：依已提交的公開狀態建立／回用圖片工作
+- `GET /api/game/{session_id}/scene-image/{job_id}`：取得玩家安全的圖片工作狀態
 
 同一個 `action_id`、同一內容重送會回傳原結果；同 ID 換成不同內容或提交過期的 `expected_state_version` 會得到 HTTP 409。Session、狀態、對話、核准事件與完整回應會以單一交易保存，後端重啟後仍可接續。
 
@@ -83,11 +85,13 @@ npm run dev
 
 ## 畫面與圖片素材
 
-第一版採用「建置期生成、遊戲期只引用版本化資產」：命脈之泉、符石林、流塵谷與烈燚原由 OpenAI 內建圖片生成工具製作，工具沒有回傳底層模型名稱，因此不在文件中猜測型號。檔案、尺寸、SHA-256、提示摘要與 provisional 狀態記錄於 [`frontend/public/game/scenes/manifest.json`](frontend/public/game/scenes/manifest.json)，完整提示在 [`docs/SCENE_ASSET_PROMPTS.md`](docs/SCENE_ASSET_PROMPTS.md)。每回合不會重新生圖，也不會讓文字模型覆寫圖片。
+版本化 fallback 資產中的命脈之泉、符石林、流塵谷與烈燚原由 OpenAI 內建圖片生成工具製作，工具沒有回傳底層模型名稱，因此不在文件中猜測型號。檔案、尺寸、SHA-256、提示摘要與 provisional 狀態記錄於 [`frontend/public/game/scenes/manifest.json`](frontend/public/game/scenes/manifest.json)，完整提示在 [`docs/SCENE_ASSET_PROMPTS.md`](docs/SCENE_ASSET_PROMPTS.md)。
 
-後端的單一 Scene Registry 位於 `backend/content/scenes.py`，同時提供 2D 背景、3D 遠景、玩家可見名稱與合法出口。Phaser 主頁會切換完整背景；Babylon.js 3D 試玩保留原有幾何、燈光與相機，並依同一個 Session 切換遠景貼圖與場景名稱。`current_scene_id`、成立事件、對話與版本會在同一交易保存，重新整理或重啟後仍可承接。
+目前已加入 provider-neutral `ImageGateway`、可持久化 scene image jobs、fingerprint 去重、前端 polling 與失敗 fallback。部署端尚未注入正式圖片 provider，因此介面會標示「版本化場景」；圖片失敗不會回滾已成立的文字回合。正式生圖 adapter、API key、成本上限與獨立 worker 仍待團隊選定。
 
-符石林及生成圖的具體美術內容目前仍標記為暫定資產；完整在場 NPC、正式進出條件及 E1／E2／E3 對應仍須由故事與規則資料確認。流塵谷名稱已出現在 C 的 E3-1 規則，且本版依使用者提供的參考設計製作場景，但目前不會被加入普通旅行選項：只有之後整合「持有裂隙地圖逃入流塵谷」的危險事件流程後才可進入。烈燚原由使用者提供名稱與視覺參考，但現有 C 規則尚無對應事件或路線，因此維持 provisional 且不可由普通旅行進入。若未來需要即時圖片生成，應另建有預算、快取、審核與失敗回復的 ImageGateway，不和文字回合交易綁死。
+後端的單一 Scene Registry 位於 `backend/content/scenes.py`，同時提供 2D 背景、3D 遠景、玩家可見名稱、合法出口與 visual profile。Phaser 主頁會切換完整背景；Babylon.js 3D 會依同一 Session 切換遠景、地面、霧光、色盤與前景物件群。`current_scene_id`、成立事件、對話與版本會在同一交易保存，重新整理或重啟後仍可承接。
+
+符石林與烈燚原的具體內容仍標記為暫定。Demo Story Director 可依已核准線索解鎖流塵谷／烈燚原，但這是週四展示用 fallback，仍須由 C 確認正式事件 ID、入口、出口及 E1／E2／E3 對應後才可升格為正式設定。各地點的完整在場 NPC、獨立 GLB 與碰撞配置也仍待提供。
 
 ## 驗證
 
