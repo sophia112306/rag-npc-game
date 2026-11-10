@@ -12,7 +12,7 @@ GitHub compare：<https://github.com/sophia112306/rag-npc-game/compare/main...fe
 | 範圍 | 進度 | 狀態 |
 | --- | --- | --- |
 | 可保存動態故事 | `██████████ 100%` | 兩條狀態式 fallback 分支、選項防偽、事件與位置同交易 |
-| Babylon Scene Profile | `██████████ 100%` | 五場景遠景、地面、霧光、色盤與物件群切換 |
+| Babylon 場景呈現 | `███████░░░ 70%` | 遮蔽與錯誤議會模型已移除；正式 GLB／碰撞仍待 3D 工具產出 |
 | 滾動圖片管線 | `████████░░ 80%` | Job／polling／快取／fallback 完成；正式 provider 尚未接入 |
 | Demo 驗收與交接 | `█████████░ 90%` | 自動測試、build、兩條 live API 與 3D 載入通過；待正式彩排 |
 
@@ -60,7 +60,7 @@ npm run dev
 1. 在平衡議會選「前往命脈之泉」。
 2. 選「追查水面的灰燼」。
 3. 選「循餘燼前往烈燚原」。
-4. 烈燚原會顯示火焰遠景、紅黑地面、火色霧光與祭壇物件群。
+4. 烈燚原會顯示完整火焰遠景、目前章節與該分支專屬選項。
 5. 選「觀察中央聖火」或「追查火焰長老」。
 
 ### 風沙分支
@@ -68,10 +68,10 @@ npm run dev
 1. 在平衡議會選「前往符石林」。
 2. 選「拼合裂隙地圖」。
 3. 選「沿裂隙進入流塵谷」。
-4. 流塵谷會顯示風沙峽谷、沙色地面、沙霧與遺跡物件群。
+4. 流塵谷會顯示完整風沙遠景、目前章節與該分支專屬選項。
 5. 選「記住墓葬姓名」或「研究墓葬循環」。
 
-重新整理後，位置、故事節點、公開線索與下一組選項仍會保留。3D 操作仍沿用原型的固定步道與互動點；若要穩定展示故事選項，可先在 2D 完成選擇，再開 3D 展示同一 Session 的場景結果。
+重新整理後，位置、故事節點、公開線索與下一組選項仍會保留。只有平衡議會沿用第一人稱固定步道；其他場景直接顯示狀態式故事面板，不會要求玩家操作不屬於該場景的維達利亞或命脈符石。
 
 ## 架構邊界
 
@@ -110,6 +110,7 @@ npm run dev
 - Live 風沙分支：平衡議會 → 符石林 → 流塵谷，公開線索含 `fissure_map`，profile 為 `liuchen_dust_valley`。
 - Headless Chrome：烈燚原與流塵谷皆以 1600×913 WebGL 載入，hard refresh 後位置正確，無 JavaScript exception。
 - 實機驗收曾發現遠景上下顛倒，已由 `087e82e` 修正並重新截圖確認。
+- 實機後續發現交叉遠景平面形成巨大棕色三角遮蔽；已改為單一 screen-space layer，並隱藏非議會場景的角色、符石、假地面與錯誤物件群。獨立 WebGL 截圖確認流塵谷／烈燚原皆無遮蔽，且顯示不同故事選項。
 - 舊 Session＋既有任務曾使 `travel_to_minglin` 被誤判成過期 Demo choice；已補 action 完整比對與 live 返回路線驗收。
 
 ## 穩定 commits
@@ -128,7 +129,7 @@ b6efdbc docs(demo): plan dynamic story delivery
 1. 週四前先做一次人工完整彩排，確認投影環境、Chrome WebGL、Session 重新開始及兩條路線的按鈕操作。
 2. 若必須展示「即時生圖」，先取得 provider／model／key／預算，再實作一個 `ImageGateway` adapter；沒有金鑰時保留現有 fallback，不阻擋 Demo。
 3. 將圖片 job 改為 turn transaction 的 outbox row，lifespan／外部 worker 只在 commit 後處理，並補 stale running recovery、timeout 與有限重試。
-4. 依場景加入正式 NPC／GLB／碰撞配置；目前非鳴霖場景仍重用原型互動角色與部分幾何。
+4. 取得 Tripo 或 Meshy API key，以現有參考圖產生模組化 GLB；經 Blender 清理、減面、PBR 與碰撞設定後，再為 Babylon 加入場景資產載入。正式資產完成前不恢復基本幾何拼貼。
 5. B 的模型可用後，依 `docs/MODEL_GATEWAY_CONTRACT.md` 接 live endpoint，驗證角色一致性、RAG 權限與多回合品質。
 6. C 確認 Demo choice 與正式事件 ID、烈燚原入口、E3-1、任務完成與結局門檻的映射，再移除 provisional 標記。
 
@@ -137,4 +138,5 @@ b6efdbc docs(demo): plan dynamic story delivery
 - B：文字模型 provider、base URL、model、認證方式、timeout／錯誤格式、RAG metadata/filter。
 - C：正式事件／分支 ID、烈燚原入口與出口、E3-1 場景轉移、任務與結局操作契約。
 - 圖片：provider、model、key 環境變數名稱、每 Session 預算、輸出保存與內容審核策略。
-- 美術／故事：各場景正式在場 NPC、GLB 或地圖配置、碰撞區、音效及尚未確認的世界觀資料。
+- 3D：Tripo 或 Meshy provider、API key、單場景成本上限，以及可執行 Blender 清理的環境；若由美術提供成品，則直接需要 GLB、碰撞區與授權資訊。
+- 美術／故事：各場景正式在場 NPC、地圖配置、碰撞區、音效及尚未確認的世界觀資料。

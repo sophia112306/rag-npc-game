@@ -32,6 +32,16 @@ const previewScene: PlayerScene = {
   canon_status: "confirmed",
 };
 
+const clueLabels: Record<string, string> = {
+  ash_flow_pattern: "灰燼流向",
+  burial_fire_cycle: "墓葬與聖火循環",
+  ember_current: "餘燼流向烈燚原",
+  fissure_map: "裂谷路線",
+  forgotten_names: "被遺忘者姓名",
+  mummies_seek_remembrance: "木乃伊希望被記住",
+  sacred_fire_cycle: "聖火循環",
+};
+
 export default function TrialExperience() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const controllerRef = useRef<Controller | null>(null);
@@ -53,6 +63,7 @@ export default function TrialExperience() {
   const [sceneImageStatus, setSceneImageStatus] = useState<"queued" | "processing" | "succeeded" | "fallback">("fallback");
   const currentScene = gameState?.current_scene ?? previewScene;
   const title = currentScene.display_name;
+  const isCouncilScene = currentScene.scene_id === "minglin";
 
   function showBackdrop(scene: PlayerScene, context: "initial" | "turn" = "turn") {
     driverRef.current?.setSceneProfile?.(scene.visual_profile);
@@ -70,6 +81,13 @@ export default function TrialExperience() {
   function applyGameState(state: GameStateSummary, context: "initial" | "turn" = "turn") {
     sceneRef.current = state.current_scene;
     setGameState(state);
+    if (state.current_scene.scene_id !== "minglin") {
+      setFocus(null);
+      setStoryLine(`「${state.current_scene.description}」`);
+      if (context === "initial") {
+        setNotice("選擇一項行動推進此回合；後端只會保存通過規則驗證的結果。");
+      }
+    }
     showBackdrop(state.current_scene, context);
   }
 
@@ -297,6 +315,7 @@ export default function TrialExperience() {
       pointerStart = null;
       dragging = false;
       if (wasDrag) return;
+      if (sceneRef.current.scene_id !== "minglin") return;
       const hit = driver.pick(event.clientX, event.clientY);
       if (inspecting) {
         if (inspecting === "relic" && hit?.kind === "relic") recordRelic();
@@ -349,7 +368,11 @@ export default function TrialExperience() {
         bobWeight += ((tookStep ? 1 : 0) - bobWeight) * Math.min(1, dt * 9);
         if (tookStep) walkPhase += dt * 12;
         const eyeBob = bobWeight * (Math.sin(walkPhase) * 0.043 + Math.sin(walkPhase * 2) * 0.009);
-        driver.setView(player.x, player.z, yaw, pitch, eyeBob);
+        if (sceneRef.current.scene_id === "minglin") {
+          driver.setView(player.x, player.z, yaw, pitch, eyeBob);
+        } else {
+          driver.setView(START.x, START.z, 0, 0.04);
+        }
         driver.render();
       }
       frame = requestAnimationFrame(tick);
@@ -397,33 +420,59 @@ export default function TrialExperience() {
 
   const goal = step === 0 ? "與維達利亞交談" : found ? "已記錄命脈符石" : "尋找命脈符石";
   const nextAction = step === 0 ? "沿路走向議會" : "轉往議會右側";
+  const publicClues = gameState?.story_progress.public_clue_ids ?? [];
   return (
     <main className={`${styles.stage} ${styles.cool}`}>
-      <canvas ref={canvasRef} className={styles.canvas} aria-label={`${title}第一人稱 3D 場景；點擊路面沿固定路線前進`} />
+      <canvas ref={canvasRef} className={styles.canvas} aria-label={isCouncilScene
+        ? `${title}第一人稱 3D 場景；點擊路面沿固定路線前進`
+        : `${title}故事場景；使用畫面下方選項推進分支`} />
       <div className={styles.vignette} aria-hidden="true" />
       <header className={styles.topbar}>
-        <div className={styles.brand}><span className={styles.compass}>✧</span><div><small>{currentScene.region_name} · 第一人稱試玩</small><strong>{title}</strong></div></div>
+        <div className={styles.brand}><span className={styles.compass}>✧</span><div><small>{currentScene.region_name} · {isCouncilScene ? "第一人稱試玩" : "規則故事場景"}</small><strong>{title}</strong></div></div>
         <div className={styles.toplinks}><span>BABYLON.JS</span><Link href="/">返回原版</Link></div>
       </header>
-      <div className={styles.reticle} aria-hidden="true">◇</div>
+      {isCouncilScene && <div className={styles.reticle} aria-hidden="true">◇</div>}
       <aside className={styles.mission}>
-        <small>探索目標 · {step === 0 ? "01 / 02" : "02 / 02"}</small><strong>{goal}</strong>
-        <span>{step === 0 ? "沿石板路前往議會，抵達後自動展開對話。" : "沿右側路線前往符石，抵達後可環顧四周。"}</span>
+        {isCouncilScene ? <>
+          <small>探索目標 · {step === 0 ? "01 / 02" : "02 / 02"}</small><strong>{goal}</strong>
+          <span>{step === 0 ? "沿石板路前往議會，抵達後自動展開對話。" : "沿右側路線前往符石，抵達後可環顧四周。"}</span>
+        </> : <>
+          <small>規則分支（非 AI） · 第 {gameState?.turn_count ?? 0} 回合</small>
+          <strong>{gameState?.story_progress.chapter_title ?? currentScene.subtitle}</strong>
+          <span>{currentScene.description}</span>
+        </>}
       </aside>
       <div className={styles.notice} role="status">{notice}</div>
       {!ready && <div className={styles.loading}>{error ? `無法啟動：${error}` : "正在走進鳴霖森林……"}</div>}
-      {ready && !focus && step < 2 && <button className={styles.action} type="button" disabled={moving} onClick={() => controllerRef.current?.advance()}>{moving ? "沿路前進中…" : `點擊${nextAction} ↗`}</button>}
-      {focus && <section className={styles.inspect} aria-label="定點觀察">
+      {ready && isCouncilScene && !focus && step < 2 && <button className={styles.action} type="button" disabled={moving} onClick={() => controllerRef.current?.advance()}>{moving ? "沿路前進中…" : `點擊${nextAction} ↗`}</button>}
+      {isCouncilScene && focus && <section className={styles.inspect} aria-label="定點觀察">
         <div className={styles.inspectPortrait}><img src="/images/vidalia.png" alt="維達利亞" /></div>
         <div className={styles.inspectBody}><small>{focus === "npc" ? `維達利亞 · 第 ${gameState?.turn_count ?? 0} 回合` : "命脈符石 · 調查線索"}</small><p>{focus === "npc" ? storyLine :
           found ? "符石的紋路已記錄。光芒仍在引導你。" : "這枚符石閃著青色微光。拖曳畫面轉頭，仔細看看它的刻痕。"}</p>
-          {focus === "npc" && choices.length > 0 && <div className={styles.storyChoices} aria-label="動態行動選項">{choices.map((choice) => <button key={choice.choice_id} type="button" disabled={turnBusy} onClick={() => void selectStoryChoice(choice)}>{choice.label}</button>)}</div>}
+          {focus === "npc" && choices.length > 0 && <div className={styles.storyChoices} aria-label="規則故事行動選項">{choices.map((choice) => <button key={choice.choice_id} type="button" disabled={turnBusy} onClick={() => void selectStoryChoice(choice)}>{choice.label}</button>)}</div>}
           {turnError && <span className={styles.turnError} role="alert">{turnError}</span>}
           <span>故事進度：{gameState?.story_progress.chapter_title ?? "鳴霖異象"}</span>
           <span>目前場景：{currentScene.display_name} · {currentScene.canon_status === "provisional" ? "暫定內容" : "已確認設定"} · {sceneImageStatus === "succeeded" ? "生成場景" : sceneImageStatus === "fallback" ? "版本化場景" : "場景生成中"}</span></div>
         <div className={styles.inspectActions}>{focus === "relic" && !found && <button type="button" onClick={() => controllerRef.current?.record()}>記錄符石</button>}<button type="button" onClick={() => controllerRef.current?.exit()}>結束觀察</button></div>
       </section>}
-      <footer className={styles.footer}><span>點擊路面或目標，角色會沿固定路線行走；抵達對話或任務時才能拖曳轉頭</span><button type="button" onClick={() => controllerRef.current?.reset()}>回到入口 ↺</button></footer>
+      {!isCouncilScene && <section className={`${styles.inspect} ${styles.storyInspect}`} aria-label={`${title}規則故事分支`}>
+        <div className={styles.inspectBody}>
+          <small>{currentScene.display_name} · {gameState?.story_progress.chapter_title ?? currentScene.subtitle}</small>
+          <p>{storyLine}</p>
+          <div className={styles.storyChoices} aria-label="規則故事行動選項">
+            {choices.map((choice) => <button key={choice.choice_id} type="button" disabled={turnBusy} onClick={() => void selectStoryChoice(choice)}>{choice.label}</button>)}
+          </div>
+          {choices.length === 0 && <span>此節點目前沒有可執行選項。</span>}
+          {turnError && <span className={styles.turnError} role="alert">{turnError}</span>}
+          <span className={styles.clues}>已成立公開線索：{publicClues.length > 0
+            ? publicClues.map((clue) => clueLabels[clue] ?? clue).join("、")
+            : "尚無"}</span>
+          <span>呈現模式：有狀態的規則分支；接入 B 的 ModelGateway 後才是 AI 自由生成。</span>
+        </div>
+      </section>}
+      <footer className={styles.footer}><span>{isCouncilScene
+        ? "點擊路面或目標，角色會沿固定路線行走；抵達對話或任務時才能拖曳轉頭"
+        : "每個選項都會經過後端驗證、保存事件與狀態，再由下一回合承接"}</span>{isCouncilScene && <button type="button" onClick={() => controllerRef.current?.reset()}>回到入口 ↺</button>}</footer>
     </main>
   );
 }
