@@ -18,7 +18,17 @@ from .game_state import GameState, InventoryItem, NPCState, PlayerState, SceneSt
 from .parsed_action import ActionType, ParsedAction
 from .player_action import ActionMode, InputType, PlayerAction
 from .player_view import NPCPublicStateView, PlayerIdentityView, PlayerViewState
-from .story import DialogueLine, EventProposal, SpeakerType, StoryProposal
+from .story import (
+    DialogueLine,
+    EstablishedEvent,
+    EventProposal,
+    OperationType,
+    ProposalDecision,
+    ProposalStatus,
+    SpeakerType,
+    StoryProposal,
+    TransferItemOperation,
+)
 
 __all__ = [
     "ActionType",
@@ -29,6 +39,7 @@ __all__ = [
     "DisclosureScope",
     "DeltaPayload",
     "DialogueLine",
+    "EstablishedEvent",
     "EventProposal",
     "GameState",
     "GameTurnResponse",
@@ -42,16 +53,20 @@ __all__ = [
     "NPCGenerationContext",
     "NPCState",
     "NPCPublicStateView",
+    "OperationType",
     "ParsedAction",
     "PlayerAction",
     "PlayerIdentityView",
     "PlayerState",
     "PlayerViewState",
+    "ProposalDecision",
+    "ProposalStatus",
     "SceneState",
     "SpeakerType",
     "SettingCertainty",
     "SourceReference",
     "StoryPhase",
     "StoryProposal",
+    "TransferItemOperation",
     "WorldCanonEntry",
 ]

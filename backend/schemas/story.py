@@ -1,7 +1,7 @@
-"""Schemas for generated dialogue and proposed game events."""
+"""Schemas for generated dialogue, proposed operations, and rule decisions."""
 
 from enum import Enum
-from typing import Any
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,16 +26,74 @@ class DialogueLine(BaseModel):
     emotion: str | None = Field(default=None, max_length=50)
 
 
+class OperationType(str, Enum):
+    """State-changing commands currently supported by the rule boundary."""
+
+    TRANSFER_ITEM = "transfer_item"
+
+
+class TransferItemOperation(BaseModel):
+    """Request an ownership transfer without creating an item."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation_type: Literal[OperationType.TRANSFER_ITEM] = OperationType.TRANSFER_ITEM
+    item_id: str = Field(..., min_length=1, max_length=100)
+    from_entity_id: str = Field(..., min_length=1, max_length=100)
+    to_entity_id: str = Field(..., min_length=1, max_length=100)
+
+
+ProposedOperation = Annotated[TransferItemOperation, Field(discriminator="operation_type")]
+
+
 class EventProposal(BaseModel):
     """A structured event suggestion for C's validator and state manager."""
 
     model_config = ConfigDict(extra="forbid")
 
+    proposal_id: UUID = Field(default_factory=uuid4)
     event_type: str = Field(..., min_length=1, max_length=100)
     description: str = Field(..., min_length=1, max_length=1_000)
-    actor_id: str | None = Field(default=None, max_length=100)
+    actor_id: str = Field(..., min_length=1, max_length=100)
     target_id: str | None = Field(default=None, max_length=100)
-    payload: dict[str, Any] = Field(default_factory=dict)
+    cause_event_id: UUID | None = None
+    operations: list[ProposedOperation] = Field(..., min_length=1, max_length=5)
+    witness_ids: list[str] = Field(default_factory=list, max_length=20)
+    visible_to_player: bool = True
+
+
+class ProposalStatus(str, Enum):
+    """Whether a complete proposed event became a world fact."""
+
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class EstablishedEvent(BaseModel):
+    """A backend-approved event safe to persist as an objective fact."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    proposal_id: UUID
+    event_type: str
+    description: str
+    actor_id: str
+    target_id: str | None = None
+    cause_event_id: UUID | None = None
+    effect: dict[str, object]
+    visibility: dict[str, object]
+
+
+class ProposalDecision(BaseModel):
+    """Traceable rule decision for one event proposal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    proposal_id: UUID
+    status: ProposalStatus
+    reason_code: str = Field(..., min_length=1, max_length=100)
+    reason: str = Field(..., min_length=1, max_length=500)
+    established_event: EstablishedEvent | None = None
 
 
 class StoryProposal(BaseModel):

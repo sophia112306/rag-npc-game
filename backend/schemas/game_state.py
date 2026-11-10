@@ -33,6 +33,7 @@ class NPCState(BaseModel):
     name: str = ""
     relation: int = Field(default=30, ge=0, le=100)  # 關係值 (0 ~ 100)
     met: bool = False  # 是否已相遇
+    inventory: List[str] = Field(default_factory=list)
 
 
 class PlayerState(BaseModel):
