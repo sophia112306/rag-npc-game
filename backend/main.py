@@ -1,23 +1,34 @@
 """FastAPI application entry point for the RAG NPC game backend."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.content.characters import CHARACTER_DEFINITIONS
+from backend.content.context_repository import NPCContextRepository
 from backend.database import create_async_session_factory, create_database_engine, upgrade_database
 from backend.database.session import get_database_url
 from backend.database.repository import SqlAlchemyGameRepository
-from backend.orchestration.game_orchestrator import GameOrchestrator
+from backend.generation.config import build_story_planner_from_env
+from backend.generation.rule_based_planner import RuleBasedStoryPlanner
+from backend.orchestration.game_orchestrator import GameOrchestrator, StoryPlanner
 
+from .api.capabilities import router as capabilities_router
 from .api.characters import router as character_router
 from .api.game import router as game_router
 from .api.health import APP_VERSION, SERVICE_NAME, router as health_router
 
 
-def create_app(database_url: str | None = None) -> FastAPI:
+StoryPlannerFactory = Callable[[NPCContextRepository], StoryPlanner]
+
+
+def create_app(
+    database_url: str | None = None,
+    story_planner_factory: StoryPlannerFactory | None = None,
+) -> FastAPI:
     """Build an application with an isolated persistence lifecycle."""
 
     @asynccontextmanager
@@ -25,9 +36,25 @@ def create_app(database_url: str | None = None) -> FastAPI:
         resolved_database_url = database_url or get_database_url()
         await upgrade_database(resolved_database_url)
         engine = create_database_engine(resolved_database_url)
-        repository = SqlAlchemyGameRepository(create_async_session_factory(engine))
+        session_factory = create_async_session_factory(engine)
+        repository = SqlAlchemyGameRepository(session_factory)
+        context_repository = NPCContextRepository(session_factory)
+        for definition in CHARACTER_DEFINITIONS.values():
+            await context_repository.ensure_character_definition(definition)
+        if story_planner_factory:
+            story_planner = story_planner_factory(context_repository)
+            generation_mode = "external_model"
+        else:
+            story_planner = build_story_planner_from_env(context_repository)
+            if story_planner is None:
+                story_planner = RuleBasedStoryPlanner(context_repository)
+                generation_mode = "rule_based"
+            else:
+                generation_mode = "external_model"
         application.state.database_engine = engine
-        application.state.game_orchestrator = GameOrchestrator(repository)
+        application.state.game_orchestrator = GameOrchestrator(repository, story_planner=story_planner)
+        application.state.npc_context_repository = context_repository
+        application.state.generation_mode = generation_mode
         try:
             yield
         finally:
@@ -57,6 +84,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     )
 
     application.include_router(health_router)
+    application.include_router(capabilities_router)
     application.include_router(character_router)
     application.include_router(game_router)
 

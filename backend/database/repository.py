@@ -15,8 +15,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import PlayerAction
+from backend.schemas.progression import PlayerQuestView
+from backend.schemas.story import ProposalDecision
 
-from .models import ActionRecord, DialogueRecord, GameEventRecord, GameSessionRecord
+from .models import (
+    ActionRecord,
+    CommitmentRecord,
+    DialogueRecord,
+    GameEventRecord,
+    GameSessionRecord,
+    MemoryRecord,
+    QuestRecord,
+)
 
 
 class PersistentSessionNotFoundError(LookupError):
@@ -46,6 +56,7 @@ class CommittedGameEvent:
 
     event_type: str
     description: str
+    event_id: str | None = None
     actor_id: str | None = None
     target_id: str | None = None
     cause_event_id: str | None = None
@@ -62,6 +73,7 @@ def effective_action_payload(action: PlayerAction) -> dict[str, Any]:
         "input_type": action.input_type.value,
         "target_npc_id": action.target_npc_id,
         "action_mode": action.action_mode.value,
+        "destination_scene_id": action.destination_scene_id,
         "expected_state_version": action.expected_state_version,
     }
 
@@ -117,12 +129,43 @@ class SqlAlchemyGameRepository:
             record = await self._find_action(database, session_id, action_id)
             return self._validated_cached_response(record, action_id, request_digest)
 
+    async def get_player_quests(self, session_id: str) -> list[PlayerQuestView]:
+        async with self._session_factory() as database:
+            session = await database.get(GameSessionRecord, session_id)
+            if session is None:
+                raise PersistentSessionNotFoundError(session_id)
+            player_id = GameState.model_validate(session.state_json).player.player_id
+            result = await database.execute(
+                select(QuestRecord)
+                .where(
+                    QuestRecord.session_id == session_id,
+                    QuestRecord.recipient_id == player_id,
+                    QuestRecord.visibility == "player",
+                    QuestRecord.status.in_(["offered", "active"]),
+                )
+                .order_by(QuestRecord.created_turn.desc())
+            )
+            return [
+                PlayerQuestView(
+                    quest_id=item.quest_id,
+                    title=item.title,
+                    summary=item.summary,
+                    giver_id=item.giver_id,
+                    status=item.status,
+                    created_turn=item.created_turn,
+                    due_turn=item.due_turn,
+                )
+                for item in result.scalars()
+            ]
+
     async def commit_turn(
         self,
         action: PlayerAction,
         request_digest: str,
+        updated_state: GameState,
         response: GameTurnResponse,
         approved_events: Sequence[CommittedGameEvent] = (),
+        proposal_decisions: Sequence[ProposalDecision] = (),
     ) -> GameTurnResponse:
         try:
             async with self._session_factory() as database:
@@ -144,10 +187,12 @@ class SqlAlchemyGameRepository:
                             action.expected_state_version,
                             session_record.state_version,
                         )
-                    if response.state.state_version != action.expected_state_version + 1:
+                    if updated_state.state_version != action.expected_state_version + 1:
                         raise ValueError("Committed state must advance state_version exactly once")
+                    if response.state.state_version != updated_state.state_version:
+                        raise ValueError("Player view must represent the committed state version")
 
-                    state_payload = response.state.model_dump(mode="json")
+                    state_payload = updated_state.model_dump(mode="json")
                     result = await database.execute(
                         update(GameSessionRecord)
                         .where(
@@ -155,10 +200,10 @@ class SqlAlchemyGameRepository:
                             GameSessionRecord.state_version == action.expected_state_version,
                         )
                         .values(
-                            state_version=response.state.state_version,
-                            turn_count=response.state.turn_count,
+                            state_version=updated_state.state_version,
+                            turn_count=updated_state.turn_count,
                             state_json=state_payload,
-                            updated_at=response.state.updated_at,
+                            updated_at=updated_state.updated_at,
                         )
                     )
                     if result.rowcount != 1:
@@ -178,6 +223,9 @@ class SqlAlchemyGameRepository:
                             },
                             status="completed",
                             response_json=response.model_dump(mode="json"),
+                            resolution_json=[
+                                decision.model_dump(mode="json") for decision in proposal_decisions
+                            ],
                             error_json=None,
                             created_at=action.created_at,
                             completed_at=completed_at,
@@ -200,10 +248,32 @@ class SqlAlchemyGameRepository:
                                 created_at=completed_at,
                             )
                         )
+                    if (
+                        action.target_npc_id is not None
+                        and action.target_npc_id in updated_state.npc_states
+                    ):
+                        database.add(
+                            MemoryRecord(
+                                memory_id=str(uuid4()),
+                                session_id=action.session_id,
+                                npc_id=action.target_npc_id,
+                                content=f"玩家說：「{action.message}」",
+                                memory_type="interaction",
+                                source_event_id=None,
+                                source_action_id=str(action.action_id),
+                                occurred_turn=response.turn_number,
+                                importance=10,
+                                is_active=True,
+                                is_private=True,
+                                provenance_json={"input_type": action.input_type.value},
+                                created_at=completed_at,
+                            )
+                        )
                     for event in approved_events:
+                        event_id = event.event_id or str(uuid4())
                         database.add(
                             GameEventRecord(
-                                event_id=str(uuid4()),
+                                event_id=event_id,
                                 session_id=action.session_id,
                                 action_id=str(action.action_id),
                                 turn_number=response.turn_number,
@@ -218,6 +288,73 @@ class SqlAlchemyGameRepository:
                                 created_at=completed_at,
                             )
                         )
+                        witness_ids = (event.visibility or {}).get("witness_ids", [])
+                        for witness_id in dict.fromkeys(witness_ids):
+                            if witness_id not in updated_state.npc_states:
+                                continue
+                            database.add(
+                                MemoryRecord(
+                                    memory_id=str(uuid4()),
+                                    session_id=action.session_id,
+                                    npc_id=witness_id,
+                                    content=event.description,
+                                    memory_type="observed_event",
+                                    source_event_id=event_id,
+                                    source_action_id=str(action.action_id),
+                                    occurred_turn=response.turn_number,
+                                    importance=20,
+                                    is_active=True,
+                                    is_private=True,
+                                    provenance_json={"event_type": event.event_type},
+                                    created_at=completed_at,
+                                )
+                            )
+                        for operation in (event.effect or {}).get("operations", []):
+                            if operation.get("operation_type") == "establish_commitment":
+                                database.add(
+                                    CommitmentRecord(
+                                        commitment_id=operation["commitment_id"],
+                                        session_id=action.session_id,
+                                        summary=operation["summary"],
+                                        promisor_id=operation["promisor_id"],
+                                        promisee_id=operation["promisee_id"],
+                                        status="active",
+                                        created_turn=operation["created_turn"],
+                                        due_turn=operation["due_turn"],
+                                        source_kind="established_event",
+                                        source_id=event_id,
+                                        visibility=operation["visibility"],
+                                        provenance_json={
+                                            "action_id": str(action.action_id),
+                                            "proposal_id": operation["proposal_id"],
+                                        },
+                                        created_at=completed_at,
+                                        updated_at=completed_at,
+                                    )
+                                )
+                            elif operation.get("operation_type") == "offer_quest":
+                                database.add(
+                                    QuestRecord(
+                                        quest_id=operation["quest_id"],
+                                        session_id=action.session_id,
+                                        title=operation["title"],
+                                        summary=operation["summary"],
+                                        giver_id=operation["giver_id"],
+                                        recipient_id=operation["recipient_id"],
+                                        status="offered",
+                                        created_turn=operation["created_turn"],
+                                        due_turn=operation["due_turn"],
+                                        source_kind="established_event",
+                                        source_id=event_id,
+                                        visibility=operation["visibility"],
+                                        provenance_json={
+                                            "action_id": str(action.action_id),
+                                            "proposal_id": operation["proposal_id"],
+                                        },
+                                        created_at=completed_at,
+                                        updated_at=completed_at,
+                                    )
+                                )
                     await database.flush()
                 return response.model_copy(deep=True)
         except IntegrityError:

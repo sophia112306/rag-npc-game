@@ -4,9 +4,9 @@ from uuid import UUID, uuid4
 from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-from .game_state import GameState
 from .parsed_action import ParsedAction
-from .story import StoryProposal
+from .player_view import PlayerViewState
+from .story import ResolvedStory
 
 
 class DeltaPayload(BaseModel):
@@ -46,7 +46,7 @@ class GameTurnResponse(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=100)
     turn_number: int = Field(..., ge=0)
     parsed_action: ParsedAction
-    story: StoryProposal
-    state: GameState
+    story: ResolvedStory
+    state: PlayerViewState
     narrative: Optional[NarrativeAIResponse] = None
     available_endings: List[str] = Field(default_factory=list, description="當前可選結局清單")

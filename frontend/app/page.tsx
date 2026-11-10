@@ -3,6 +3,17 @@
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import MinglinGame, { interactWithNpc, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP } from "../components/MinglinGame";
+import {
+  ApiRequestError,
+  GAME_SESSION_STORAGE_KEY,
+  requestJson,
+  type Capabilities,
+  type GameStateSummary,
+  type GameTurnResponse,
+  type PlayerChoice,
+  type PlayerQuest,
+  type PlayerScene,
+} from "../lib/game-api";
 
 type CharacterProfile = {
   npc_id: string;
@@ -15,18 +26,6 @@ type CharacterProfile = {
   greeting: string;
 };
 
-type GameTurnResponse = {
-  turn_number: number;
-  state: { state_version: number; updated_at: string };
-  story: { dialogue: { speaker_name: string; text: string }[] };
-};
-
-type GameStateSummary = {
-  turn_count: number;
-  state_version: number;
-  updated_at: string;
-};
-
 type ChatMessage = {
   id: string;
   speaker: string;
@@ -37,17 +36,26 @@ type ChatMessage = {
 type PendingAction = {
   actionId: string;
   text: string;
+  inputType: "text" | "speech_transcript";
+  targetNpcId: string | null;
+  actionMode: PlayerChoice["action_mode"];
+  destinationSceneId: string | null;
   expectedStateVersion: number;
 };
 
-class ApiRequestError extends Error {
-  constructor(message: string, readonly status: number, readonly code?: string) {
-    super(message);
-  }
-}
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onend: (() => void) | null;
+};
 
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8300";
-const storageKey = "vidalia-game-session";
+type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
 const conversationKey = (id: string) => `vidalia-conversation:${id}`;
 const previewProfile: CharacterProfile = {
   npc_id: "vidalia",
@@ -60,27 +68,16 @@ const previewProfile: CharacterProfile = {
   greeting: "旅人，歡迎來到鳴霖。命脈之泉近來沉默得太久了；你願意告訴我，你沿途看見了什麼嗎？",
 };
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${apiBase}${path}`, init);
-  } catch {
-    throw new Error("無法連線到遊戲服務，請確認後端已啟動。");
-  }
-  if (!response.ok) {
-    let detail: { code?: string; message?: string } | undefined;
-    try {
-      const payload = (await response.json()) as { detail?: { code?: string; message?: string } };
-      detail = payload.detail;
-    } catch { /* Non-JSON failures use the generic status message below. */ }
-    throw new ApiRequestError(
-      detail?.message ?? `遊戲服務回應 ${response.status}，請稍後重試。`,
-      response.status,
-      detail?.code,
-    );
-  }
-  return (await response.json()) as T;
-}
+const previewScene: PlayerScene = {
+  scene_id: "minglin",
+  region_name: "鳴霖",
+  display_name: "平衡議會",
+  subtitle: "古林中的議會庭",
+  description: "維達利亞接見旅人的林間議會庭。",
+  background_url: "/game/forest-council.png",
+  horizon_url: "/game/forest-eye-backdrop.png",
+  canon_status: "confirmed",
+};
 
 export default function Home() {
   const [profile, setProfile] = useState(previewProfile);
@@ -89,6 +86,12 @@ export default function Home() {
   const [nearNpc, setNearNpc] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [inputType, setInputType] = useState<"text" | "speech_transcript">("text");
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [ttsSupported, setTtsSupported] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [lastNpcSpeech, setLastNpcSpeech] = useState("");
   const [busy, setBusy] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [ready, setReady] = useState(false);
@@ -97,14 +100,29 @@ export default function Home() {
   const [restartConfirm, setRestartConfirm] = useState(false);
   const [turnNumber, setTurnNumber] = useState(0);
   const [stateVersion, setStateVersion] = useState(1);
+  const [scene, setScene] = useState<PlayerScene>(previewScene);
+  const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
+  const [questLabel, setQuestLabel] = useState("與維達利亞交談");
+  const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
   useEffect(() => {
-    const id = window.localStorage.getItem(storageKey) ?? window.crypto.randomUUID();
-    window.localStorage.setItem(storageKey, id);
+    const id = window.localStorage.getItem(GAME_SESSION_STORAGE_KEY) ?? window.crypto.randomUUID();
+    window.localStorage.setItem(GAME_SESSION_STORAGE_KEY, id);
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+    setVoiceSupported(Boolean(speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition));
+    setTtsSupported("speechSynthesis" in window);
     void initialize(id);
+    return () => {
+      recognitionRef.current?.stop();
+      window.speechSynthesis?.cancel();
+    };
   }, []);
 
   useEffect(() => {
@@ -130,17 +148,26 @@ export default function Home() {
     setError("");
     setReady(false);
     try {
-      const [character, state] = await Promise.all([
+      const [character, state, capabilities] = await Promise.all([
         requestJson<CharacterProfile>("/api/characters/vidalia"),
         requestJson<GameStateSummary>("/api/game/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ session_id: id }),
         }),
+        requestJson<Capabilities>("/api/capabilities"),
       ]);
       setProfile(character);
+      setGenerationMode(capabilities.generation_mode);
+      const [quests, choices] = await Promise.all([
+        requestJson<PlayerQuest[]>(`/api/game/${id}/quests`),
+        requestJson<PlayerChoice[]>(`/api/game/${id}/choices`),
+      ]);
+      setQuestLabel(quests[0] ? `${quests[0].status === "offered" ? "任務提議" : "目前任務"}：${quests[0].title}` : "與維達利亞交談");
+      setPlayerChoices(choices);
       setTurnNumber(state.turn_count);
       setStateVersion(state.state_version);
+      setScene(state.current_scene);
       const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: character.name, text: character.greeting, kind: "npc" }];
       let restored = fallback;
       try {
@@ -154,6 +181,7 @@ export default function Home() {
         }
       } catch { /* A missing or old browser record starts with the greeting. */ }
       setMessages(restored);
+      setLastNpcSpeech(restored.filter((message) => message.kind === "npc").at(-1)?.text ?? character.greeting);
       setReady(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "無法連線到後端。");
@@ -169,19 +197,109 @@ export default function Home() {
     setDialogueOpen(true);
   }, []);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  function toggleListening() {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      setError("這個瀏覽器不支援語音轉文字，仍可使用文字輸入。");
+      return;
+    }
+    setError("");
+    const recognition = new Recognition();
+    recognition.lang = "zh-TW";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      if (transcript) {
+        setInput(transcript);
+        setInputType("speech_transcript");
+      }
+    };
+    recognition.onerror = (event) => {
+      const message = event.error === "not-allowed"
+        ? "麥克風權限未開啟；你可以在瀏覽器設定允許後再試。"
+        : "語音辨識沒有成功，請再試一次或使用文字輸入。";
+      setError(message);
+    };
+    recognition.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+    recognitionRef.current = recognition;
+    setListening(true);
+    recognition.start();
+  }
+
+  function speakLastResponse() {
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    if (!ttsSupported || !lastNpcSpeech) {
+      setError("這個瀏覽器目前無法播放語音。");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(lastNpcSpeech);
+    utterance.lang = "zh-TW";
+    utterance.rate = 1;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = input.trim();
+    const pending = pendingActionRef.current;
+    const retryingPending = pending?.text === text && pending.inputType === inputType && pending.expectedStateVersion === stateVersion;
+    void sendAction(
+      text,
+      inputType,
+      retryingPending ? pending.targetNpcId : "vidalia",
+      retryingPending ? pending.actionMode : "dialogue",
+      retryingPending ? pending.destinationSceneId : null,
+    );
+  }
+
+  function selectChoice(choice: PlayerChoice) {
+    void sendAction(
+      choice.message,
+      "text",
+      choice.target_npc_id,
+      choice.action_mode,
+      choice.destination_scene_id,
+    );
+  }
+
+  async function sendAction(
+    text: string,
+    actionInputType: "text" | "speech_transcript",
+    targetNpcId: string | null,
+    actionMode: PlayerChoice["action_mode"],
+    destinationSceneId: string | null,
+  ) {
     if (!text || !ready || busy) return;
 
     setInput("");
+    setInputType("text");
     setBusy(true);
     setError("");
     setMessages((current) => [...current, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }]);
     const pending = pendingActionRef.current;
-    const canRetryPending = pending?.text === text && pending.expectedStateVersion === stateVersion;
+    const canRetryPending = pending?.text === text && pending.inputType === actionInputType && pending.targetNpcId === targetNpcId && pending.actionMode === actionMode && pending.destinationSceneId === destinationSceneId && pending.expectedStateVersion === stateVersion;
     const actionId = canRetryPending ? pending.actionId : window.crypto.randomUUID();
-    pendingActionRef.current = { actionId, text, expectedStateVersion: stateVersion };
+    pendingActionRef.current = { actionId, text, inputType: actionInputType, targetNpcId, actionMode, destinationSceneId, expectedStateVersion: stateVersion };
 
     try {
       const turn = await requestJson<GameTurnResponse>("/api/game/turn", {
@@ -191,19 +309,30 @@ export default function Home() {
           session_id: sessionId,
           action_id: actionId,
           message: text,
-          input_type: "text",
-          target_npc_id: "vidalia",
-          action_mode: "dialogue",
+          input_type: actionInputType,
+          target_npc_id: targetNpcId,
+          action_mode: actionMode,
+          destination_scene_id: destinationSceneId,
           expected_state_version: stateVersion,
         }),
       });
       pendingActionRef.current = null;
       setTurnNumber(turn.turn_number);
       setStateVersion(turn.state.state_version);
+      setScene(turn.state.current_scene);
+      try {
+        const [quests, choices] = await Promise.all([
+          requestJson<PlayerQuest[]>(`/api/game/${sessionId}/quests`),
+          requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`),
+        ]);
+        setQuestLabel(quests[0] ? `${quests[0].status === "offered" ? "任務提議" : "目前任務"}：${quests[0].title}` : "與維達利亞交談");
+        setPlayerChoices(choices);
+      } catch { /* The committed turn remains valid if the optional quest refresh fails. */ }
       const nextMessages: ChatMessage[] = [...messages, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }, ...turn.story.dialogue.map((line) => ({
         id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const,
       }))];
       setMessages(nextMessages);
+      setLastNpcSpeech(turn.story.dialogue.filter((line) => line.speaker_name !== "系統").map((line) => line.text).join("\n"));
       try {
         window.localStorage.setItem(conversationKey(sessionId), JSON.stringify({ turn_number: turn.turn_number, updated_at: turn.state.updated_at, messages: nextMessages }));
       } catch { /* The current conversation still works when browser storage is unavailable. */ }
@@ -214,6 +343,7 @@ export default function Home() {
           const latest = await requestJson<GameStateSummary>(`/api/game/${sessionId}/state`);
           setTurnNumber(latest.turn_count);
           setStateVersion(latest.state_version);
+          setScene(latest.current_scene);
           setError("遊戲進度已在其他請求中更新，請確認內容後重新送出。");
         } catch {
           setError("遊戲進度版本衝突，且無法重新取得最新狀態。請稍後重試。");
@@ -233,12 +363,13 @@ export default function Home() {
 
   function restart() {
     const id = window.crypto.randomUUID();
-    window.localStorage.setItem(storageKey, id);
+    window.localStorage.setItem(GAME_SESSION_STORAGE_KEY, id);
     setDialogueOpen(false);
     setRestartConfirm(false);
     setHelpOpen(false);
     setNearNpc(false);
     setInput("");
+    setInputType("text");
     pendingActionRef.current = null;
     void initialize(id);
   }
@@ -250,7 +381,7 @@ export default function Home() {
   return (
     <main className="game-page">
       <section className="map-stage" aria-label="斜俯視的鳴霖遊戲地圖">
-        {sessionId && <MinglinGame key={sessionId} paused={dialogueOpen || helpOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpc} onInteract={openDialogue} onZoomChange={setMapZoom} />}
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}`} backgroundUrl={scene.background_url} paused={dialogueOpen || helpOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpc} onInteract={openDialogue} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
 
         <header className="location-banner" aria-label="目前場景">
@@ -260,13 +391,13 @@ export default function Home() {
             <path d="M36 3l6 27 27 6-27 6-6 27-6-27L3 36l27-6L36 3Z" stroke="currentColor" strokeWidth="1.7" />
             <path d="M36 22l4 10 10 4-10 4-4 10-4-10-10-4 10-4 4-10Z" fill="currentColor" />
           </svg>
-          <div className="location-copy"><strong>鳴霖</strong><span>命脈之泉 · 平衡議會</span></div>
+          <div className="location-copy"><strong>{scene.region_name}</strong><span>{scene.display_name} · {scene.subtitle}</span></div>
           <span className="location-ornament" aria-hidden="true">✧</span>
         </header>
 
         <aside className="quest-banner" aria-label="目前任務">
           <span className="quest-emblem" aria-hidden="true">◇</span>
-          <span>與維達利亞交談</span>
+          <span>{questLabel}</span>
           <button type="button" className="help-button" onClick={() => setHelpOpen(true)} aria-label="查看操作說明" title="操作說明">?</button>
           <button type="button" className="restart-button" onClick={() => setRestartConfirm(true)} disabled={busy} aria-label="重新開始遊戲" title="重新開始">↺</button>
         </aside>
@@ -300,7 +431,7 @@ export default function Home() {
           </div>
           <div className="dialogue-main">
             <div className="dialogue-heading">
-              <div><h1>{profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span></div>
+              <div><h1>{profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 動態" : "規則動態"}</span></div>
               {dialogueOpen && <button type="button" className="close-dialogue" onClick={() => setDialogueOpen(false)} aria-label="關閉對話">✕</button>}
             </div>
 
@@ -311,10 +442,21 @@ export default function Home() {
                   {busy && ready && <p className="thinking">維達利亞正在思索……</p>}
                   <div ref={endRef} />
                 </div>
+                {playerChoices.length > 0 && (
+                  <div className="dialogue-choices" aria-label="可選行動">
+                    {playerChoices.map((choice) => (
+                      <button key={choice.choice_id} type="button" disabled={!ready || busy} onClick={() => selectChoice(choice)}>
+                        {choice.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {error && <p className="dialogue-error" role="alert">{error}</p>}
                 <form className="dialogue-form" onSubmit={submit}>
                   <label htmlFor="dialogue-input" className="sr-only">對維達利亞說話</label>
-                  <input id="dialogue-input" value={input} onChange={(event) => setInput(event.target.value)} placeholder={ready ? "說出你的想法……" : "等待後端連線……"} disabled={!ready || busy} maxLength={2000} />
+                  <input id="dialogue-input" value={input} onChange={(event) => { setInput(event.target.value); setInputType("text"); }} placeholder={ready ? (listening ? "正在聆聽……" : "說出你的想法……") : "等待後端連線……"} disabled={!ready || busy || listening} maxLength={2000} />
+                  <button type="button" className={`voice-button ${listening ? "is-listening" : ""}`} onClick={toggleListening} disabled={!ready || busy || !voiceSupported} aria-label={listening ? "停止語音辨識" : "使用麥克風輸入"} title={voiceSupported ? "語音轉文字" : "瀏覽器不支援語音辨識"}>{listening ? "■" : "🎙"}</button>
+                  <button type="button" className={`voice-button ${speaking ? "is-speaking" : ""}`} onClick={speakLastResponse} disabled={!ttsSupported || !lastNpcSpeech} aria-label={speaking ? "停止播放 NPC 回覆" : "播放 NPC 最近回覆"} title={speaking ? "停止播放" : "播放 NPC 最近回覆"}>{speaking ? "■" : "🔊"}</button>
                   <button type="submit" disabled={!ready || busy || !input.trim()}>送出 ↗</button>
                 </form>
               </>

@@ -50,6 +50,9 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
 .dialogue-heading > div { display: flex; align-items: baseline; gap: 18px; }
 .dialogue-heading h1 { margin: 0; color: #f6dc9d; font-size: clamp(19px, 1.6vw, 26px); font-weight: 500; letter-spacing: .12em; text-shadow: 0 2px 4px #000; }
 .turn-indicator { color: #a99363; font-size: 11px; white-space: nowrap; }
+.generation-badge { padding: 2px 7px; border: 1px solid #806f48; border-radius: 999px; color: #c8b98e; background: #302b1dbd; font-size: 10px; line-height: 1.2; letter-spacing: .08em; white-space: nowrap; }
+.generation-badge.mode-rule_based { border-color: #c5a860; color: #ffedbd; background: #443817c9; }
+.generation-badge.mode-external_model { border-color: #7fa46e; color: #d9f0cc; background: #203521c9; }
 .dialogue-preview { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .dialogue-preview p { margin: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: #f9f4e9; font-size: clamp(17px, 1.5vw, 24px); line-height: 1.6; letter-spacing: .05em; text-shadow: 0 2px 3px #000; }
 .talk-button, .dialogue-form button { flex: 0 0 auto; min-width: 182px; padding: 9px 18px; border: 1px solid #efcf82; border-radius: 5px; color: #fff1c7; background: linear-gradient(180deg, #74602e, #362a15); box-shadow: inset 0 0 0 2px #a3854c68, 0 2px 8px #0008; font-size: 19px; letter-spacing: .2em; text-shadow: 0 1px 3px #000; }
@@ -64,13 +67,21 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
 .dialogue-history .line-player { color: #d0e0c5; }
 .dialogue-history .line-player span { color: #aec58c; }
 .dialogue-history .thinking { color: #d1bd8c; font-size: 12px; }
+.dialogue-choices { display: flex; flex-wrap: wrap; gap: 7px; margin: 1px 0 7px; }
+.dialogue-choices button { padding: 5px 10px; border: 1px solid #9f8751; border-radius: 3px; color: #f4dfad; background: #2b321fdd; font-size: 12px; }
+.dialogue-choices button:hover:not(:disabled), .dialogue-choices button:focus-visible { border-color: #e5c675; color: #fff3cf; background: #4a4526; outline: none; }
+.dialogue-choices button:disabled { opacity: .45; cursor: default; }
 .dialogue-error { margin: 3px 0; color: #ffd1b2; font-size: 12px; }
 .dialogue-form { display: flex; gap: 9px; }
 .dialogue-form input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #a78d57; border-radius: 3px; outline: none; background: #111b14cb; color: #fff8e4; font-size: 14px; }
 .dialogue-form input:focus { border-color: #ffdc8e; }
 .dialogue-form input::placeholder { color: #b8b39d; }
 .dialogue-form button { min-width: 90px; font-size: 14px; letter-spacing: .06em; }
+.dialogue-form .voice-button { min-width: 42px; padding: 7px 9px; letter-spacing: 0; }
+.dialogue-form .voice-button.is-listening { border-color: #ef9a78; color: #ffe0d1; background: linear-gradient(180deg, #80452f, #452317); animation: voice-pulse 1s ease-in-out infinite; }
+.dialogue-form .voice-button.is-speaking { border-color: #8ebd79; color: #e6f7dc; background: linear-gradient(180deg, #40643a, #243a21); }
 .dialogue-form button:disabled { opacity: .5; cursor: not-allowed; }
+@keyframes voice-pulse { 50% { box-shadow: 0 0 0 4px #df765134; } }
 
 .game-overlay { position: absolute; z-index: 8; inset: 0; display: grid; place-items: center; padding: 20px; background: #07130bb8; backdrop-filter: blur(5px); }
 .game-overlay-card { position: relative; width: min(460px, 100%); max-height: calc(100svh - 40px); overflow-y: auto; padding: 27px 30px 29px; border: 1px solid #d7b369; color: #f9edd0; background: linear-gradient(145deg, #152219f5, #101911f5); box-shadow: inset 0 0 0 3px #2b2b1c, 0 18px 55px #000a; text-align: center; }
@@ -134,6 +145,7 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
   .dialogue-main { margin-left: 94px; padding: 10px 8px; }
   .dialogue-heading h1 { font-size: 18px; }
   .turn-indicator { display: none; }
+  .generation-badge { font-size: 9px; }
   .dialogue-preview { align-items: flex-start; flex-direction: column; gap: 6px; justify-content: center; }
   .dialogue-preview p { font-size: 15px; }
   .talk-button { min-width: 108px; padding: 5px 11px; font-size: 15px; align-self: flex-end; }

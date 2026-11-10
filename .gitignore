@@ -9,6 +9,7 @@ __pycache__/
 .env
 .vscode/
 .idea/
+.DS_Store
 
 # 本機測試腳本
 test_pipeline.py

@@ -7,7 +7,13 @@ import pytest_asyncio
 from sqlalchemy import func, select
 
 from backend.database import create_async_session_factory, create_database_engine, create_schema
-from backend.database.models import ActionRecord, DialogueRecord, GameEventRecord, GameSessionRecord
+from backend.database.models import (
+    ActionRecord,
+    DialogueRecord,
+    GameEventRecord,
+    GameSessionRecord,
+    MemoryRecord,
+)
 from backend.database.repository import (
     ActionIdConflictError,
     CommittedGameEvent,
@@ -19,7 +25,8 @@ from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState
 from backend.schemas.parsed_action import ParsedAction
 from backend.schemas.player_action import PlayerAction
-from backend.schemas.story import DialogueLine, SpeakerType, StoryProposal
+from backend.schemas.player_view import project_player_view
+from backend.schemas.story import DialogueLine, ResolvedStory, SpeakerType
 
 
 def make_action(session_id: str, *, message: str = "你好", version: int = 1, action_id=None) -> PlayerAction:
@@ -32,7 +39,7 @@ def make_action(session_id: str, *, message: str = "你好", version: int = 1, a
     )
 
 
-def make_response(action: PlayerAction, state: GameState) -> GameTurnResponse:
+def make_turn(action: PlayerAction, state: GameState) -> tuple[GameState, GameTurnResponse]:
     updated = state.model_copy(deep=True)
     updated.turn_count += 1
     updated.phase_turns += 1
@@ -42,9 +49,7 @@ def make_response(action: PlayerAction, state: GameState) -> GameTurnResponse:
         target_ids=["vidalia"],
         parameters={"action_id": str(action.action_id)},
     )
-    story = StoryProposal(
-        session_id=state.session_id,
-        turn_number=updated.turn_count,
+    story = ResolvedStory(
         dialogue=[
             DialogueLine(
                 speaker_type=SpeakerType.NPC,
@@ -54,12 +59,15 @@ def make_response(action: PlayerAction, state: GameState) -> GameTurnResponse:
             )
         ],
     )
-    return GameTurnResponse(
-        session_id=state.session_id,
-        turn_number=updated.turn_count,
-        parsed_action=parsed,
-        story=story,
-        state=updated,
+    return (
+        updated,
+        GameTurnResponse(
+            session_id=state.session_id,
+            turn_number=updated.turn_count,
+            parsed_action=parsed,
+            story=story,
+            state=project_player_view(updated),
+        ),
     )
 
 
@@ -79,10 +87,11 @@ async def test_session_and_completed_turn_survive_new_engine(repository_context)
     initial = GameState(session_id="persistent-session", current_scene_id="minglin")
     await repository.create_or_get_session(initial)
     action = make_action(initial.session_id)
-    response = make_response(action, initial)
+    updated, response = make_turn(action, initial)
     await repository.commit_turn(
         action,
         action_request_digest(action),
+        updated,
         response,
         approved_events=[
             CommittedGameEvent(
@@ -112,10 +121,11 @@ async def test_session_and_completed_turn_survive_new_engine(repository_context)
 @pytest.mark.asyncio
 async def test_same_action_id_with_different_content_is_rejected(repository_context) -> None:
     repository, _session_factory, _database_url = repository_context
-    initial = GameState(session_id="digest-session")
+    initial = GameState(session_id="digest-session", current_scene_id="minglin")
     await repository.create_or_get_session(initial)
     action = make_action(initial.session_id)
-    await repository.commit_turn(action, action_request_digest(action), make_response(action, initial))
+    updated, response = make_turn(action, initial)
+    await repository.commit_turn(action, action_request_digest(action), updated, response)
     changed = make_action(initial.session_id, message="不同內容", action_id=action.action_id)
 
     with pytest.raises(ActionIdConflictError):
@@ -129,14 +139,26 @@ async def test_same_action_id_with_different_content_is_rejected(repository_cont
 @pytest.mark.asyncio
 async def test_stale_version_does_not_create_a_second_turn(repository_context) -> None:
     repository, session_factory, _database_url = repository_context
-    initial = GameState(session_id="version-session")
+    initial = GameState(session_id="version-session", current_scene_id="minglin")
     await repository.create_or_get_session(initial)
     first = make_action(initial.session_id)
-    await repository.commit_turn(first, action_request_digest(first), make_response(first, initial))
+    first_updated, first_response = make_turn(first, initial)
+    await repository.commit_turn(
+        first,
+        action_request_digest(first),
+        first_updated,
+        first_response,
+    )
     stale = make_action(initial.session_id, message="第二個動作", version=1)
+    stale_updated, stale_response = make_turn(stale, initial)
 
     with pytest.raises(PersistentStateVersionConflictError):
-        await repository.commit_turn(stale, action_request_digest(stale), make_response(stale, initial))
+        await repository.commit_turn(
+            stale,
+            action_request_digest(stale),
+            stale_updated,
+            stale_response,
+        )
 
     async with session_factory() as database:
         action_count = await database.scalar(select(func.count()).select_from(ActionRecord))
@@ -148,7 +170,7 @@ async def test_stale_version_does_not_create_a_second_turn(repository_context) -
 @pytest.mark.asyncio
 async def test_failed_event_serialization_rolls_back_entire_turn(repository_context) -> None:
     repository, session_factory, _database_url = repository_context
-    initial = GameState(session_id="rollback-session")
+    initial = GameState(session_id="rollback-session", current_scene_id="minglin")
     await repository.create_or_get_session(initial)
     action = make_action(initial.session_id)
     invalid_event = CommittedGameEvent(
@@ -156,12 +178,14 @@ async def test_failed_event_serialization_rolls_back_entire_turn(repository_cont
         description="Forces JSON serialization failure",
         effect={"not_json": object()},
     )
+    updated, response = make_turn(action, initial)
 
     with pytest.raises(Exception):
         await repository.commit_turn(
             action,
             action_request_digest(action),
-            make_response(action, initial),
+            updated,
+            response,
             approved_events=[invalid_event],
         )
 
@@ -170,9 +194,11 @@ async def test_failed_event_serialization_rolls_back_entire_turn(repository_cont
         action_count = await database.scalar(select(func.count()).select_from(ActionRecord))
         dialogue_count = await database.scalar(select(func.count()).select_from(DialogueRecord))
         event_count = await database.scalar(select(func.count()).select_from(GameEventRecord))
+        memory_count = await database.scalar(select(func.count()).select_from(MemoryRecord))
     assert session is not None
     assert session.state_version == 1
     assert session.turn_count == 0
     assert action_count == 0
     assert dialogue_count == 0
     assert event_count == 0
+    assert memory_count == 0

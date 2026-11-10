@@ -17,6 +17,7 @@ export const pillars = [
 export type Pick = { kind: "ground"; x: number; z: number } | { kind: "npc" | "relic" } | null;
 export type TrialDriver = {
   setView: (x: number, z: number, yaw: number, pitch: number, eyeBob?: number) => void;
+  setBackdrop?: (url: string) => Promise<void>;
   setTalking?: (talking: boolean) => void;
   pick: (clientX: number, clientY: number) => Pick;
   render: () => void;

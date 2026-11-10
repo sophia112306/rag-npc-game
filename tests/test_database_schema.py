@@ -9,8 +9,15 @@ EXPECTED_TABLES = {
     "action_records",
     "alembic_version",
     "dialogue_records",
+    "character_definitions",
     "game_events",
     "game_sessions",
+    "knowledge_records",
+    "memory_records",
+    "npc_goals",
+    "commitments",
+    "quests",
+    "world_canon",
 }
 
 
@@ -33,6 +40,12 @@ def test_initial_migration_creates_complete_turn_schema(tmp_path) -> None:
     unique_constraints = inspector.get_unique_constraints("action_records")
     assert {tuple(item["column_names"]) for item in unique_constraints} == {
         ("session_id", "action_id")
+    }
+    assert {column["name"] for column in inspector.get_columns("knowledge_records")} >= {
+        "knower_npc_id",
+        "epistemic_status",
+        "is_unlocked",
+        "provenance_json",
     }
     engine.dispose()
 
