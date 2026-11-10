@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from backend.content.scenes import require_scene
+from backend.content.scenes import SceneVisualProfile, require_scene
 
 from .game_state import GameState
 
@@ -42,6 +42,7 @@ class PlayerSceneView(BaseModel):
     description: str
     background_url: str
     horizon_url: str
+    visual_profile: SceneVisualProfile
     canon_status: Literal["confirmed", "provisional"]
 
 
@@ -91,6 +92,7 @@ def project_player_view(state: GameState) -> PlayerViewState:
             description=scene.description,
             background_url=scene.background_url,
             horizon_url=scene.horizon_url,
+            visual_profile=scene.visual_profile,
             canon_status=scene.canon_status,
         ),
         story_progress=PlayerStoryProgressView(

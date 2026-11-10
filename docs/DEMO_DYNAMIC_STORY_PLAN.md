@@ -58,6 +58,7 @@
 
 ### D3 Babylon Scene Profile
 
+- 狀態：`██████████ 100%`（程式、API 合約、自動測試及 production build 完成；兩條分支的瀏覽器肉眼驗收列入 D5）。
 - 每個場景定義地面材質、色調、霧、光線、前景物件群與碰撞 profile。
 - 保留單一 Scene Registry；前端不另寫一份故事路線。
 - 驗收：命脈之泉、符石林、流塵谷、烈燚原肉眼可明顯區分；hard refresh 保持正確 profile。

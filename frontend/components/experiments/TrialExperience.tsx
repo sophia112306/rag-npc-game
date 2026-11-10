@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   ApiRequestError,
+  DEFAULT_SCENE_VISUAL_PROFILE,
   GAME_SESSION_STORAGE_KEY,
   requestJson,
   type GameStateSummary,
@@ -26,6 +27,7 @@ const previewScene: PlayerScene = {
   description: "維達利亞接見旅人的林間議會庭。",
   background_url: "/game/forest-council.png",
   horizon_url: "/game/forest-eye-backdrop.png",
+  visual_profile: DEFAULT_SCENE_VISUAL_PROFILE,
   canon_status: "confirmed",
 };
 
@@ -51,6 +53,7 @@ export default function TrialExperience() {
   const title = currentScene.display_name;
 
   function showBackdrop(scene: PlayerScene, context: "initial" | "turn" = "turn") {
+    driverRef.current?.setSceneProfile?.(scene.visual_profile);
     const load = driverRef.current?.setBackdrop?.(scene.horizon_url);
     if (!load) return;
     void load.catch(() => {
@@ -342,6 +345,7 @@ export default function TrialExperience() {
         if (cancelled) { loaded.dispose(); return; }
         driver = loaded;
         driverRef.current = loaded;
+        loaded.setSceneProfile?.(sceneRef.current.visual_profile);
         const backdrop = loaded.setBackdrop?.(sceneRef.current.horizon_url);
         if (backdrop) void backdrop.catch(() => {
           const message = `無法載入${sceneRef.current.display_name}遠景；目前保留預設場景。`;

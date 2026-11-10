@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import MinglinGame, { interactWithNpc, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP } from "../components/MinglinGame";
 import {
   ApiRequestError,
+  DEFAULT_SCENE_VISUAL_PROFILE,
   GAME_SESSION_STORAGE_KEY,
   requestJson,
   type Capabilities,
@@ -76,6 +77,7 @@ const previewScene: PlayerScene = {
   description: "維達利亞接見旅人的林間議會庭。",
   background_url: "/game/forest-council.png",
   horizon_url: "/game/forest-eye-backdrop.png",
+  visual_profile: DEFAULT_SCENE_VISUAL_PROFILE,
   canon_status: "confirmed",
 };
 

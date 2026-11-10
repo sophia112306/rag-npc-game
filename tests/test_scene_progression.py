@@ -29,7 +29,15 @@ def test_scene_registry_references_existing_assets_and_destinations() -> None:
     for scene in SCENES.values():
         assert (public_root / scene.background_url.removeprefix("/")).is_file()
         assert (public_root / scene.horizon_url.removeprefix("/")).is_file()
+        assert scene.visual_profile.profile_id
+        assert scene.visual_profile.prop_groups
         assert all(destination in SCENES for destination in scene.allowed_destinations)
+
+    assert len(
+        {scene.visual_profile.profile_id for scene in SCENES.values()}
+    ) == len(SCENES)
+    assert SCENES["liuchen_valley"].visual_profile.use_ground_texture is False
+    assert SCENES["lieyi_plains"].visual_profile.liquid_color == "#ff681c"
 
     for isolated_scene_id in ("liuchen_valley", "lieyi_plains"):
         assert all(
@@ -71,6 +79,10 @@ def test_valid_scene_change_is_saved_and_resumed_after_restart(tmp_path) -> None
         assert turn["state"]["current_scene"]["display_name"] == "命脈之泉"
         assert turn["state"]["current_scene"]["background_url"].endswith(
             "minglin-life-spring-v1.png"
+        )
+        assert (
+            turn["state"]["current_scene"]["visual_profile"]["profile_id"]
+            == "minglin_life_spring"
         )
         operation = turn["story"]["established_events"][0]["effect"]["operations"][0]
         assert operation == {
