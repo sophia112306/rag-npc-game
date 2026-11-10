@@ -17,7 +17,13 @@ from backend.schemas.game_state import GameState
 from backend.schemas.player_action import PlayerAction
 from backend.schemas.story import ProposalDecision
 
-from .models import ActionRecord, DialogueRecord, GameEventRecord, GameSessionRecord
+from .models import (
+    ActionRecord,
+    CommitmentRecord,
+    DialogueRecord,
+    GameEventRecord,
+    GameSessionRecord,
+)
 
 
 class PersistentSessionNotFoundError(LookupError):
@@ -47,6 +53,7 @@ class CommittedGameEvent:
 
     event_type: str
     description: str
+    event_id: str | None = None
     actor_id: str | None = None
     target_id: str | None = None
     cause_event_id: str | None = None
@@ -209,9 +216,10 @@ class SqlAlchemyGameRepository:
                             )
                         )
                     for event in approved_events:
+                        event_id = event.event_id or str(uuid4())
                         database.add(
                             GameEventRecord(
-                                event_id=str(uuid4()),
+                                event_id=event_id,
                                 session_id=action.session_id,
                                 action_id=str(action.action_id),
                                 turn_number=response.turn_number,
@@ -226,6 +234,30 @@ class SqlAlchemyGameRepository:
                                 created_at=completed_at,
                             )
                         )
+                        for operation in (event.effect or {}).get("operations", []):
+                            if operation.get("operation_type") != "establish_commitment":
+                                continue
+                            database.add(
+                                CommitmentRecord(
+                                    commitment_id=operation["commitment_id"],
+                                    session_id=action.session_id,
+                                    summary=operation["summary"],
+                                    promisor_id=operation["promisor_id"],
+                                    promisee_id=operation["promisee_id"],
+                                    status="active",
+                                    created_turn=operation["created_turn"],
+                                    due_turn=operation["due_turn"],
+                                    source_kind="established_event",
+                                    source_id=event_id,
+                                    visibility=operation["visibility"],
+                                    provenance_json={
+                                        "action_id": str(action.action_id),
+                                        "proposal_id": operation["proposal_id"],
+                                    },
+                                    created_at=completed_at,
+                                    updated_at=completed_at,
+                                )
+                            )
                     await database.flush()
                 return response.model_copy(deep=True)
         except IntegrityError:

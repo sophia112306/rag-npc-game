@@ -57,7 +57,7 @@ def test_default_capabilities_identify_development_stub(client: TestClient) -> N
         "dynamic_dialogue": False,
         "rag_integration": "pending",
         "voice_integration": "pending",
-        "allowed_operations": ["transfer_item"],
+        "allowed_operations": ["transfer_item", "establish_commitment"],
     }
 
 

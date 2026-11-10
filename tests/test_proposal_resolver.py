@@ -3,6 +3,7 @@
 from backend.modules.proposal_resolver import ProposalResolver
 from backend.schemas.game_state import GameState
 from backend.schemas.story import (
+    EstablishCommitmentOperation,
     EventProposal,
     ProposalStatus,
     StoryProposal,
@@ -121,3 +122,53 @@ def test_actor_cannot_transfer_another_entity_item() -> None:
 
     assert result.updated_state == state
     assert result.decisions[0].reason_code == "actor_not_item_source"
+
+
+def test_registered_actor_can_establish_a_sourced_commitment_effect() -> None:
+    state = make_state()
+    event = EventProposal(
+        event_type="commitment_created",
+        description="Untrusted wording.",
+        actor_id="player",
+        target_id="vidalia",
+        operations=[
+            EstablishCommitmentOperation(
+                summary="帶回經後端確認存在的地圖碎片。",
+                promisor_id="player",
+                promisee_id="vidalia",
+                due_in_turns=3,
+            )
+        ],
+        witness_ids=["player", "vidalia"],
+    )
+
+    result = ProposalResolver().resolve(state, make_proposal(event))
+
+    assert result.decisions[0].status == ProposalStatus.APPROVED
+    operation = result.established_events[0].effect["operations"][0]
+    assert operation["operation_type"] == "establish_commitment"
+    assert operation["created_turn"] == 1
+    assert operation["due_turn"] == 4
+    assert operation["commitment_id"]
+
+
+def test_commitment_with_unknown_participant_is_rejected() -> None:
+    state = make_state()
+    event = EventProposal(
+        event_type="commitment_created",
+        description="Unknown participant.",
+        actor_id="player",
+        target_id="invented_npc",
+        operations=[
+            EstablishCommitmentOperation(
+                summary="不應成立。",
+                promisor_id="player",
+                promisee_id="invented_npc",
+            )
+        ],
+    )
+
+    result = ProposalResolver().resolve(state, make_proposal(event))
+
+    assert result.established_events == ()
+    assert result.decisions[0].reason_code == "unknown_entity"

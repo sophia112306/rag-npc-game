@@ -29,6 +29,7 @@ from .progression import (
 )
 from .story import (
     DialogueLine,
+    EstablishCommitmentOperation,
     EstablishedEvent,
     EventProposal,
     OperationType,
@@ -52,6 +53,7 @@ __all__ = [
     "DisclosureScope",
     "DeltaPayload",
     "DialogueLine",
+    "EstablishCommitmentOperation",
     "EstablishedEvent",
     "EventProposal",
     "GameState",

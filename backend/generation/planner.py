@@ -86,7 +86,10 @@ class GatewayStoryPlanner:
             action_mode=action.action_mode,
             parsed_action=parsed_action,
             target_context=target_context,
-            allowed_operations=[OperationType.TRANSFER_ITEM],
+            allowed_operations=[
+                OperationType.TRANSFER_ITEM,
+                OperationType.ESTABLISH_COMMITMENT,
+            ],
         )
         output = await self._generate_valid_output(request)
         return StoryProposal(

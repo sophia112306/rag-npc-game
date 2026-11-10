@@ -276,6 +276,7 @@ class GameOrchestrator:
     ) -> tuple[CommittedGameEvent, ...]:
         return tuple(
             CommittedGameEvent(
+                event_id=str(event.event_id),
                 event_type=event.event_type,
                 description=event.description,
                 actor_id=event.actor_id,

@@ -1,11 +1,14 @@
 """Validate whitelisted proposal operations before changing authoritative state."""
 
 from dataclasses import dataclass
+from uuid import uuid4
 
 from backend.schemas.game_state import GameState
 from backend.schemas.story import (
     EstablishedEvent,
+    EstablishCommitmentOperation,
     EventProposal,
+    OperationType,
     ProposalDecision,
     ProposalStatus,
     StoryProposal,
@@ -47,8 +50,13 @@ class ProposalResolver:
         for event in proposal.event_proposals:
             event_candidate = candidate.model_copy(deep=True)
             try:
-                descriptions = [
-                    self._apply_operation(event_candidate, event, operation)
+                applied = [
+                    self._apply_operation(
+                        event_candidate,
+                        event,
+                        operation,
+                        proposal.turn_number,
+                    )
                     for operation in event.operations
                 ]
             except ProposalRuleViolation as exc:
@@ -65,12 +73,12 @@ class ProposalResolver:
             established = EstablishedEvent(
                 proposal_id=event.proposal_id,
                 event_type=event.event_type,
-                description=" ".join(descriptions),
+                description=" ".join(description for description, _effect in applied),
                 actor_id=event.actor_id,
                 target_id=event.target_id,
                 cause_event_id=event.cause_event_id,
                 effect={
-                    "operations": [operation.model_dump(mode="json") for operation in event.operations]
+                    "operations": [effect for _description, effect in applied]
                 },
                 visibility={
                     "audience": "player" if event.visible_to_player else "backend",
@@ -94,8 +102,12 @@ class ProposalResolver:
         self,
         state: GameState,
         event: EventProposal,
-        operation: TransferItemOperation,
-    ) -> str:
+        operation: TransferItemOperation | EstablishCommitmentOperation,
+        turn_number: int,
+    ) -> tuple[str, dict[str, object]]:
+        if isinstance(operation, EstablishCommitmentOperation):
+            return self._establish_commitment(state, event, operation, turn_number)
+
         if event.actor_id != operation.from_entity_id:
             raise ProposalRuleViolation(
                 "actor_not_item_source",
@@ -128,18 +140,75 @@ class ProposalResolver:
         source_inventory.remove(operation.item_id)
         target_inventory.append(operation.item_id)
         return (
-            f"Item '{operation.item_id}' transferred from "
-            f"'{operation.from_entity_id}' to '{operation.to_entity_id}'."
+            (
+                f"Item '{operation.item_id}' transferred from "
+                f"'{operation.from_entity_id}' to '{operation.to_entity_id}'."
+            ),
+            operation.model_dump(mode="json"),
+        )
+
+    def _establish_commitment(
+        self,
+        state: GameState,
+        event: EventProposal,
+        operation: EstablishCommitmentOperation,
+        turn_number: int,
+    ) -> tuple[str, dict[str, object]]:
+        self._require_entity(state, operation.promisor_id)
+        self._require_entity(state, operation.promisee_id)
+        if event.actor_id != operation.promisor_id:
+            raise ProposalRuleViolation(
+                "actor_not_promisor",
+                "Only the event actor can become the promisor.",
+            )
+        if event.target_id is not None and event.target_id != operation.promisee_id:
+            raise ProposalRuleViolation(
+                "target_mismatch",
+                "The event target does not match the commitment promisee.",
+            )
+        if operation.promisor_id == operation.promisee_id:
+            raise ProposalRuleViolation(
+                "same_commitment_participant",
+                "A commitment requires two different participants.",
+            )
+
+        commitment_id = str(uuid4())
+        due_turn = (
+            turn_number + operation.due_in_turns
+            if operation.due_in_turns is not None
+            else None
+        )
+        effect: dict[str, object] = {
+            "operation_type": OperationType.ESTABLISH_COMMITMENT.value,
+            "commitment_id": commitment_id,
+            "summary": operation.summary,
+            "promisor_id": operation.promisor_id,
+            "promisee_id": operation.promisee_id,
+            "created_turn": turn_number,
+            "due_turn": due_turn,
+            "visibility": "player" if event.visible_to_player else "backend",
+            "proposal_id": str(event.proposal_id),
+        }
+        return (
+            (
+                f"'{operation.promisor_id}' committed to '{operation.promisee_id}': "
+                f"{operation.summary}"
+            ),
+            effect,
         )
 
     @staticmethod
-    def _inventory_for(state: GameState, entity_id: str) -> list[str]:
+    def _require_entity(state: GameState, entity_id: str) -> None:
+        if entity_id == state.player.player_id or entity_id in state.npc_states:
+            return
+        raise ProposalRuleViolation(
+            "unknown_entity",
+            f"Entity '{entity_id}' is not registered in the current game state.",
+        )
+
+    @classmethod
+    def _inventory_for(cls, state: GameState, entity_id: str) -> list[str]:
+        cls._require_entity(state, entity_id)
         if entity_id == state.player.player_id:
             return state.player.inventory
-        npc = state.npc_states.get(entity_id)
-        if npc is None:
-            raise ProposalRuleViolation(
-                "unknown_entity",
-                f"Entity '{entity_id}' is not registered in the current game state.",
-            )
-        return npc.inventory
+        return state.npc_states[entity_id].inventory

@@ -31,5 +31,8 @@ def get_capabilities(request: Request) -> CapabilitiesResponse:
     return CapabilitiesResponse(
         generation_mode=generation_mode,
         dynamic_dialogue=generation_mode == "external_model",
-        allowed_operations=[OperationType.TRANSFER_ITEM],
+        allowed_operations=[
+            OperationType.TRANSFER_ITEM,
+            OperationType.ESTABLISH_COMMITMENT,
+        ],
     )

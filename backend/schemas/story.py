@@ -30,6 +30,7 @@ class OperationType(str, Enum):
     """State-changing commands currently supported by the rule boundary."""
 
     TRANSFER_ITEM = "transfer_item"
+    ESTABLISH_COMMITMENT = "establish_commitment"
 
 
 class TransferItemOperation(BaseModel):
@@ -43,7 +44,24 @@ class TransferItemOperation(BaseModel):
     to_entity_id: str = Field(..., min_length=1, max_length=100)
 
 
-ProposedOperation = Annotated[TransferItemOperation, Field(discriminator="operation_type")]
+class EstablishCommitmentOperation(BaseModel):
+    """Propose a sourced obligation between two registered entities."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation_type: Literal[OperationType.ESTABLISH_COMMITMENT] = (
+        OperationType.ESTABLISH_COMMITMENT
+    )
+    summary: str = Field(..., min_length=1, max_length=1_000)
+    promisor_id: str = Field(..., min_length=1, max_length=100)
+    promisee_id: str = Field(..., min_length=1, max_length=100)
+    due_in_turns: int | None = Field(default=None, ge=1, le=20)
+
+
+ProposedOperation = Annotated[
+    TransferItemOperation | EstablishCommitmentOperation,
+    Field(discriminator="operation_type"),
+]
 
 
 class EventProposal(BaseModel):
@@ -74,6 +92,7 @@ class EstablishedEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    event_id: UUID = Field(default_factory=uuid4)
     proposal_id: UUID
     event_type: str
     description: str
