@@ -20,7 +20,7 @@ from backend.schemas.game_state import GameState
 from backend.schemas.parsed_action import ParsedAction
 from backend.schemas.player_action import PlayerAction
 from backend.schemas.player_view import project_player_view
-from backend.schemas.story import DialogueLine, SpeakerType, StoryProposal
+from backend.schemas.story import DialogueLine, ResolvedStory, SpeakerType
 
 
 def make_action(session_id: str, *, message: str = "你好", version: int = 1, action_id=None) -> PlayerAction:
@@ -43,9 +43,7 @@ def make_turn(action: PlayerAction, state: GameState) -> tuple[GameState, GameTu
         target_ids=["vidalia"],
         parameters={"action_id": str(action.action_id)},
     )
-    story = StoryProposal(
-        session_id=state.session_id,
-        turn_number=updated.turn_count,
+    story = ResolvedStory(
         dialogue=[
             DialogueLine(
                 speaker_type=SpeakerType.NPC,

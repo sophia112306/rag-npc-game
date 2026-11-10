@@ -48,6 +48,7 @@ class ActionRecord(Base):
     request_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     response_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    resolution_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     error_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import PlayerAction
+from backend.schemas.story import ProposalDecision
 
 from .models import ActionRecord, DialogueRecord, GameEventRecord, GameSessionRecord
 
@@ -124,6 +125,7 @@ class SqlAlchemyGameRepository:
         updated_state: GameState,
         response: GameTurnResponse,
         approved_events: Sequence[CommittedGameEvent] = (),
+        proposal_decisions: Sequence[ProposalDecision] = (),
     ) -> GameTurnResponse:
         try:
             async with self._session_factory() as database:
@@ -181,6 +183,9 @@ class SqlAlchemyGameRepository:
                             },
                             status="completed",
                             response_json=response.model_dump(mode="json"),
+                            resolution_json=[
+                                decision.model_dump(mode="json") for decision in proposal_decisions
+                            ],
                             error_json=None,
                             created_at=action.created_at,
                             completed_at=completed_at,

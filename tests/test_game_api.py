@@ -71,7 +71,8 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert "flags" not in turn["state"]
     assert turn["parsed_action"]["action_type"] == "dialogue"
     assert "開發替身" in turn["story"]["dialogue"][0]["text"]
-    assert turn["story"]["event_proposals"] == []
+    assert turn["story"]["established_events"] == []
+    assert "proposal_decisions" not in turn
 
     state_response = client.get(f"/api/game/{state['session_id']}/state")
     assert state_response.status_code == 200

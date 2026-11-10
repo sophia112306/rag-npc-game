@@ -1,15 +1,18 @@
-"""Coordinate the deterministic M1 game-turn flow."""
+"""Coordinate the persisted proposal, rule-resolution, and response flow."""
 
 from datetime import datetime, timezone
+from collections.abc import Sequence
 from typing import Protocol
 from uuid import UUID
 
 from backend.database.repository import (
     ActionIdConflictError as RepositoryActionIdConflictError,
+    CommittedGameEvent,
     PersistentSessionNotFoundError,
     PersistentStateVersionConflictError,
     action_request_digest,
 )
+from backend.modules.proposal_resolver import ProposalResolution, ProposalResolver
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState, PlayerState
 from backend.schemas.parsed_action import ActionType, ParsedAction
@@ -17,6 +20,8 @@ from backend.schemas.player_action import ActionMode, PlayerAction
 from backend.schemas.player_view import project_player_view
 from backend.schemas.story import (
     DialogueLine,
+    ProposalDecision,
+    ResolvedStory,
     SpeakerType,
     StoryProposal,
 )
@@ -63,14 +68,51 @@ class GameRepository(Protocol):
         request_digest: str,
         updated_state: GameState,
         response: GameTurnResponse,
+        approved_events: Sequence[CommittedGameEvent] = (),
+        proposal_decisions: Sequence[ProposalDecision] = (),
     ) -> GameTurnResponse: ...
+
+
+class StoryPlanner(Protocol):
+    """Replaceable source of untrusted story and event proposals."""
+
+    async def propose(
+        self,
+        action: PlayerAction,
+        parsed_action: ParsedAction,
+        state: GameState,
+    ) -> StoryProposal: ...
+
+
+class DevelopmentStoryPlanner:
+    """Explicit non-AI planner used until B's ModelGateway is available."""
+
+    async def propose(
+        self,
+        action: PlayerAction,
+        parsed_action: ParsedAction,
+        state: GameState,
+    ) -> StoryProposal:
+        return StoryProposal(
+            session_id=action.session_id,
+            turn_number=state.turn_count + 1,
+            intent_summary=f"Development acknowledgement for {parsed_action.intent}",
+            event_proposals=[],
+        )
 
 
 class GameOrchestrator:
     """Coordinate input parsing, story generation, and state updates."""
 
-    def __init__(self, repository: GameRepository) -> None:
+    def __init__(
+        self,
+        repository: GameRepository,
+        story_planner: StoryPlanner | None = None,
+        proposal_resolver: ProposalResolver | None = None,
+    ) -> None:
         self._repository = repository
+        self._story_planner = story_planner or DevelopmentStoryPlanner()
+        self._proposal_resolver = proposal_resolver or ProposalResolver()
 
     async def start_game(self, session_id: str) -> GameState:
         """Create a deterministic initial state or resume an existing session."""
@@ -106,8 +148,11 @@ class GameOrchestrator:
             raise StateVersionConflictError(action.expected_state_version, state.state_version)
 
         parsed_action = self._parse_action(action)
-        updated_state = self._apply_action(state)
-        story = self._build_placeholder_story(action, updated_state)
+        proposal = await self._story_planner.propose(action, parsed_action, state.model_copy(deep=True))
+        self._validate_proposal_envelope(proposal, state)
+        resolution = self._proposal_resolver.resolve(state, proposal)
+        updated_state = self._advance_turn(resolution.updated_state)
+        story = self._render_resolved_story(action, resolution)
         response = GameTurnResponse(
             session_id=action.session_id,
             turn_number=updated_state.turn_count,
@@ -122,6 +167,8 @@ class GameOrchestrator:
                 request_digest,
                 updated_state,
                 response,
+                approved_events=self._committed_events(resolution),
+                proposal_decisions=resolution.decisions,
             )
         except RepositoryActionIdConflictError as exc:
             raise ActionIdConflictError(exc.action_id) from exc
@@ -168,7 +215,7 @@ class GameOrchestrator:
         )
 
     @staticmethod
-    def _apply_action(state: GameState) -> GameState:
+    def _advance_turn(state: GameState) -> GameState:
         """Advance only integration metadata; no AI proposal may mutate game facts."""
 
         updated_state = state.model_copy(deep=True)
@@ -179,25 +226,62 @@ class GameOrchestrator:
         return updated_state
 
     @staticmethod
-    def _build_placeholder_story(
-        action: PlayerAction,
-        state: GameState,
-    ) -> StoryProposal:
-        """Return an explicit development stub until B's model gateway is connected."""
+    def _validate_proposal_envelope(proposal: StoryProposal, state: GameState) -> None:
+        if proposal.session_id != state.session_id:
+            raise ValueError("Story proposal session does not match the authoritative state")
+        if proposal.turn_number != state.turn_count + 1:
+            raise ValueError("Story proposal turn does not match the next authoritative turn")
 
-        dialogue = DialogueLine(
-            speaker_type=SpeakerType.NPC,
-            speaker_id=action.target_npc_id or "vidalia",
-            speaker_name="維達利亞",
-            text=(
-                f"（開發替身）我收到你的話：「{action.message}」。"
-                "目前只驗證前後端流程，真實模型、RAG 與遊戲規則尚未接入。"
-            ),
-            emotion="neutral",
+    @staticmethod
+    def _render_resolved_story(
+        action: PlayerAction,
+        resolution: ProposalResolution,
+    ) -> ResolvedStory:
+        """Use deterministic text so rejected effects cannot leak into final narration."""
+
+        dialogue = [
+            DialogueLine(
+                speaker_type=SpeakerType.NPC,
+                speaker_id=action.target_npc_id or "vidalia",
+                speaker_name="維達利亞",
+                text=(
+                    f"（開發替身）我收到你的話：「{action.message}」。"
+                    "事件只會在後端規則核准後成立；真實模型與 RAG 尚未接入。"
+                ),
+                emotion="neutral",
+            )
+        ]
+        for event in resolution.established_events:
+            if event.visibility.get("audience") == "player":
+                dialogue.append(
+                    DialogueLine(
+                        speaker_type=SpeakerType.NARRATOR,
+                        speaker_name="系統",
+                        text=event.description,
+                    )
+                )
+        return ResolvedStory(
+            dialogue=dialogue,
+            established_events=[
+                event
+                for event in resolution.established_events
+                if event.visibility.get("audience") == "player"
+            ],
         )
-        return StoryProposal(
-            session_id=action.session_id,
-            turn_number=state.turn_count,
-            dialogue=[dialogue],
-            event_proposals=[],
+
+    @staticmethod
+    def _committed_events(
+        resolution: ProposalResolution,
+    ) -> tuple[CommittedGameEvent, ...]:
+        return tuple(
+            CommittedGameEvent(
+                event_type=event.event_type,
+                description=event.description,
+                actor_id=event.actor_id,
+                target_id=event.target_id,
+                cause_event_id=str(event.cause_event_id) if event.cause_event_id else None,
+                effect=event.effect,
+                visibility=event.visibility,
+            )
+            for event in resolution.established_events
         )

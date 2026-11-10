@@ -104,7 +104,16 @@ class StoryProposal(BaseModel):
     proposal_id: UUID = Field(default_factory=uuid4)
     session_id: str = Field(..., min_length=1, max_length=100)
     turn_number: int = Field(..., ge=0)
-    dialogue: list[DialogueLine] = Field(default_factory=list)
+    intent_summary: str = Field(default="", max_length=1_000)
     event_proposals: list[EventProposal] = Field(default_factory=list)
     next_scene_id: str | None = Field(default=None, max_length=100)
+
+
+class ResolvedStory(BaseModel):
+    """Player-visible narrative built only after proposal resolution."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dialogue: list[DialogueLine] = Field(default_factory=list)
+    established_events: list[EstablishedEvent] = Field(default_factory=list)
 
