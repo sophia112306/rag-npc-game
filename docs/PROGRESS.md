@@ -11,6 +11,7 @@
 | M2c：核准事件介面 | `██████████ 100%` | 初始操作白名單、事件原子核准、私有決策稽核與同交易保存已完成 |
 | M3：真正生成 | `█████████░ 90%` | Gateway、動態台詞、安全回復已完成；待 B 的真實端點、RAG 與角色品質驗收 |
 | M4：世界持續發展 | `██████████ 100%` | 有來源的 NPC 目標、承諾、回合時鐘、記憶承接與動態任務已完成 |
+| A1：瀏覽器語音互動 | `█████████░ 90%` | STT transcript 與瀏覽器 TTS 已完成；待實機麥克風中文辨識驗收 |
 
 ## M1 已完成
 
@@ -117,6 +118,16 @@
 - 任務由已登記 giver 提供給不同的已登記 recipient；玩家 API 只回傳 visibility=player 的 open quests。
 - Alembic `20261110_0005` upgrade／downgrade 與 app 啟動升級通過。
 - `npm run build`：Next.js、TypeScript 與全部既有 routes 通過 production build。
+
+## A1 瀏覽器語音互動
+
+- 玩家按下麥克風後才啟動 Web Speech recognition，不會在載入頁面時要求權限。
+- 辨識結果先放入輸入框供確認；送出 API 時使用既有 `speech_transcript`，不會把未確認內容自動提交。
+- 不確定回應重試會保留相同 action ID、文字、state version 與 input type。
+- 玩家可手動播放／停止 NPC 最近回覆的瀏覽器 TTS；系統成立事件不會冒充 NPC 語音。
+- 不支援語音 API 或拒絕權限時，顯示／停用對應控制，文字遊戲仍可運作。
+- `npm run build`：Next.js production build 與 TypeScript 通過。
+- 尚未在使用者實機完成麥克風權限、中文辨識與聲音輸出測試，因此目前記為 90%。
 
 ## 已知限制
 

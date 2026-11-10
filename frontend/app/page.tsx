@@ -48,8 +48,22 @@ type ChatMessage = {
 type PendingAction = {
   actionId: string;
   text: string;
+  inputType: "text" | "speech_transcript";
   expectedStateVersion: number;
 };
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onend: (() => void) | null;
+};
+
+type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
 class ApiRequestError extends Error {
   constructor(message: string, readonly status: number, readonly code?: string) {
@@ -100,6 +114,12 @@ export default function Home() {
   const [nearNpc, setNearNpc] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [inputType, setInputType] = useState<"text" | "speech_transcript">("text");
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [ttsSupported, setTtsSupported] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [lastNpcSpeech, setLastNpcSpeech] = useState("");
   const [busy, setBusy] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [ready, setReady] = useState(false);
@@ -113,11 +133,22 @@ export default function Home() {
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
   useEffect(() => {
     const id = window.localStorage.getItem(storageKey) ?? window.crypto.randomUUID();
     window.localStorage.setItem(storageKey, id);
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+    setVoiceSupported(Boolean(speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition));
+    setTtsSupported("speechSynthesis" in window);
     void initialize(id);
+    return () => {
+      recognitionRef.current?.stop();
+      window.speechSynthesis?.cancel();
+    };
   }, []);
 
   useEffect(() => {
@@ -171,6 +202,7 @@ export default function Home() {
         }
       } catch { /* A missing or old browser record starts with the greeting. */ }
       setMessages(restored);
+      setLastNpcSpeech(restored.filter((message) => message.kind === "npc").at(-1)?.text ?? character.greeting);
       setReady(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "無法連線到後端。");
@@ -186,6 +218,67 @@ export default function Home() {
     setDialogueOpen(true);
   }, []);
 
+  function toggleListening() {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      setError("這個瀏覽器不支援語音轉文字，仍可使用文字輸入。");
+      return;
+    }
+    setError("");
+    const recognition = new Recognition();
+    recognition.lang = "zh-TW";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      if (transcript) {
+        setInput(transcript);
+        setInputType("speech_transcript");
+      }
+    };
+    recognition.onerror = (event) => {
+      const message = event.error === "not-allowed"
+        ? "麥克風權限未開啟；你可以在瀏覽器設定允許後再試。"
+        : "語音辨識沒有成功，請再試一次或使用文字輸入。";
+      setError(message);
+    };
+    recognition.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+    recognitionRef.current = recognition;
+    setListening(true);
+    recognition.start();
+  }
+
+  function speakLastResponse() {
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    if (!ttsSupported || !lastNpcSpeech) {
+      setError("這個瀏覽器目前無法播放語音。");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(lastNpcSpeech);
+    utterance.lang = "zh-TW";
+    utterance.rate = 1;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = input.trim();
@@ -196,9 +289,9 @@ export default function Home() {
     setError("");
     setMessages((current) => [...current, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }]);
     const pending = pendingActionRef.current;
-    const canRetryPending = pending?.text === text && pending.expectedStateVersion === stateVersion;
+    const canRetryPending = pending?.text === text && pending.inputType === inputType && pending.expectedStateVersion === stateVersion;
     const actionId = canRetryPending ? pending.actionId : window.crypto.randomUUID();
-    pendingActionRef.current = { actionId, text, expectedStateVersion: stateVersion };
+    pendingActionRef.current = { actionId, text, inputType, expectedStateVersion: stateVersion };
 
     try {
       const turn = await requestJson<GameTurnResponse>("/api/game/turn", {
@@ -208,7 +301,7 @@ export default function Home() {
           session_id: sessionId,
           action_id: actionId,
           message: text,
-          input_type: "text",
+          input_type: inputType,
           target_npc_id: "vidalia",
           action_mode: "dialogue",
           expected_state_version: stateVersion,
@@ -225,6 +318,8 @@ export default function Home() {
         id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const,
       }))];
       setMessages(nextMessages);
+      setLastNpcSpeech(turn.story.dialogue.filter((line) => line.speaker_name !== "系統").map((line) => line.text).join("\n"));
+      setInputType("text");
       try {
         window.localStorage.setItem(conversationKey(sessionId), JSON.stringify({ turn_number: turn.turn_number, updated_at: turn.state.updated_at, messages: nextMessages }));
       } catch { /* The current conversation still works when browser storage is unavailable. */ }
@@ -260,6 +355,7 @@ export default function Home() {
     setHelpOpen(false);
     setNearNpc(false);
     setInput("");
+    setInputType("text");
     pendingActionRef.current = null;
     void initialize(id);
   }
@@ -335,7 +431,9 @@ export default function Home() {
                 {error && <p className="dialogue-error" role="alert">{error}</p>}
                 <form className="dialogue-form" onSubmit={submit}>
                   <label htmlFor="dialogue-input" className="sr-only">對維達利亞說話</label>
-                  <input id="dialogue-input" value={input} onChange={(event) => setInput(event.target.value)} placeholder={ready ? "說出你的想法……" : "等待後端連線……"} disabled={!ready || busy} maxLength={2000} />
+                  <input id="dialogue-input" value={input} onChange={(event) => { setInput(event.target.value); setInputType("text"); }} placeholder={ready ? (listening ? "正在聆聽……" : "說出你的想法……") : "等待後端連線……"} disabled={!ready || busy || listening} maxLength={2000} />
+                  <button type="button" className={`voice-button ${listening ? "is-listening" : ""}`} onClick={toggleListening} disabled={!ready || busy || !voiceSupported} aria-label={listening ? "停止語音辨識" : "使用麥克風輸入"} title={voiceSupported ? "語音轉文字" : "瀏覽器不支援語音辨識"}>{listening ? "■" : "🎙"}</button>
+                  <button type="button" className={`voice-button ${speaking ? "is-speaking" : ""}`} onClick={speakLastResponse} disabled={!ttsSupported || !lastNpcSpeech} aria-label={speaking ? "停止播放 NPC 回覆" : "播放 NPC 最近回覆"} title={speaking ? "停止播放" : "播放 NPC 最近回覆"}>{speaking ? "■" : "🔊"}</button>
                   <button type="submit" disabled={!ready || busy || !input.trim()}>送出 ↗</button>
                 </form>
               </>
