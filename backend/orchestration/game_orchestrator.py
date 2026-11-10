@@ -97,6 +97,18 @@ class DevelopmentStoryPlanner:
             session_id=action.session_id,
             turn_number=state.turn_count + 1,
             intent_summary=f"Development acknowledgement for {parsed_action.intent}",
+            proposed_dialogue=[
+                DialogueLine(
+                    speaker_type=SpeakerType.NPC,
+                    speaker_id=action.target_npc_id or "vidalia",
+                    speaker_name="維達利亞",
+                    text=(
+                        f"（開發替身）我收到你的話：「{action.message}」。"
+                        "事件只會在後端規則核准後成立；真實模型與 RAG 尚未接入。"
+                    ),
+                    emotion="neutral",
+                )
+            ],
             event_proposals=[],
         )
 
@@ -152,7 +164,7 @@ class GameOrchestrator:
         self._validate_proposal_envelope(proposal, state)
         resolution = self._proposal_resolver.resolve(state, proposal)
         updated_state = self._advance_turn(resolution.updated_state)
-        story = self._render_resolved_story(action, resolution)
+        story = self._render_resolved_story(proposal, resolution)
         response = GameTurnResponse(
             session_id=action.session_id,
             turn_number=updated_state.turn_count,
@@ -234,23 +246,12 @@ class GameOrchestrator:
 
     @staticmethod
     def _render_resolved_story(
-        action: PlayerAction,
+        proposal: StoryProposal,
         resolution: ProposalResolution,
     ) -> ResolvedStory:
-        """Use deterministic text so rejected effects cannot leak into final narration."""
+        """Keep NPC speech subjective and describe objective effects deterministically."""
 
-        dialogue = [
-            DialogueLine(
-                speaker_type=SpeakerType.NPC,
-                speaker_id=action.target_npc_id or "vidalia",
-                speaker_name="維達利亞",
-                text=(
-                    f"（開發替身）我收到你的話：「{action.message}」。"
-                    "事件只會在後端規則核准後成立；真實模型與 RAG 尚未接入。"
-                ),
-                emotion="neutral",
-            )
-        ]
+        dialogue = list(proposal.proposed_dialogue)
         for event in resolution.established_events:
             if event.visibility.get("audience") == "player":
                 dialogue.append(

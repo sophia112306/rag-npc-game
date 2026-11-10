@@ -18,7 +18,7 @@ from backend.schemas.content import NPCGenerationContext
 from backend.schemas.game_state import GameState
 from backend.schemas.parsed_action import ParsedAction
 from backend.schemas.player_action import PlayerAction
-from backend.schemas.story import OperationType, StoryProposal
+from backend.schemas.story import DialogueLine, OperationType, SpeakerType, StoryProposal
 
 
 class NPCContextProvider(Protocol):
@@ -93,6 +93,16 @@ class GatewayStoryPlanner:
             session_id=action.session_id,
             turn_number=state.turn_count + 1,
             intent_summary=output.intent_summary,
+            proposed_dialogue=[
+                DialogueLine(
+                    speaker_type=SpeakerType.NPC,
+                    speaker_id=npc_id,
+                    speaker_name=target_context.public_profile.get("name", npc_id),
+                    text=line.text,
+                    emotion=line.emotion,
+                )
+                for line in output.npc_dialogue
+            ],
             event_proposals=output.event_proposals,
         )
 

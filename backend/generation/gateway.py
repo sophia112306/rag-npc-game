@@ -29,12 +29,22 @@ class ModelTurnRequest(BaseModel):
     allowed_operations: list[OperationType]
 
 
+class ModelNPCDialogue(BaseModel):
+    """Subjective speech; backend assigns the authorized NPC identity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(..., min_length=1, max_length=4_000)
+    emotion: str | None = Field(default=None, max_length=50)
+
+
 class ModelStoryOutput(BaseModel):
     """Structured model output before trusted session metadata is attached."""
 
     model_config = ConfigDict(extra="forbid")
 
     intent_summary: str = Field(default="", max_length=1_000)
+    npc_dialogue: list[ModelNPCDialogue] = Field(..., min_length=1, max_length=3)
     event_proposals: list[EventProposal] = Field(default_factory=list, max_length=3)
 
 

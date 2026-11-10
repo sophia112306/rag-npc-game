@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.generation.planner import StoryGenerationUnavailableError
+from backend.generation.planner import GatewayStoryPlanner, StoryGenerationUnavailableError
 from backend.main import create_app
 
 
@@ -186,3 +186,36 @@ def test_generation_failure_returns_503_without_committing_turn(tmp_path) -> Non
     assert unchanged.status_code == 200
     assert unchanged.json()["turn_count"] == 0
     assert unchanged.json()["state_version"] == 1
+
+
+def test_configured_gateway_dialogue_reaches_player_after_validation(tmp_path) -> None:
+    class DynamicGateway:
+        async def generate_story(self, request):
+            return {
+                "intent_summary": "Respond to the player's greeting.",
+                "npc_dialogue": [
+                    {
+                        "text": "旅人，我記得你剛才的問候；命脈之泉仍在等待答案。",
+                        "emotion": "thoughtful",
+                    }
+                ],
+                "event_proposals": [],
+            }
+
+    application = create_app(
+        f"sqlite+aiosqlite:///{tmp_path / 'dynamic-model.db'}",
+        story_planner_factory=lambda context: GatewayStoryPlanner(DynamicGateway(), context),
+    )
+    with TestClient(application) as dynamic_client:
+        state = start_session(dynamic_client, "dynamic-model-session")
+        response = dynamic_client.post(
+            "/api/game/turn",
+            json=action_payload(state["session_id"]),
+        )
+
+    assert response.status_code == 200
+    line = response.json()["story"]["dialogue"][0]
+    assert line["speaker_id"] == "vidalia"
+    assert line["speaker_name"] == "維達利亞"
+    assert "命脈之泉" in line["text"]
+    assert "開發替身" not in line["text"]

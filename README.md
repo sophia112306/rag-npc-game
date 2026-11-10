@@ -28,6 +28,8 @@ python3.12 -m venv .venv
 
 可用 `DATABASE_URL` 改變資料庫位置，例如 `sqlite+aiosqlite:////absolute/path/game.db`。
 
+外部模型是選用且預設關閉。可複製根目錄 [`.env.example`](.env.example) 設定 `MODEL_GATEWAY_URL`；HTTP 格式與 B 需確認的項目見 [`docs/MODEL_GATEWAY_CONTRACT.md`](docs/MODEL_GATEWAY_CONTRACT.md)。只設定 shell／部署環境變數才會生效，程式不會自動讀取或提交本機 `.env`。
+
 前端：
 
 ```bash

@@ -12,6 +12,7 @@ from backend.content.context_repository import NPCContextRepository
 from backend.database import create_async_session_factory, create_database_engine, upgrade_database
 from backend.database.session import get_database_url
 from backend.database.repository import SqlAlchemyGameRepository
+from backend.generation.config import build_story_planner_from_env
 from backend.orchestration.game_orchestrator import GameOrchestrator, StoryPlanner
 
 from .api.characters import router as character_router
@@ -38,7 +39,11 @@ def create_app(
         context_repository = NPCContextRepository(session_factory)
         for definition in CHARACTER_DEFINITIONS.values():
             await context_repository.ensure_character_definition(definition)
-        story_planner = story_planner_factory(context_repository) if story_planner_factory else None
+        story_planner = (
+            story_planner_factory(context_repository)
+            if story_planner_factory
+            else build_story_planner_from_env(context_repository)
+        )
         application.state.database_engine = engine
         application.state.game_orchestrator = GameOrchestrator(repository, story_planner=story_planner)
         application.state.npc_context_repository = context_repository

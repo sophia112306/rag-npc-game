@@ -64,7 +64,13 @@ def make_inputs() -> tuple[PlayerAction, ParsedAction, GameState]:
 
 @pytest.mark.asyncio
 async def test_planner_sends_only_explicit_authorized_context() -> None:
-    gateway = SequenceGateway({"intent_summary": "Respond cautiously.", "event_proposals": []})
+    gateway = SequenceGateway(
+        {
+            "intent_summary": "Respond cautiously.",
+            "npc_dialogue": [{"text": "我會先聽聽你的條件。", "emotion": "cautious"}],
+            "event_proposals": [],
+        }
+    )
     planner = GatewayStoryPlanner(gateway, FixedContextProvider())
     action, parsed, state = make_inputs()
 
@@ -73,6 +79,8 @@ async def test_planner_sends_only_explicit_authorized_context() -> None:
     assert proposal.session_id == action.session_id
     assert proposal.turn_number == 1
     assert proposal.intent_summary == "Respond cautiously."
+    assert proposal.proposed_dialogue[0].speaker_id == "vidalia"
+    assert proposal.proposed_dialogue[0].text == "我會先聽聽你的條件。"
     request_json = gateway.requests[0].model_dump_json()
     assert "private_secret" not in request_json
     assert "truth_level" not in request_json
@@ -85,7 +93,11 @@ async def test_planner_sends_only_explicit_authorized_context() -> None:
 async def test_invalid_output_is_retried_once_then_accepted() -> None:
     gateway = SequenceGateway(
         {"unexpected": "shape"},
-        {"intent_summary": "Valid second response.", "event_proposals": []},
+        {
+            "intent_summary": "Valid second response.",
+            "npc_dialogue": [{"text": "第二次輸出有效。"}],
+            "event_proposals": [],
+        },
     )
     planner = GatewayStoryPlanner(gateway, FixedContextProvider(), max_attempts=2)
     action, parsed, state = make_inputs()

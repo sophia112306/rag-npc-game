@@ -105,6 +105,7 @@ class StoryProposal(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=100)
     turn_number: int = Field(..., ge=0)
     intent_summary: str = Field(default="", max_length=1_000)
+    proposed_dialogue: list[DialogueLine] = Field(default_factory=list, max_length=3)
     event_proposals: list[EventProposal] = Field(default_factory=list)
     next_scene_id: str | None = Field(default=None, max_length=100)
 
