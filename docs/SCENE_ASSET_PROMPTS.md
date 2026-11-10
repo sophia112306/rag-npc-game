@@ -40,3 +40,23 @@ Color palette: deep emerald and yellow-green foliage, gray-beige mossy stone, re
 Constraints: environment only; no people, no characters, no creatures, no UI, no text, no readable letters, no banners, no logos, no watermark; no giant eye motif; preserve clear readable walkable space; the rune marks should be abstract non-linguistic motifs; do not reproduce the council circle or exact landmarks from the references.
 Avoid: photorealism, dark horror, neon sci-fi machinery, portal rings, excessive fog, overpowered glow, modern objects.
 ```
+
+## 流塵谷 v1
+
+參考來源：使用者於 2026-11-10 專案對話提供的「流塵谷參考設計」。該圖只作為地貌、氣氛、地標及敘事情緒參考，不是修改目標，也不複製原構圖。
+
+```text
+Use case: stylized-concept
+Asset type: 2D game environment background
+Primary request: Create a game-ready interpretation of 流塵谷 (Liuchen Valley / Valley of Drifting Dust), using the supplied image only as a visual reference for biome, atmosphere, landmarks, and narrative mood rather than copying its exact composition.
+Input images: Image 1 is the user's visual reference, not an edit target.
+Scene/backdrop: a vast eroded desert canyon filled with ochre dunes and cracked earth; weathered funerary ruins, half-buried stone monuments, dead twisted trees, deep fissures, and a powerful column of drifting dust rising in the middle distance.
+Subject: the flowing dust column and a readable route through the valley are the main focal elements; include only a few small distant mummy wanderers as environmental storytelling, never as large foreground characters.
+Style/medium: richly detailed hand-painted fantasy game background with crisp painterly rock, sand, cloth, and ruin textures; storybook realism consistent with a polished narrative adventure game, not photorealistic.
+Composition/framing: 16:9 wide environment, elevated three-quarter view suitable for a 2D game scene and 3D horizon texture; preserve a broad open traversable area across the lower center and middle ground for overlaying the player; create a distinct layout rather than reproducing Image 1.
+Lighting/mood: dramatic dusty daylight breaking through heavy storm clouds; dangerous, ancient, desolate, but still readable for gameplay.
+Color palette: warm ochre, burnt umber, sandstone, charcoal storm clouds, muted bone linen, restrained pale-gold light.
+Materials/textures: layered sandstone cliffs, wind-carved ruins, cracked clay, loose sand, worn linen on distant figures.
+Constraints: no close-up character, no prominent foreground mummy, no named character, no gore, no combat pose, no UI, no text, no letters, no logos, no watermark; distant mummy figures must remain small and secondary; keep the playable path and ground visually clear.
+Avoid: exact copying of the reference composition, photorealism, modern objects, sci-fi machinery, neon colors, giant monsters, excessive debris covering the route.
+```

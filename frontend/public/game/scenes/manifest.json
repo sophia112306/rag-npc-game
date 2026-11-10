@@ -7,10 +7,15 @@
     "model": null,
     "model_note": "The built-in tool did not expose an underlying model identifier."
   },
-  "style_references": [
-    "/game/forest-council.png",
-    "/game/forest-eye-backdrop.png"
-  ],
+  "reference_sets": {
+    "minglin": [
+      "/game/forest-council.png",
+      "/game/forest-eye-backdrop.png"
+    ],
+    "liuchen_valley": [
+      "user-provided visual reference in the 2026-11-10 project conversation"
+    ]
+  },
   "assets": [
     {
       "scene_id": "minglin_life_spring",
@@ -29,6 +34,15 @@
       "height": 941,
       "canon_status": "provisional",
       "prompt_summary": "Create a second Minglin location in the same visual family as the references: a quiet grove of ancient rune stones around one restrained blue-green luminous stone. Keep an open walkable clearing in the center and foreground, with a subtle rear path. Use richly detailed hand-painted fantasy-game art, elevated three-quarter view, warm forest light balanced by a subtle cyan glow. Environment only; no characters, creatures, UI, text, readable letters, banners, logos, watermark, giant-eye motif, copied council layout, portal rings, or science-fiction machinery."
+    },
+    {
+      "scene_id": "liuchen_valley",
+      "file": "/game/scenes/liuchen-valley-v1.png",
+      "sha256": "7a896e7a4fbdda4b10d349b2b30cc9eb9b87d58bce2d7169cb0a2137f9e1a65f",
+      "width": 1672,
+      "height": 941,
+      "canon_status": "provisional",
+      "prompt_summary": "Adapt the user-provided Liuchen Valley reference into a game-ready hand-painted fantasy background: an ochre desert canyon with cracked earth, funerary ruins, dead trees, deep fissures, a central drifting-dust column, a clear traversable route, and only a few small distant mummy wanderers. Keep the lower center open for the player; no close character, UI, text, logo, watermark, gore, modern objects, science-fiction machinery, or exact copying of the reference composition."
     }
   ]
 }
