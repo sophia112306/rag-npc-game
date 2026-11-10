@@ -3,9 +3,14 @@
 from dataclasses import dataclass
 from uuid import uuid4
 
+from backend.content.demo_story import (
+    find_available_demo_story_choice,
+    find_demo_story_choice_definition,
+)
 from backend.content.scenes import can_travel, get_scene
 from backend.schemas.game_state import GameState
 from backend.schemas.story import (
+    AdvanceStoryOperation,
     ChangeSceneOperation,
     EstablishedEvent,
     EstablishCommitmentOperation,
@@ -110,11 +115,14 @@ class ProposalResolver:
             | EstablishCommitmentOperation
             | OfferQuestOperation
             | ChangeSceneOperation
+            | AdvanceStoryOperation
         ),
         turn_number: int,
     ) -> tuple[str, dict[str, object]]:
         if isinstance(operation, ChangeSceneOperation):
             return self._change_scene(state, event, operation)
+        if isinstance(operation, AdvanceStoryOperation):
+            return self._advance_story(state, event, operation)
         if isinstance(operation, EstablishCommitmentOperation):
             return self._establish_commitment(state, event, operation, turn_number)
         if isinstance(operation, OfferQuestOperation):
@@ -243,10 +251,25 @@ class ProposalResolver:
                 "A scene transition requires a different destination.",
             )
         if not can_travel(source_scene_id, destination.scene_id):
-            raise ProposalRuleViolation(
-                "scene_not_connected",
-                f"Scene '{destination.scene_id}' is not reachable from '{source_scene_id}'.",
+            story_choice = (
+                find_demo_story_choice_definition(
+                    operation.story_choice_id,
+                    source_scene_id,
+                )
+                if operation.story_choice_id
+                else None
             )
+            if (
+                story_choice is None
+                or not story_choice.special_scene_transition
+                or story_choice.destination_scene_id != destination.scene_id
+                or story_choice.choice_id not in state.story_progress.completed_choice_ids
+                or destination.scene_id not in state.story_progress.unlocked_scene_ids
+            ):
+                raise ProposalRuleViolation(
+                    "scene_not_connected",
+                    f"Scene '{destination.scene_id}' is not reachable from '{source_scene_id}'.",
+                )
 
         state.current_scene_id = destination.scene_id
         effect: dict[str, object] = {
@@ -254,8 +277,57 @@ class ProposalResolver:
             "source_scene_id": source_scene_id,
             "destination_scene_id": destination.scene_id,
         }
+        if operation.story_choice_id:
+            effect["story_choice_id"] = operation.story_choice_id
         return (
             f"「{state.player.name}」已抵達「{destination.display_name}」。",
+            effect,
+        )
+
+    def _advance_story(
+        self,
+        state: GameState,
+        event: EventProposal,
+        operation: AdvanceStoryOperation,
+    ) -> tuple[str, dict[str, object]]:
+        if event.actor_id != state.player.player_id:
+            raise ProposalRuleViolation(
+                "actor_not_player",
+                "Only the player can resolve a player-visible story choice.",
+            )
+
+        choice = find_available_demo_story_choice(state, operation.story_choice_id)
+        if choice is None:
+            raise ProposalRuleViolation(
+                "story_choice_unavailable",
+                f"Story choice '{operation.story_choice_id}' is not available now.",
+            )
+
+        previous_node_id = state.story_progress.node_id
+        if choice.choice_id not in state.story_progress.completed_choice_ids:
+            state.story_progress.completed_choice_ids.append(choice.choice_id)
+        for clue_id in choice.reveal_clue_ids:
+            if clue_id not in state.story_progress.public_clue_ids:
+                state.story_progress.public_clue_ids.append(clue_id)
+        for scene_id in choice.unlock_scene_ids:
+            if scene_id not in state.story_progress.unlocked_scene_ids:
+                state.story_progress.unlocked_scene_ids.append(scene_id)
+
+        if "fissure_map" in choice.reveal_clue_ids:
+            state.flags["fissure_map"] = True
+
+        state.story_progress.node_id = choice.next_node_id
+        state.story_progress.chapter_title = choice.next_chapter_title
+        effect: dict[str, object] = {
+            "operation_type": OperationType.ADVANCE_STORY.value,
+            "story_choice_id": choice.choice_id,
+            "from_node_id": previous_node_id,
+            "to_node_id": choice.next_node_id,
+            "revealed_clue_ids": list(choice.reveal_clue_ids),
+            "unlocked_scene_ids": list(choice.unlock_scene_ids),
+        }
+        return (
+            f"故事進度已推進至「{choice.next_chapter_title}」。",
             effect,
         )
 

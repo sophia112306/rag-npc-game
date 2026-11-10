@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from typing import Protocol
 from uuid import UUID
 
+from backend.content.demo_story import find_available_demo_story_choice
 from backend.database.repository import (
     ActionIdConflictError as RepositoryActionIdConflictError,
     CommittedGameEvent,
@@ -14,6 +15,10 @@ from backend.database.repository import (
 )
 from backend.modules.proposal_resolver import ProposalResolution, ProposalResolver
 from backend.orchestration.player_choices import build_player_choices
+from backend.orchestration.demo_story_director import (
+    build_demo_story_proposal,
+    story_choice_action_matches,
+)
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState, PlayerState
 from backend.schemas.parsed_action import ActionType, ParsedAction
@@ -49,6 +54,14 @@ class ActionIdConflictError(RuntimeError):
     def __init__(self, action_id: UUID) -> None:
         self.action_id = action_id
         super().__init__(f"Action '{action_id}' was already used with different content")
+
+
+class StoryChoiceUnavailableError(LookupError):
+    """Raised when a choice is stale, forged, or unavailable in current state."""
+
+
+class StoryChoiceMismatchError(ValueError):
+    """Raised when a valid choice ID is attached to altered action content."""
 
 
 class GameRepository(Protocol):
@@ -136,7 +149,26 @@ class GameOrchestrator:
             raise StateVersionConflictError(action.expected_state_version, state.state_version)
 
         parsed_action = self._parse_action(action)
-        proposal = await self._story_planner.propose(action, parsed_action, state.model_copy(deep=True))
+        if action.story_choice_id:
+            story_choice = find_available_demo_story_choice(
+                state,
+                action.story_choice_id,
+            )
+            if story_choice is None:
+                raise StoryChoiceUnavailableError(
+                    f"Story choice '{action.story_choice_id}' is not available in the current state"
+                )
+            if not story_choice_action_matches(action, story_choice):
+                raise StoryChoiceMismatchError(
+                    f"Story choice '{action.story_choice_id}' does not match its authoritative action"
+                )
+            proposal = build_demo_story_proposal(action, state, story_choice)
+        else:
+            proposal = await self._story_planner.propose(
+                action,
+                parsed_action,
+                state.model_copy(deep=True),
+            )
         self._validate_proposal_envelope(proposal, state)
         resolution = self._proposal_resolver.resolve(state, proposal)
         updated_state = self._advance_turn(resolution.updated_state)

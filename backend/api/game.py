@@ -9,6 +9,8 @@ from backend.orchestration.game_orchestrator import (
     GameOrchestrator,
     SessionNotFoundError,
     StateVersionConflictError,
+    StoryChoiceMismatchError,
+    StoryChoiceUnavailableError,
 )
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.player_action import PlayerAction
@@ -86,6 +88,16 @@ async def submit_player_action(
                 "message": str(exc),
                 "action_id": str(exc.action_id),
             },
+        ) from exc
+    except StoryChoiceUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "STORY_CHOICE_UNAVAILABLE", "message": str(exc)},
+        ) from exc
+    except StoryChoiceMismatchError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "STORY_CHOICE_MISMATCH", "message": str(exc)},
         ) from exc
     except StoryGenerationUnavailableError as exc:
         raise HTTPException(

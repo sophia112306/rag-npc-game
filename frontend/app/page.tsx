@@ -11,7 +11,6 @@ import {
   type GameStateSummary,
   type GameTurnResponse,
   type PlayerChoice,
-  type PlayerQuest,
   type PlayerScene,
 } from "../lib/game-api";
 
@@ -160,11 +159,8 @@ export default function Home() {
       ]);
       setProfile(character);
       setGenerationMode(capabilities.generation_mode);
-      const [quests, choices] = await Promise.all([
-        requestJson<PlayerQuest[]>(`/api/game/${id}/quests`),
-        requestJson<PlayerChoice[]>(`/api/game/${id}/choices`),
-      ]);
-      setQuestLabel(quests[0] ? `${quests[0].status === "offered" ? "任務提議" : "目前任務"}：${quests[0].title}` : "與維達利亞交談");
+      const choices = await requestJson<PlayerChoice[]>(`/api/game/${id}/choices`);
+      setQuestLabel(`故事進度：${state.story_progress.chapter_title}`);
       setPlayerChoices(choices);
       setTurnNumber(state.turn_count);
       setStateVersion(state.state_version);
@@ -325,12 +321,9 @@ export default function Home() {
       setTurnNumber(turn.turn_number);
       setStateVersion(turn.state.state_version);
       setScene(turn.state.current_scene);
+      setQuestLabel(`故事進度：${turn.state.story_progress.chapter_title}`);
       try {
-        const [quests, choices] = await Promise.all([
-          requestJson<PlayerQuest[]>(`/api/game/${sessionId}/quests`),
-          requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`),
-        ]);
-        setQuestLabel(quests[0] ? `${quests[0].status === "offered" ? "任務提議" : "目前任務"}：${quests[0].title}` : "與維達利亞交談");
+        const choices = await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`);
         setPlayerChoices(choices);
       } catch { /* The committed turn remains valid if the optional quest refresh fails. */ }
       const nextMessages: ChatMessage[] = [...messages, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }, ...turn.story.dialogue.map((line) => ({

@@ -2,7 +2,7 @@
 
 整體里程碑：`█████████▌ 95%`（M0～M2c、M4、A2～A3 完成；M3 真實服務與 A1 實機語音待驗收）
 
-週四動態故事 Demo：`██░░░░░░░░ 20%`（D0 完成；D1a 已完成可持久化故事進度契約、玩家安全投影與選項 ID 去重內容）
+週四動態故事 Demo：`█████░░░░░ 50%`（D0～D2 完成；兩條可保存分支、權威選項驗證與特殊場景解鎖已完成；D3～D5 接續）
 
 | 階段 | 狀態 | 可驗收成果 |
 | --- | --- | --- |
@@ -98,7 +98,7 @@
 
 ## M3 目前驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：88 passed（目前全套；含 M4、語音、OpenAI 相容 adapter、規則動態、場景切換與玩家選項回歸測試）。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：92 passed（目前全套；含 M4、語音、OpenAI 相容 adapter、規則動態、場景切換、權威故事選項與兩條 Demo 分支回歸測試）。
 - 格式錯誤可有限修正，timeout 達上限後停止，永久設定錯誤不重試。
 - fake Gateway 的動態台詞已通過完整 API 流程，玩家端不再顯示開發替身。
 - 外部模型失敗的 503、Retry-After、狀態不推進均有自動化測試。
@@ -118,10 +118,13 @@
 - 前端 badge 顯示「規則動態」；只有設定並使用外部 ModelGateway 時才顯示「AI 動態」。
 - 新增玩家選項 API；初始提供所在地、委託及兩個合法目的地，任務建立後改為任務追問、承諾回報及合法目的地。
 - 選項只包裝一般 `PlayerAction`，仍使用 `action_id`、`state_version`、resolver 與完整回合交易；自由文字輸入不受限制。
+- 新增有狀態的 Demo Story Director；玩家可由命脈之泉線索解鎖烈燚原，或由符石林取得裂隙地圖後解鎖流塵谷，兩條分支會保存不同公開線索與下一組選項。
+- `story_choice_id` 只接受當前節點可用的權威選項；竄改文字、目的地或模式會回傳 409，避免只靠前端隱藏選項。
+- 新增 `advance_story` 白名單操作；推進節點、揭露公開線索、解鎖特殊場景、換場、事件及對話沿用單一交易，後續操作失敗時不留下半個故事節點。
 
 ## M3a 驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：88 passed。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：92 passed。
 - 單元測試涵蓋回合化招呼、記憶承接、秘密隔離、任務去重、承諾及物品持有權提案。
 - API 端到端測試證明規則任務會保存，下一回合承接且不重複新增。
 - Choices API 測試涵蓋初始選項、任務後選項更新及不存在 Session 的 404；前端 TypeScript production build 通過。
@@ -177,7 +180,7 @@
 
 ## A2 驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：88 passed；涵蓋資產／Registry 完整性、合法換場、流塵谷／烈燚原非法直達不改位置、目的地去重內容、E3-1 裂隙地圖邊界、當前場景敘事與跨 app 重啟承接。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：92 passed；涵蓋資產／Registry 完整性、合法換場、流塵谷／烈燚原非法直達不改位置、目的地去重內容、E3-1 裂隙地圖邊界、當前場景敘事、Demo 特殊路線與跨 app 重啟承接。
 - `npm run build`：Next.js 16.4.4、TypeScript、`/` 與 `/experiments/babylon` production build 通過。
 - Live HTTP：起始場景回傳平衡議會與四個選項；提交「前往命脈之泉」後建立 `change_scene` 成立事件、版本 1→2，重新 GET 仍為命脈之泉。
 - Chrome headless＋CDP 實際座標點擊「前往命脈之泉」：turn POST 與 choices GET 均為 200，場景標題及遠景更新、對話面板退出；hard refresh 後仍保留相同 Session 與位置。
@@ -192,7 +195,7 @@
 - 第一版圖片生成是可審核的建置期資產流程，不是每回合即時圖片 API；Babylon 切換的是遠景貼圖，尚未為每個地點建立獨立 3D 幾何。
 - Scene Registry 已登記平衡議會、命脈之泉、符石林、流塵谷與烈燚原；目前只有鳴霖三個場景具普通旅行路線，仍缺完整正式場景清單、在場 NPC、進出條件及 E1／E2／E3 對應。
 - 目前只有維達利亞的前端公開原型資料；私有角色設定、正式來源、初始知識與秘密解鎖條件仍待團隊提供。
-- 目前白名單為 `transfer_item`、`establish_commitment`、`offer_quest`、`change_scene`；關係、線索、任務接受／完成、固定事件與結局效果仍需依 C 的正式介面加入。
+- 目前白名單為 `transfer_item`、`establish_commitment`、`offer_quest`、`change_scene`、`advance_story`；Demo 公開線索與特殊路線由權威選項推進，關係、任務接受／完成、正式固定事件與結局效果仍需依 C 的正式介面加入。
 
 ## 待 B／C 協調
 
@@ -203,8 +206,8 @@
 
 ## 下一步
 
-1. C 確認 E3-1 成功後的特殊場景轉移契約，讓「持有裂隙地圖逃入流塵谷」以核准事件同交易保存；流塵谷不加入普通旅行出口。
-2. 團隊補齊正式開場與首批場景：scene ID、名稱、在場 NPC、進出條件、玩家可見描述，以及對應 E1 事件／效果；烈燚原尤其需要來源事件、入口、出口與在場角色，確認後再把暫定場景升為正式內容。
-3. 團隊提供正式 provider、URL、模型名稱與認證方式，完成無 RAG 的 M3 live AI 驗收；B 提供 RAG 後再驗收知識邊界、召回與角色品質案例。
-4. 若產品需要每回合即時生圖，再另行評估 ImageGateway 的模型、成本、快取、審核及失敗回復；目前不與文字狀態交易綁定。
-5. C 確認任務接受／完成、關係、固定事件與結局操作後再擴充白名單；不自行改寫現有規則語意。
+1. D3：為五個已登記場景加入 Babylon Scene Profile，至少同步地面、霧、光線與前景物件群；hard refresh 必須維持正確 profile。
+2. D4：建立非同步 ImageGateway／工作狀態／快取與靜態 fallback；圖片失敗不可 rollback 已成立文字回合。
+3. D5：實際啟動兩個服務，以瀏覽器操作火焰與風沙兩條分支並完成交接手冊。
+4. C 確認 Demo fallback 與正式 E3-1／烈燚原入口規則的映射；目前不把暫定選項升格為正式作者設定。
+5. B 提供正式 provider、URL、模型名稱與認證方式後，完成 M3 live AI 及 RAG 知識邊界驗收。
