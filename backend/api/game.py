@@ -1,9 +1,10 @@
 """Game endpoints exposed to the frontend."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.orchestration.game_orchestrator import (
+    ActionIdConflictError,
     GameOrchestrator,
     SessionNotFoundError,
     StateVersionConflictError,
@@ -22,13 +23,12 @@ class StartGameRequest(BaseModel):
 
 
 router = APIRouter(prefix="/api/game", tags=["game"])
-_orchestrator = GameOrchestrator()
 
 
-def get_orchestrator() -> GameOrchestrator:
-    """Return the shared in-memory orchestrator for this process."""
+def get_orchestrator(request: Request) -> GameOrchestrator:
+    """Return the database-backed orchestrator configured by the app lifespan."""
 
-    return _orchestrator
+    return request.app.state.game_orchestrator
 
 
 @router.post(
@@ -72,6 +72,15 @@ async def submit_player_action(
                 "message": str(exc),
                 "expected_state_version": exc.expected,
                 "actual_state_version": exc.actual,
+            },
+        ) from exc
+    except ActionIdConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ACTION_ID_CONFLICT",
+                "message": str(exc),
+                "action_id": str(exc.action_id),
             },
         ) from exc
 
