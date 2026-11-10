@@ -12,6 +12,7 @@ from backend.orchestration.game_orchestrator import (
 )
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.player_action import PlayerAction
+from backend.schemas.player_choice import PlayerChoice
 from backend.schemas.player_view import PlayerViewState, project_player_view
 from backend.schemas.progression import PlayerQuestView
 
@@ -96,6 +97,26 @@ async def submit_player_action(
                 "attempts": exc.attempts,
             },
             headers={"Retry-After": "2"},
+        ) from exc
+
+
+@router.get(
+    "/{session_id}/choices",
+    response_model=list[PlayerChoice],
+    summary="Get player-visible action choices",
+)
+async def get_player_choices(
+    session_id: str,
+    orchestrator: GameOrchestrator = Depends(get_orchestrator),
+) -> list[PlayerChoice]:
+    """Return clickable choices derived from the current public session state."""
+
+    try:
+        return await orchestrator.get_player_choices(session_id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "SESSION_NOT_FOUND", "message": str(exc)},
         ) from exc
 
 

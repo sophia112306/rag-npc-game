@@ -38,6 +38,14 @@ type PlayerQuest = {
   status: "offered" | "active" | "completed" | "failed" | "cancelled";
 };
 
+type PlayerChoice = {
+  choice_id: string;
+  label: string;
+  message: string;
+  target_npc_id: string;
+  action_mode: "dialogue" | "interaction" | "movement";
+};
+
 type ChatMessage = {
   id: string;
   speaker: string;
@@ -49,6 +57,8 @@ type PendingAction = {
   actionId: string;
   text: string;
   inputType: "text" | "speech_transcript";
+  targetNpcId: string;
+  actionMode: PlayerChoice["action_mode"];
   expectedStateVersion: number;
 };
 
@@ -130,6 +140,7 @@ export default function Home() {
   const [stateVersion, setStateVersion] = useState(1);
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
   const [questLabel, setQuestLabel] = useState("與維達利亞交談");
+  const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
@@ -185,8 +196,12 @@ export default function Home() {
       ]);
       setProfile(character);
       setGenerationMode(capabilities.generation_mode);
-      const quests = await requestJson<PlayerQuest[]>(`/api/game/${id}/quests`);
+      const [quests, choices] = await Promise.all([
+        requestJson<PlayerQuest[]>(`/api/game/${id}/quests`),
+        requestJson<PlayerChoice[]>(`/api/game/${id}/choices`),
+      ]);
       setQuestLabel(quests[0] ? `${quests[0].status === "offered" ? "任務提議" : "目前任務"}：${quests[0].title}` : "與維達利亞交談");
+      setPlayerChoices(choices);
       setTurnNumber(state.turn_count);
       setStateVersion(state.state_version);
       const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: character.name, text: character.greeting, kind: "npc" }];
@@ -279,19 +294,40 @@ export default function Home() {
     window.speechSynthesis.speak(utterance);
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = input.trim();
+    const pending = pendingActionRef.current;
+    const retryingPending = pending?.text === text && pending.inputType === inputType && pending.expectedStateVersion === stateVersion;
+    void sendAction(
+      text,
+      inputType,
+      retryingPending ? pending.targetNpcId : "vidalia",
+      retryingPending ? pending.actionMode : "dialogue",
+    );
+  }
+
+  function selectChoice(choice: PlayerChoice) {
+    void sendAction(choice.message, "text", choice.target_npc_id, choice.action_mode);
+  }
+
+  async function sendAction(
+    text: string,
+    actionInputType: "text" | "speech_transcript",
+    targetNpcId: string,
+    actionMode: PlayerChoice["action_mode"],
+  ) {
     if (!text || !ready || busy) return;
 
     setInput("");
+    setInputType("text");
     setBusy(true);
     setError("");
     setMessages((current) => [...current, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }]);
     const pending = pendingActionRef.current;
-    const canRetryPending = pending?.text === text && pending.inputType === inputType && pending.expectedStateVersion === stateVersion;
+    const canRetryPending = pending?.text === text && pending.inputType === actionInputType && pending.targetNpcId === targetNpcId && pending.actionMode === actionMode && pending.expectedStateVersion === stateVersion;
     const actionId = canRetryPending ? pending.actionId : window.crypto.randomUUID();
-    pendingActionRef.current = { actionId, text, inputType, expectedStateVersion: stateVersion };
+    pendingActionRef.current = { actionId, text, inputType: actionInputType, targetNpcId, actionMode, expectedStateVersion: stateVersion };
 
     try {
       const turn = await requestJson<GameTurnResponse>("/api/game/turn", {
@@ -301,9 +337,9 @@ export default function Home() {
           session_id: sessionId,
           action_id: actionId,
           message: text,
-          input_type: inputType,
-          target_npc_id: "vidalia",
-          action_mode: "dialogue",
+          input_type: actionInputType,
+          target_npc_id: targetNpcId,
+          action_mode: actionMode,
           expected_state_version: stateVersion,
         }),
       });
@@ -311,15 +347,18 @@ export default function Home() {
       setTurnNumber(turn.turn_number);
       setStateVersion(turn.state.state_version);
       try {
-        const quests = await requestJson<PlayerQuest[]>(`/api/game/${sessionId}/quests`);
+        const [quests, choices] = await Promise.all([
+          requestJson<PlayerQuest[]>(`/api/game/${sessionId}/quests`),
+          requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`),
+        ]);
         setQuestLabel(quests[0] ? `${quests[0].status === "offered" ? "任務提議" : "目前任務"}：${quests[0].title}` : "與維達利亞交談");
+        setPlayerChoices(choices);
       } catch { /* The committed turn remains valid if the optional quest refresh fails. */ }
       const nextMessages: ChatMessage[] = [...messages, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }, ...turn.story.dialogue.map((line) => ({
         id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const,
       }))];
       setMessages(nextMessages);
       setLastNpcSpeech(turn.story.dialogue.filter((line) => line.speaker_name !== "系統").map((line) => line.text).join("\n"));
-      setInputType("text");
       try {
         window.localStorage.setItem(conversationKey(sessionId), JSON.stringify({ turn_number: turn.turn_number, updated_at: turn.state.updated_at, messages: nextMessages }));
       } catch { /* The current conversation still works when browser storage is unavailable. */ }
@@ -428,6 +467,15 @@ export default function Home() {
                   {busy && ready && <p className="thinking">維達利亞正在思索……</p>}
                   <div ref={endRef} />
                 </div>
+                {playerChoices.length > 0 && (
+                  <div className="dialogue-choices" aria-label="可選行動">
+                    {playerChoices.map((choice) => (
+                      <button key={choice.choice_id} type="button" disabled={!ready || busy} onClick={() => selectChoice(choice)}>
+                        {choice.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {error && <p className="dialogue-error" role="alert">{error}</p>}
                 <form className="dialogue-form" onSubmit={submit}>
                   <label htmlFor="dialogue-input" className="sr-only">對維達利亞說話</label>

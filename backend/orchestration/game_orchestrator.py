@@ -17,6 +17,7 @@ from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState, PlayerState
 from backend.schemas.parsed_action import ActionType, ParsedAction
 from backend.schemas.player_action import ActionMode, PlayerAction
+from backend.schemas.player_choice import PlayerChoice
 from backend.schemas.player_view import project_player_view
 from backend.schemas.progression import PlayerQuestView
 from backend.schemas.story import (
@@ -176,6 +177,73 @@ class GameOrchestrator:
             return await self._repository.get_player_quests(session_id)
         except PersistentSessionNotFoundError as exc:
             raise SessionNotFoundError(str(exc)) from exc
+
+    async def get_player_choices(self, session_id: str) -> list[PlayerChoice]:
+        """Return state-aware shortcuts without exposing hidden rules or memories."""
+
+        state = await self.get_state(session_id)
+        try:
+            quests = await self._repository.get_player_quests(session_id)
+        except PersistentSessionNotFoundError as exc:
+            raise SessionNotFoundError(str(exc)) from exc
+
+        target_npc_id = "vidalia"
+        if quests:
+            current_quest = quests[0]
+            return [
+                PlayerChoice(
+                    choice_id="ask_current_quest",
+                    label=f"詢問「{current_quest.title}」",
+                    message="請再告訴我目前任務的內容。",
+                    target_npc_id=target_npc_id,
+                ),
+                PlayerChoice(
+                    choice_id="promise_to_report",
+                    label="承諾完成後回報",
+                    message="我答應會調查這項異常，完成後回來報告。",
+                    target_npc_id=target_npc_id,
+                ),
+                PlayerChoice(
+                    choice_id="recall_conversation",
+                    label="回想先前對話",
+                    message="你還記得我們之前說過什麼嗎？",
+                    target_npc_id=target_npc_id,
+                ),
+            ]
+
+        choices = [
+            PlayerChoice(
+                choice_id="ask_location",
+                label="詢問目前所在地",
+                message="這裡是什麼地方？我應該觀察什麼？",
+                target_npc_id=target_npc_id,
+            ),
+            PlayerChoice(
+                choice_id="ask_for_task",
+                label="詢問能幫什麼忙",
+                message="有什麼需要我幫忙的任務？",
+                target_npc_id=target_npc_id,
+            ),
+        ]
+        if state.turn_count > 0:
+            choices.append(
+                PlayerChoice(
+                    choice_id="recall_conversation",
+                    label="回想先前對話",
+                    message="你還記得我們之前說過什麼嗎？",
+                    target_npc_id=target_npc_id,
+                )
+            )
+        else:
+            choices.append(
+                PlayerChoice(
+                    choice_id="ask_about_anomaly",
+                    label="詢問世界異象",
+                    message="你提到世界出現異象，目前能確認的是什麼？",
+                    target_npc_id=target_npc_id,
+                )
+            )
+        return choices
 
     @staticmethod
     def _parse_action(action: PlayerAction) -> ParsedAction:

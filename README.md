@@ -44,6 +44,8 @@ export MODEL_GATEWAY_API_KEY='<本機金鑰>'
 
 規則動態目前能處理招呼、場景觀察、任務詢問、明確承諾、物品交付與先前對話回想。任務、承諾及物品移轉仍需通過後端白名單驗證，並與完整回合同一交易保存。它是可驗收的程序式故事系統，不宣稱具備 LLM 的自由創作能力。
 
+對話介面也會顯示後端依 Session 產生的三個可點選行動。初始提供所在地、委託與異象選項；任務成立後會改為任務追問、承諾回報與回想前文。點選選項會提交一般 `PlayerAction`，沿用相同的去重、版本及規則驗證，不是只在前端切換假畫面。
+
 前端：
 
 ```bash
@@ -68,6 +70,7 @@ npm run dev
 - `POST /api/game/start`：建立或恢復持久化 Session
 - `POST /api/game/turn`：提交 `action_id`、訊息與預期狀態版本
 - `GET /api/game/{session_id}/state`：取得玩家可見狀態
+- `GET /api/game/{session_id}/choices`：取得依目前公開狀態產生的可點選行動
 - `GET /api/game/{session_id}/quests`：取得玩家可見且尚未結束的動態任務
 
 同一個 `action_id`、同一內容重送會回傳原結果；同 ID 換成不同內容或提交過期的 `expected_state_version` 會得到 HTTP 409。Session、狀態、對話、核准事件與完整回應會以單一交易保存，後端重啟後仍可接續。
@@ -83,6 +86,8 @@ npm run dev
 目前沒有執行中的圖片生成模型。Phaser 2D 主遊戲載入 `frontend/public/game/forest-council.png`、玩家方向圖及 NPC 透明圖；Babylon.js 3D 原型則由程式建立幾何、燈光與相機，再貼上 repository 內的固定 PNG 材質。現有 Git 歷史只記錄素材由前端原型 commit 匯入，沒有保存原始生圖模型與 prompt，因此不能確認這批圖最初由哪個模型製作。
 
 未來若加入場景生圖，應由 A 的前端資產流程呼叫獨立 ImageGateway，先生成並審核版本化素材，再把核准的 asset ID 放入遊戲狀態；不應讓每回合文字模型直接覆寫目前場景圖片。
+
+目前尚未實作正式換場。repository 只有鳴霖主畫面與 Babylon 試玩場景，C 的 E1／E2／E3 多數只有事件 ID、數值效果與階段門檻，沒有完整的場景 ID、進出條件、地圖素材及每個選項的敘事內容。這些資料確認後，才能新增受規則驗證的 `change_scene` 操作，讓背景、在場 NPC、可選行動與後續生成一起切換。
 
 ## 驗證
 

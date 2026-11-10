@@ -63,6 +63,7 @@ def test_default_capabilities_identify_rule_based_generation(client: TestClient)
 
 def test_start_turn_and_read_current_state(client: TestClient) -> None:
     state = start_session(client)
+    choices = client.get(f"/api/game/{state['session_id']}/choices")
 
     assert state["turn_count"] == 0
     assert state["state_version"] == 1
@@ -73,6 +74,13 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert "usurp" not in state
     assert "flags" not in state
     assert "relation" not in state["npc_states"]["vidalia"]
+    assert choices.status_code == 200
+    assert [choice["choice_id"] for choice in choices.json()] == [
+        "ask_location",
+        "ask_for_task",
+        "ask_about_anomaly",
+    ]
+    assert all(choice["target_npc_id"] == "vidalia" for choice in choices.json())
 
     response = client.post("/api/game/turn", json=action_payload(state["session_id"]))
 
@@ -106,6 +114,7 @@ def test_default_rule_planner_offers_and_remembers_dynamic_quest(client: TestCli
         },
     )
     quests = client.get(f"/api/game/{state['session_id']}/quests")
+    choices = client.get(f"/api/game/{state['session_id']}/choices")
     second = client.post(
         "/api/game/turn",
         json={
@@ -125,9 +134,23 @@ def test_default_rule_planner_offers_and_remembers_dynamic_quest(client: TestCli
     assert len(quests.json()) == 1
     assert quests.json()[0]["status"] == "offered"
     assert "鳴霖・平衡議會" in quests.json()[0]["title"]
+    assert choices.status_code == 200
+    assert [choice["choice_id"] for choice in choices.json()] == [
+        "ask_current_quest",
+        "promise_to_report",
+        "recall_conversation",
+    ]
+    assert quests.json()[0]["title"] in choices.json()[0]["label"]
     assert second.status_code == 200
     assert quests.json()[0]["title"] in second.json()["story"]["dialogue"][0]["text"]
     assert len(quests_after_second_turn.json()) == 1
+
+
+def test_choices_for_unknown_session_return_not_found(client: TestClient) -> None:
+    response = client.get("/api/game/missing-session/choices")
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "SESSION_NOT_FOUND"
 
 
 def test_repeated_action_id_does_not_advance_the_turn_twice(client: TestClient) -> None:

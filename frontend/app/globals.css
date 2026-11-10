@@ -67,6 +67,10 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
 .dialogue-history .line-player { color: #d0e0c5; }
 .dialogue-history .line-player span { color: #aec58c; }
 .dialogue-history .thinking { color: #d1bd8c; font-size: 12px; }
+.dialogue-choices { display: flex; flex-wrap: wrap; gap: 7px; margin: 1px 0 7px; }
+.dialogue-choices button { padding: 5px 10px; border: 1px solid #9f8751; border-radius: 3px; color: #f4dfad; background: #2b321fdd; font-size: 12px; }
+.dialogue-choices button:hover:not(:disabled), .dialogue-choices button:focus-visible { border-color: #e5c675; color: #fff3cf; background: #4a4526; outline: none; }
+.dialogue-choices button:disabled { opacity: .45; cursor: default; }
 .dialogue-error { margin: 3px 0; color: #ffd1b2; font-size: 12px; }
 .dialogue-form { display: flex; gap: 9px; }
 .dialogue-form input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #a78d57; border-radius: 3px; outline: none; background: #111b14cb; color: #fff8e4; font-size: 14px; }
