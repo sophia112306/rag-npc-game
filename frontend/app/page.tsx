@@ -27,6 +27,11 @@ type GameStateSummary = {
   updated_at: string;
 };
 
+type Capabilities = {
+  generation_mode: "development_stub" | "external_model";
+  dynamic_dialogue: boolean;
+};
+
 type ChatMessage = {
   id: string;
   speaker: string;
@@ -97,6 +102,7 @@ export default function Home() {
   const [restartConfirm, setRestartConfirm] = useState(false);
   const [turnNumber, setTurnNumber] = useState(0);
   const [stateVersion, setStateVersion] = useState(1);
+  const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("development_stub");
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
@@ -130,15 +136,17 @@ export default function Home() {
     setError("");
     setReady(false);
     try {
-      const [character, state] = await Promise.all([
+      const [character, state, capabilities] = await Promise.all([
         requestJson<CharacterProfile>("/api/characters/vidalia"),
         requestJson<GameStateSummary>("/api/game/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ session_id: id }),
         }),
+        requestJson<Capabilities>("/api/capabilities"),
       ]);
       setProfile(character);
+      setGenerationMode(capabilities.generation_mode);
       setTurnNumber(state.turn_count);
       setStateVersion(state.state_version);
       const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: character.name, text: character.greeting, kind: "npc" }];
@@ -300,7 +308,7 @@ export default function Home() {
           </div>
           <div className="dialogue-main">
             <div className="dialogue-heading">
-              <div><h1>{profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span></div>
+              <div><h1>{profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 動態" : "開發替身"}</span></div>
               {dialogueOpen && <button type="button" className="close-dialogue" onClick={() => setDialogueOpen(false)} aria-label="關閉對話">✕</button>}
             </div>
 

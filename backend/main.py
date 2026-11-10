@@ -15,6 +15,7 @@ from backend.database.repository import SqlAlchemyGameRepository
 from backend.generation.config import build_story_planner_from_env
 from backend.orchestration.game_orchestrator import GameOrchestrator, StoryPlanner
 
+from .api.capabilities import router as capabilities_router
 from .api.characters import router as character_router
 from .api.game import router as game_router
 from .api.health import APP_VERSION, SERVICE_NAME, router as health_router
@@ -47,6 +48,9 @@ def create_app(
         application.state.database_engine = engine
         application.state.game_orchestrator = GameOrchestrator(repository, story_planner=story_planner)
         application.state.npc_context_repository = context_repository
+        application.state.generation_mode = (
+            "external_model" if story_planner is not None else "development_stub"
+        )
         try:
             yield
         finally:
@@ -76,6 +80,7 @@ def create_app(
     )
 
     application.include_router(health_router)
+    application.include_router(capabilities_router)
     application.include_router(character_router)
     application.include_router(game_router)
 

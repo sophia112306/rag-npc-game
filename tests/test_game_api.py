@@ -48,6 +48,19 @@ def test_public_character_profile_is_available(client: TestClient) -> None:
     assert "secrets" not in response.json()
 
 
+def test_default_capabilities_identify_development_stub(client: TestClient) -> None:
+    response = client.get("/api/capabilities")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "generation_mode": "development_stub",
+        "dynamic_dialogue": False,
+        "rag_integration": "pending",
+        "voice_integration": "pending",
+        "allowed_operations": ["transfer_item"],
+    }
+
+
 def test_start_turn_and_read_current_state(client: TestClient) -> None:
     state = start_session(client)
 
@@ -208,12 +221,15 @@ def test_configured_gateway_dialogue_reaches_player_after_validation(tmp_path) -
     )
     with TestClient(application) as dynamic_client:
         state = start_session(dynamic_client, "dynamic-model-session")
+        capabilities = dynamic_client.get("/api/capabilities")
         response = dynamic_client.post(
             "/api/game/turn",
             json=action_payload(state["session_id"]),
         )
 
     assert response.status_code == 200
+    assert capabilities.json()["generation_mode"] == "external_model"
+    assert capabilities.json()["dynamic_dialogue"] is True
     line = response.json()["story"]["dialogue"][0]
     assert line["speaker_id"] == "vidalia"
     assert line["speaker_name"] == "維達利亞"
