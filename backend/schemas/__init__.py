@@ -2,6 +2,16 @@
 
 from .api_response import ApiError, DeltaPayload, GameTurnResponse, NarrativeAIResponse
 from .character import CharacterProfile
+from .content import (
+    CharacterDefinition,
+    DisclosureScope,
+    KnowledgeItem,
+    MemoryItem,
+    NPCGenerationContext,
+    SettingCertainty,
+    SourceReference,
+    WorldCanonEntry,
+)
 from .game_state import GameState, InventoryItem, NPCState, PlayerState, SceneState, StoryPhase
 from .parsed_action import ActionType, ParsedAction
 from .player_action import ActionMode, InputType, PlayerAction
@@ -13,6 +23,8 @@ __all__ = [
     "ActionMode",
     "ApiError",
     "CharacterProfile",
+    "CharacterDefinition",
+    "DisclosureScope",
     "DeltaPayload",
     "DialogueLine",
     "EventProposal",
@@ -21,6 +33,9 @@ __all__ = [
     "InputType",
     "InventoryItem",
     "NarrativeAIResponse",
+    "KnowledgeItem",
+    "MemoryItem",
+    "NPCGenerationContext",
     "NPCState",
     "NPCPublicStateView",
     "ParsedAction",
@@ -30,6 +45,9 @@ __all__ = [
     "PlayerViewState",
     "SceneState",
     "SpeakerType",
+    "SettingCertainty",
+    "SourceReference",
     "StoryPhase",
     "StoryProposal",
+    "WorldCanonEntry",
 ]

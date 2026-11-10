@@ -26,5 +26,14 @@ def test_app_startup_applies_alembic_migration(tmp_path) -> None:
     finally:
         connection.close()
 
-    assert revision == ("20261110_0001",)
-    assert {"game_sessions", "action_records", "game_events", "dialogue_records"} <= tables
+    assert revision == ("20261110_0002",)
+    assert {
+        "game_sessions",
+        "action_records",
+        "game_events",
+        "dialogue_records",
+        "world_canon",
+        "character_definitions",
+        "knowledge_records",
+        "memory_records",
+    } <= tables
