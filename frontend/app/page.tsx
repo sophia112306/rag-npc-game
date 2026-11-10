@@ -8,6 +8,7 @@ import {
   DEFAULT_SCENE_VISUAL_PROFILE,
   GAME_SESSION_STORAGE_KEY,
   requestJson,
+  resolveSceneImage,
   type Capabilities,
   type GameStateSummary,
   type GameTurnResponse,
@@ -103,6 +104,8 @@ export default function Home() {
   const [turnNumber, setTurnNumber] = useState(0);
   const [stateVersion, setStateVersion] = useState(1);
   const [scene, setScene] = useState<PlayerScene>(previewScene);
+  const [sceneImageUrl, setSceneImageUrl] = useState(previewScene.background_url);
+  const [sceneImageStatus, setSceneImageStatus] = useState<"queued" | "processing" | "succeeded" | "fallback">("fallback");
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
   const [questLabel, setQuestLabel] = useState("與維達利亞交談");
   const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
@@ -126,6 +129,23 @@ export default function Home() {
       window.speechSynthesis?.cancel();
     };
   }, []);
+
+  useEffect(() => {
+    if (!ready || !sessionId) return;
+    let current = true;
+    setSceneImageUrl(scene.background_url);
+    setSceneImageStatus("queued");
+    void resolveSceneImage(sessionId, stateVersion, () => current)
+      .then((job) => {
+        if (!current || !job || job.scene_id !== scene.scene_id) return;
+        setSceneImageStatus(job.status);
+        if (job.image_url) setSceneImageUrl(job.image_url);
+      })
+      .catch(() => {
+        if (current) setSceneImageStatus("fallback");
+      });
+    return () => { current = false; };
+  }, [ready, scene.background_url, scene.scene_id, sessionId, stateVersion]);
 
   useEffect(() => {
     if (dialogueOpen) endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -381,7 +401,7 @@ export default function Home() {
   return (
     <main className="game-page">
       <section className="map-stage" aria-label="斜俯視的鳴霖遊戲地圖">
-        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}`} backgroundUrl={scene.background_url} paused={dialogueOpen || helpOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpc} onInteract={openDialogue} onZoomChange={setMapZoom} />}
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} paused={dialogueOpen || helpOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpc} onInteract={openDialogue} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
 
         <header className="location-banner" aria-label="目前場景">
@@ -391,7 +411,7 @@ export default function Home() {
             <path d="M36 3l6 27 27 6-27 6-6 27-6-27L3 36l27-6L36 3Z" stroke="currentColor" strokeWidth="1.7" />
             <path d="M36 22l4 10 10 4-10 4-4 10-4-10-10-4 10-4 4-10Z" fill="currentColor" />
           </svg>
-          <div className="location-copy"><strong>{scene.region_name}</strong><span>{scene.display_name} · {scene.subtitle}</span></div>
+          <div className="location-copy"><strong>{scene.region_name}</strong><span>{scene.display_name} · {scene.subtitle} · {sceneImageStatus === "succeeded" ? "生成場景" : sceneImageStatus === "fallback" ? "版本化場景" : "場景生成中"}</span></div>
           <span className="location-ornament" aria-hidden="true">✧</span>
         </header>
 

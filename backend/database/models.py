@@ -283,3 +283,38 @@ class QuestRecord(Base):
     provenance_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class SceneImageJobRecord(Base):
+    """A post-commit image job derived only from player-visible story state."""
+
+    __tablename__ = "scene_image_jobs"
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id",
+            "prompt_fingerprint",
+            name="uq_scene_image_jobs_session_fingerprint",
+        ),
+        Index("ix_scene_image_jobs_session_created", "session_id", "created_at"),
+    )
+
+    job_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        String(100),
+        ForeignKey("game_sessions.session_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    scene_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    story_node_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    prompt_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_text: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    fallback_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

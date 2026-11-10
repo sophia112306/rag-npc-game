@@ -2,7 +2,7 @@
 
 整體里程碑：`█████████▌ 95%`（M0～M2c、M4、A2～A3 完成；M3 真實服務與 A1 實機語音待驗收）
 
-週四動態故事 Demo：`███████░░░ 70%`（D0～D3 完成；兩條可保存分支、權威選項驗證、特殊場景解鎖與 3D Scene Profile 已完成；D4～D5 接續）
+週四動態故事 Demo：`████████▌░ 85%`（D0～D3 完成；D4 圖片 job／polling／fallback 完成，待正式圖片 provider；D5 實機與交接接續）
 
 | 階段 | 狀態 | 可驗收成果 |
 | --- | --- | --- |
@@ -168,6 +168,9 @@
 - 依使用者提供的烈燚原參考設計新增 1672×941 場景圖；保留中央火柱祭壇、熔流、玄武岩峽壁與橙色樹林，移除參考圖人物並保留前景可行走路徑。
 - 生成提示摘要、版本、尺寸、SHA-256、風格參考及 provisional 狀態保存在 `frontend/public/game/scenes/manifest.json`；舊資產未被覆蓋。
 - 圖片採建置期生成與版本化提交；遊戲每回合只引用已存在資產，不重複呼叫圖片模型。
+- 新增 provider-neutral `ImageGateway` 與 `scene_image_jobs` migration；圖片工作只在已提交狀態之後建立，不在遊戲回合交易中等待模型。
+- 圖片 prompt fingerprint 只使用公開場景、公開章節、公開線索與固定 style version；不讀取 NPC 私人記憶或隱藏設定，相同內容會回用既有 job。
+- 2D／3D 前端以非重疊 polling 追蹤工作；舊場景的晚到結果不能覆蓋目前場景，成功時套用生成 URL，未設定／失敗時保留版本化 fallback。
 - 新增單一 Scene Registry，同時供後端合法路線驗證、PlayerViewState、Phaser 2D 完整背景及 Babylon 3D 遠景使用，沒有前後端各維護一份場景表。
 - 新增 `change_scene` 白名單操作；只有玩家、已登記目的地與 Scene Registry 允許的出口可以成立，不可直達或不存在場景會原子拒絕。
 - `destination_scene_id` 納入 action digest；場景狀態、成立事件、對話與版本以同一交易保存，後端重啟後仍可承接。
@@ -182,7 +185,7 @@
 
 ## A2 驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：92 passed；涵蓋資產／Registry 完整性、合法換場、流塵谷／烈燚原非法直達不改位置、目的地去重內容、E3-1 裂隙地圖邊界、當前場景敘事、Demo 特殊路線與跨 app 重啟承接。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：96 passed；涵蓋資產／Registry 完整性、合法換場、特殊路線、Scene Profile、圖片 job 去重、成功、timeout fallback、Session 隔離、migration 與跨 app 重啟承接。
 - `npm run build`：Next.js 16.4.4、TypeScript、`/` 與 `/experiments/babylon` production build 通過。
 - Live HTTP：起始場景回傳平衡議會與四個選項；提交「前往命脈之泉」後建立 `change_scene` 成立事件、版本 1→2，重新 GET 仍為命脈之泉。
 - Chrome headless＋CDP 實際座標點擊「前往命脈之泉」：turn POST 與 choices GET 均為 200，場景標題及遠景更新、對話面板退出；hard refresh 後仍保留相同 Session 與位置。
@@ -194,7 +197,9 @@
 - 真實 AI、RAG 與外部 STT/TTS 尚未接入；NPC 互動／目擊記憶已由後端依核准結果自動寫入。
 - 真實 ModelGateway 端點、模型名稱與認證尚未提供；目前可直接接 B 的自訂契約或 OpenAI 相容服務，預設則使用規則動態。
 - 規則動態可承接狀態但不是 LLM 自由創作；角色語氣、未預寫情境與大範圍故事發展仍需真實 ModelGateway／RAG。
-- 第一版圖片生成是可審核的建置期資產流程，不是每回合即時圖片 API；Babylon 已會切換遠景、地面、霧光、色盤與物件群，但尚未為每個地點建立獨立 GLB／碰撞地圖。
+- 圖片 job／polling／fallback 已可運作，但部署端尚未注入正式 ImageGateway，因此目前介面會誠實標示「版本化場景」，不是每回合即時呼叫圖片模型。
+- 圖片工作目前由 FastAPI background task 執行；Demo 單程序可用，正式多程序部署仍應改為 transactional outbox＋獨立 worker、stale-job recovery 與有限重試。
+- Babylon 已會切換遠景、地面、霧光、色盤與物件群，但尚未為每個地點建立獨立 GLB／碰撞地圖。
 - Scene Registry 已登記平衡議會、命脈之泉、符石林、流塵谷與烈燚原；目前只有鳴霖三個場景具普通旅行路線，仍缺完整正式場景清單、在場 NPC、進出條件及 E1／E2／E3 對應。
 - 目前只有維達利亞的前端公開原型資料；私有角色設定、正式來源、初始知識與秘密解鎖條件仍待團隊提供。
 - 目前白名單為 `transfer_item`、`establish_commitment`、`offer_quest`、`change_scene`、`advance_story`；Demo 公開線索與特殊路線由權威選項推進，關係、任務接受／完成、正式固定事件與結局效果仍需依 C 的正式介面加入。
@@ -208,7 +213,7 @@
 
 ## 下一步
 
-1. D4：建立非同步 ImageGateway／工作狀態／快取與靜態 fallback；圖片失敗不可 rollback 已成立文字回合。
-2. D5：實際啟動兩個服務，以瀏覽器操作火焰與風沙兩條分支，肉眼確認 Scene Profile 與 hard refresh，再完成交接手冊。
+1. D5：實際啟動兩個服務，以瀏覽器操作火焰與風沙兩條分支，肉眼確認 Scene Profile 與 hard refresh，再完成交接手冊。
+2. 選定正式圖片 provider／模型／金鑰環境變數，實作 ImageGateway adapter、timeout、有限重試與獨立 worker；目前無 provider 時必須保持 fallback。
 3. C 確認 Demo fallback 與正式 E3-1／烈燚原入口規則的映射；目前不把暫定選項升格為正式作者設定。
-4. B 提供正式 provider、URL、模型名稱與認證方式後，完成 M3 live AI 及 RAG 知識邊界驗收。
+4. B 提供正式文字 provider、URL、模型名稱與認證方式後，完成 M3 live AI 及 RAG 知識邊界驗收。

@@ -65,6 +65,7 @@
 
 ### D4 滾動式圖片生成
 
+- 狀態：`████████░░ 80%`。已完成供應商無關 Gateway、SQLite job、prompt fingerprint 去重、成功／失敗 fallback、重啟承接、玩家安全 API 與 2D／3D polling；待正式 provider adapter、金鑰、有限重試與獨立 worker。
 - 建立供應商無關 `ImageGateway` 與可持久化 `SceneImageJob`。
 - 回合交易成功後才排入圖片工作；不在資料庫交易中等待模型。
 - 以故事節點、場景、公開事件及固定 style guide 建立 prompt；不送 NPC 私人記憶。
@@ -72,6 +73,8 @@
 - 前端輪詢狀態並在完成後 crossfade；失敗時保留 fallback。
 - Demo provider：優先接正式圖片 API；未設定時使用已提交版本化資產，完整流程仍可驗收。
 - 驗收：成功、逾時、拒絕、重試、快取、重新整理承接均有測試。
+
+目前未設定 ImageGateway 時，工作會以 `fallback` 終止並回傳 Scene Registry 的版本化圖片；介面明確顯示「版本化場景」。測試用 fake gateway 已驗證生成成功與 timeout fallback 都不修改或 rollback 遊戲狀態。正式 provider 尚未選定，不能在部署端宣稱已即時生圖。
 
 ### D5 端到端 Demo
 

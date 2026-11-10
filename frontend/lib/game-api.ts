@@ -99,6 +99,47 @@ export type Capabilities = {
   dynamic_dialogue: boolean;
 };
 
+export type SceneImageJob = {
+  job_id: string;
+  session_id: string;
+  scene_id: string;
+  story_node_id: string;
+  state_version: number;
+  prompt_fingerprint: string;
+  provider: string;
+  status: "queued" | "processing" | "succeeded" | "fallback";
+  image_url: string | null;
+  attempt_count: number;
+  error_code: string | null;
+};
+
+export function enqueueSceneImage(sessionId: string, expectedStateVersion: number) {
+  return requestJson<SceneImageJob>(`/api/game/${sessionId}/scene-image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_state_version: expectedStateVersion }),
+  });
+}
+
+export function getSceneImageJob(sessionId: string, jobId: string) {
+  return requestJson<SceneImageJob>(`/api/game/${sessionId}/scene-image/${jobId}`);
+}
+
+export async function resolveSceneImage(
+  sessionId: string,
+  expectedStateVersion: number,
+  isCurrent: () => boolean,
+) {
+  let job = await enqueueSceneImage(sessionId, expectedStateVersion);
+  for (let attempt = 0; attempt < 10 && isCurrent(); attempt += 1) {
+    if (job.status === "succeeded" || job.status === "fallback") return job;
+    await new Promise((resolve) => window.setTimeout(resolve, 750));
+    if (!isCurrent()) return null;
+    job = await getSceneImageJob(sessionId, job.job_id);
+  }
+  return isCurrent() ? job : null;
+}
+
 export type PlayerQuest = {
   quest_id: string;
   title: string;
