@@ -13,6 +13,7 @@ from backend.database import create_async_session_factory, create_database_engin
 from backend.database.session import get_database_url
 from backend.database.repository import SqlAlchemyGameRepository
 from backend.generation.config import build_story_planner_from_env
+from backend.generation.rule_based_planner import RuleBasedStoryPlanner
 from backend.orchestration.game_orchestrator import GameOrchestrator, StoryPlanner
 
 from .api.capabilities import router as capabilities_router
@@ -40,17 +41,20 @@ def create_app(
         context_repository = NPCContextRepository(session_factory)
         for definition in CHARACTER_DEFINITIONS.values():
             await context_repository.ensure_character_definition(definition)
-        story_planner = (
-            story_planner_factory(context_repository)
-            if story_planner_factory
-            else build_story_planner_from_env(context_repository)
-        )
+        if story_planner_factory:
+            story_planner = story_planner_factory(context_repository)
+            generation_mode = "external_model"
+        else:
+            story_planner = build_story_planner_from_env(context_repository)
+            if story_planner is None:
+                story_planner = RuleBasedStoryPlanner(context_repository)
+                generation_mode = "rule_based"
+            else:
+                generation_mode = "external_model"
         application.state.database_engine = engine
         application.state.game_orchestrator = GameOrchestrator(repository, story_planner=story_planner)
         application.state.npc_context_repository = context_repository
-        application.state.generation_mode = (
-            "external_model" if story_planner is not None else "development_stub"
-        )
+        application.state.generation_mode = generation_mode
         try:
             yield
         finally:

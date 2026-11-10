@@ -13,6 +13,7 @@ from .gateway import (
 from .http_gateway import HttpModelGateway
 from .openai_compatible_gateway import OpenAICompatibleChatGateway
 from .planner import GatewayStoryPlanner, StoryGenerationUnavailableError
+from .rule_based_planner import RuleBasedStoryPlanner
 
 __all__ = [
     "GatewayStoryPlanner",
@@ -26,5 +27,6 @@ __all__ = [
     "ModelStoryOutput",
     "ModelTurnRequest",
     "OpenAICompatibleChatGateway",
+    "RuleBasedStoryPlanner",
     "StoryGenerationUnavailableError",
 ]

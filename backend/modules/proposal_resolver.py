@@ -142,10 +142,12 @@ class ProposalResolver:
 
         source_inventory.remove(operation.item_id)
         target_inventory.append(operation.item_id)
+        source_name = self._entity_label(state, operation.from_entity_id)
+        target_name = self._entity_label(state, operation.to_entity_id)
         return (
             (
-                f"Item '{operation.item_id}' transferred from "
-                f"'{operation.from_entity_id}' to '{operation.to_entity_id}'."
+                f"物品「{operation.item_id}」已由「{source_name}」"
+                f"移交給「{target_name}」。"
             ),
             operation.model_dump(mode="json"),
         )
@@ -192,10 +194,12 @@ class ProposalResolver:
             "visibility": "player" if event.visible_to_player else "backend",
             "proposal_id": str(event.proposal_id),
         }
+        promisor_name = self._entity_label(state, operation.promisor_id)
+        promisee_name = self._entity_label(state, operation.promisee_id)
         return (
             (
-                f"'{operation.promisor_id}' committed to '{operation.promisee_id}': "
-                f"{operation.summary}"
+                f"「{promisor_name}」已向「{promisee_name}」"
+                f"建立承諾：{operation.summary}"
             ),
             effect,
         )
@@ -236,8 +240,13 @@ class ProposalResolver:
             "visibility": "player" if event.visible_to_player else "backend",
             "proposal_id": str(event.proposal_id),
         }
+        giver_name = self._entity_label(state, operation.giver_id)
+        recipient_name = self._entity_label(state, operation.recipient_id)
         return (
-            f"'{operation.giver_id}' offered quest '{operation.title}' to '{operation.recipient_id}'.",
+            (
+                f"「{giver_name}」已向「{recipient_name}」"
+                f"提出任務「{operation.title}」。"
+            ),
             effect,
         )
 
@@ -249,6 +258,13 @@ class ProposalResolver:
             "unknown_entity",
             f"Entity '{entity_id}' is not registered in the current game state.",
         )
+
+    @staticmethod
+    def _entity_label(state: GameState, entity_id: str) -> str:
+        if entity_id == state.player.player_id:
+            return state.player.name or entity_id
+        npc = state.npc_states.get(entity_id)
+        return npc.name if npc and npc.name else entity_id
 
     @classmethod
     def _inventory_for(cls, state: GameState, entity_id: str) -> list[str]:

@@ -10,8 +10,10 @@
 | M2b：內容與知識隔離 | `██████████ 100%` | 世界／角色內容結構、NPC 記憶來源、授權後生成背景與 PlayerViewState 已完成 |
 | M2c：核准事件介面 | `██████████ 100%` | 初始操作白名單、事件原子核准、私有決策稽核與同交易保存已完成 |
 | M3：真正生成 | `█████████░ 90%` | Gateway、動態台詞、安全回復已完成；待 B 的真實端點、RAG 與角色品質驗收 |
+| M3a：規則動態故事 | `██████████ 100%` | 無模型也能依輸入、回合、記憶、承諾、任務與背包產生並保存不同結果 |
 | M4：世界持續發展 | `██████████ 100%` | 有來源的 NPC 目標、承諾、回合時鐘、記憶承接與動態任務已完成 |
 | A1：瀏覽器語音互動 | `█████████░ 90%` | STT transcript 與瀏覽器 TTS 已完成；待實機麥克風中文辨識驗收 |
+| A2：圖片／場景生成 | `██░░░░░░░░ 20%` | 現有固定 2D 素材與 Babylon 程式場景已盤點；尚未選擇或串接生圖模型 |
 
 ## M1 已完成
 
@@ -88,12 +90,12 @@
 - 新增 OpenAI 相容 Chat Completions adapter，可用環境變數選擇模型，支援 strict JSON schema 與 JSON object fallback；原本 B 的自訂契約 adapter 繼續保留。
 - 模型 system prompt 明確隔離玩家指令、未授權秘密、缺失核心設定與尚未核准的客觀結果。
 - 模型可生成目標 NPC 的主觀台詞與事件提案；後端固定說話者身分，客觀效果仍只用核准事件的確定性系統敘事。
-- 新增 `/api/capabilities`，前端會明確顯示「開發替身」或「AI 動態」。
+- 新增 `/api/capabilities`，前端會明確顯示「規則動態」或「AI 動態」。
 - B 的完整 HTTP 契約記錄於 `docs/MODEL_GATEWAY_CONTRACT.md`。
 
 ## M3 目前驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：70 passed（目前全套；含後續 M4、語音與 OpenAI 相容 adapter 回歸測試）。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：77 passed（目前全套；含 M4、語音、OpenAI 相容 adapter 與規則動態回歸測試）。
 - 格式錯誤可有限修正，timeout 達上限後停止，永久設定錯誤不重試。
 - fake Gateway 的動態台詞已通過完整 API 流程，玩家端不再顯示開發替身。
 - 外部模型失敗的 503、Retry-After、狀態不推進均有自動化測試。
@@ -101,6 +103,24 @@
 - OpenAI 相容 `/v1/chat/completions` request、模型名稱、Bearer token、回應解包、strict schema、JSON fallback、拒絕、截斷及 content filter 均有自動化測試。
 - `npm run build`：Next.js、TypeScript 與全部既有 routes 通過 production build。
 - 尚未使用 B 的真實服務做延遲、角色一致性、RAG 召回與多回合品質驗收，因此 M3 不記為 100%。
+
+## M3a 規則動態故事
+
+- 未設定外部模型時，預設使用 `RuleBasedStoryPlanner`，不再顯示固定的開發替身句子。
+- 招呼會依初次／再次互動及已保存記憶改變。
+- 詢問任務時可提出一項只引用目前公開場景的觀察任務；同一 open quest 不會重複建立。
+- 玩家明確承諾時可建立有來源的 Commitment；提及交付物品時會先核對實際背包。
+- 詢問先前對話時只承接該 NPC 的玩家互動記憶，不把 observed-event 私人內容直接洩漏。
+- 規則只產生 `StoryProposal`；任務、承諾與物品仍通過既有 resolver，與回合、事件及記憶同交易保存。
+- 前端 badge 顯示「規則動態」；只有設定並使用外部 ModelGateway 時才顯示「AI 動態」。
+
+## M3a 驗收
+
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：77 passed。
+- 單元測試涵蓋回合化招呼、記憶承接、秘密隔離、任務去重、承諾及物品持有權提案。
+- API 端到端測試證明規則任務會保存，下一回合承接且不重複新增。
+- Live HTTP 驗收：`/api/capabilities` 回報 `rule_based`，前端 `/` 與 `/experiments/babylon` 均回 200；第一回合建立任務、第二回合承接，任務總數維持 1。
+- 瀏覽器控制主機目前不可用，未完成自動化畫面點擊；production build 與實際服務 HTTP 已通過。
 
 ## M4 已完成
 
@@ -136,8 +156,9 @@
 
 - M1 的 `minglin` 起始場景是為沿用現有可玩前端的暫時整合值，不視為最終世界觀定案。
 - 真實 AI、RAG 與外部 STT/TTS 尚未接入；NPC 互動／目擊記憶已由後端依核准結果自動寫入。
-- 真實 ModelGateway 端點、模型名稱與認證尚未提供；目前可直接接 B 的自訂契約或 OpenAI 相容服務，但預設仍為開發替身。
-- 預設 `DevelopmentStoryPlanner` 不產生事件；要看到真正動態內容仍需接入 B 的 ModelGateway／RAG。
+- 真實 ModelGateway 端點、模型名稱與認證尚未提供；目前可直接接 B 的自訂契約或 OpenAI 相容服務，預設則使用規則動態。
+- 規則動態可承接狀態但不是 LLM 自由創作；角色語氣、未預寫情境與大範圍故事發展仍需真實 ModelGateway／RAG。
+- 目前畫面使用 repository 內的固定 PNG 與 Babylon.js 程式幾何；沒有圖片生成 API，現有素材的原始生成模型也沒有記錄。
 - 目前只有維達利亞的前端公開原型資料；私有角色設定、正式來源、初始知識與秘密解鎖條件仍待團隊提供。
 - 目前白名單為 `transfer_item`、`establish_commitment`、`offer_quest`；關係、線索、任務接受／完成、固定事件與結局效果仍需依 C 的正式介面加入。
 
@@ -150,5 +171,7 @@
 
 ## 下一步
 
-1. 團隊提供正式 provider、URL、模型名稱與認證方式，先完成無 RAG 的 M3 live 生成驗收；B 提供 RAG 後再驗收知識邊界、召回與角色品質案例。
-2. C 確認任務接受／完成、關係、固定事件與結局操作後再擴充白名單；不自行改寫現有規則語意。
+1. 使用者從 http://localhost:3200 實機點擊驗收「規則動態」badge、任務、承諾與記憶承接。
+2. 團隊提供正式 provider、URL、模型名稱與認證方式，完成無 RAG 的 M3 live AI 驗收；B 提供 RAG 後再驗收知識邊界、召回與角色品質案例。
+3. A 決定圖片生成用途、模型、成本與資產審核流程後，再建立獨立 ImageGateway；不與每回合文字狀態交易混在一起。
+4. C 確認任務接受／完成、關係、固定事件與結局操作後再擴充白名單；不自行改寫現有規則語意。

@@ -28,7 +28,7 @@ type GameStateSummary = {
 };
 
 type Capabilities = {
-  generation_mode: "development_stub" | "external_model";
+  generation_mode: "rule_based" | "external_model";
   dynamic_dialogue: boolean;
 };
 
@@ -128,7 +128,7 @@ export default function Home() {
   const [restartConfirm, setRestartConfirm] = useState(false);
   const [turnNumber, setTurnNumber] = useState(0);
   const [stateVersion, setStateVersion] = useState(1);
-  const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("development_stub");
+  const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
   const [questLabel, setQuestLabel] = useState("與維達利亞交談");
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
@@ -417,7 +417,7 @@ export default function Home() {
           </div>
           <div className="dialogue-main">
             <div className="dialogue-heading">
-              <div><h1>{profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 動態" : "開發替身"}</span></div>
+              <div><h1>{profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 動態" : "規則動態"}</span></div>
               {dialogueOpen && <button type="button" className="close-dialogue" onClick={() => setDialogueOpen(false)} aria-label="關閉對話">✕</button>}
             </div>
 

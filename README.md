@@ -1,8 +1,8 @@
 # RAG NPC Game
 
-生成式 NPC 遊戲的 A／D 整合專案。現階段 M3 整合基礎已串接既有 Next.js＋Phaser 前端、FastAPI 與 SQLite：可以建立持久化 Session、送出文字，並依設定顯示開發替身或外部 Gateway 的動態 NPC 台詞；玩家 API、NPC 私有生成背景及事件核准流程已分開。
+生成式 NPC 遊戲的 A／D 整合專案。現階段已串接既有 Next.js＋Phaser 前端、FastAPI 與 SQLite：可以建立持久化 Session、送出文字，並依設定使用後端規則動態或外部 ModelGateway 產生 NPC 台詞與事件提案；玩家 API、NPC 私有生成背景及事件核准流程已分開。
 
-> B 的真實模型／RAG 與外部 STT／TTS 服務尚未接入。開發替身不會修改背包、角色設定或遊戲規則數值。
+> 預設的「規則動態」不需要模型，能依玩家輸入、回合、背包、NPC 記憶、承諾與任務產生不同回覆。B 的真實模型／RAG 與外部 STT／TTS 服務仍尚未接入；前端會誠實區分「規則動態」與「AI 動態」。
 
 瀏覽器版語音互動已提供：支援 Web Speech API 時可用麥克風把中文語音轉成可確認的文字，並用瀏覽器 TTS 播放 NPC 最近回覆。這不是外部 STT／TTS 服務；實際可用性取決於瀏覽器、localhost／HTTPS 與麥克風權限，文字輸入永遠保留。
 
@@ -40,7 +40,9 @@ export MODEL_GATEWAY_API_KEY='<本機金鑰>'
 ./.venv/bin/uvicorn backend.main:app --reload --port 8300
 ```
 
-程式不會替團隊選定模型，也不會自動讀取或提交本機 `.env`。未設定 URL 時仍使用「開發替身」；完整格式、JSON schema fallback 與 B 需確認的項目見 [`docs/MODEL_GATEWAY_CONTRACT.md`](docs/MODEL_GATEWAY_CONTRACT.md)。
+程式不會替團隊選定模型，也不會自動讀取或提交本機 `.env`。未設定 URL 時使用可直接遊玩的「規則動態」；完整格式、JSON schema fallback 與 B 需確認的項目見 [`docs/MODEL_GATEWAY_CONTRACT.md`](docs/MODEL_GATEWAY_CONTRACT.md)。
+
+規則動態目前能處理招呼、場景觀察、任務詢問、明確承諾、物品交付與先前對話回想。任務、承諾及物品移轉仍需通過後端白名單驗證，並與完整回合同一交易保存。它是可驗收的程序式故事系統，不宣稱具備 LLM 的自由創作能力。
 
 前端：
 
@@ -62,7 +64,7 @@ npm run dev
 ## 目前 API
 
 - `GET /api/characters/{npc_id}`：玩家可見的公開角色資料
-- `GET /api/capabilities`：目前使用開發替身或外部模型，以及已開放的操作類型
+- `GET /api/capabilities`：目前使用規則動態或外部模型，以及已開放的操作類型
 - `POST /api/game/start`：建立或恢復持久化 Session
 - `POST /api/game/turn`：提交 `action_id`、訊息與預期狀態版本
 - `GET /api/game/{session_id}/state`：取得玩家可見狀態
@@ -75,6 +77,12 @@ npm run dev
 未受信任的 `StoryProposal` 會先通過固定操作白名單。目前第一個可執行操作是 `transfer_item`：後端確認行動者、接收者及實際持有權後才更新狀態。不存在的物品、角色或冒用他人物品會整件拒絕；核准／拒絕紀錄只存後端，玩家只會看見已成立且可公開的事件與最終敘事。
 
 目前白名單也支援 `establish_commitment` 與 `offer_quest`。承諾、任務、玩家發言記憶與目擊事件會和回合同一交易保存，下一回合放入相關 NPC 的授權 context。生成任務只能先成為待接受提議，不能由模型自行標記為已接受或完成。
+
+## 畫面與圖片素材
+
+目前沒有執行中的圖片生成模型。Phaser 2D 主遊戲載入 `frontend/public/game/forest-council.png`、玩家方向圖及 NPC 透明圖；Babylon.js 3D 原型則由程式建立幾何、燈光與相機，再貼上 repository 內的固定 PNG 材質。現有 Git 歷史只記錄素材由前端原型 commit 匯入，沒有保存原始生圖模型與 prompt，因此不能確認這批圖最初由哪個模型製作。
+
+未來若加入場景生圖，應由 A 的前端資產流程呼叫獨立 ImageGateway，先生成並審核版本化素材，再把核准的 asset ID 放入遊戲狀態；不應讓每回合文字模型直接覆寫目前場景圖片。
 
 ## 驗證
 

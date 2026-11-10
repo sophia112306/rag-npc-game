@@ -48,13 +48,13 @@ def test_public_character_profile_is_available(client: TestClient) -> None:
     assert "secrets" not in response.json()
 
 
-def test_default_capabilities_identify_development_stub(client: TestClient) -> None:
+def test_default_capabilities_identify_rule_based_generation(client: TestClient) -> None:
     response = client.get("/api/capabilities")
 
     assert response.status_code == 200
     assert response.json() == {
-        "generation_mode": "development_stub",
-        "dynamic_dialogue": False,
+        "generation_mode": "rule_based",
+        "dynamic_dialogue": True,
         "rag_integration": "pending",
         "voice_integration": "pending",
         "allowed_operations": ["transfer_item", "establish_commitment", "offer_quest"],
@@ -84,7 +84,8 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert "truth_level" not in turn["state"]
     assert "flags" not in turn["state"]
     assert turn["parsed_action"]["action_type"] == "dialogue"
-    assert "開發替身" in turn["story"]["dialogue"][0]["text"]
+    assert "你好，旅人" in turn["story"]["dialogue"][0]["text"]
+    assert "開發替身" not in turn["story"]["dialogue"][0]["text"]
     assert turn["story"]["established_events"] == []
     assert "proposal_decisions" not in turn
 
@@ -93,6 +94,40 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert state_response.json()["state_version"] == 2
     assert "truth_level" not in state_response.json()
     assert "flags" not in state_response.json()
+
+
+def test_default_rule_planner_offers_and_remembers_dynamic_quest(client: TestClient) -> None:
+    state = start_session(client, "rule-quest-session")
+    first = client.post(
+        "/api/game/turn",
+        json={
+            **action_payload(state["session_id"]),
+            "message": "有什麼需要我幫忙的任務？",
+        },
+    )
+    quests = client.get(f"/api/game/{state['session_id']}/quests")
+    second = client.post(
+        "/api/game/turn",
+        json={
+            **action_payload(state["session_id"], expected_state_version=2),
+            "message": "請再告訴我任務內容",
+        },
+    )
+    quests_after_second_turn = client.get(f"/api/game/{state['session_id']}/quests")
+
+    assert first.status_code == 200
+    system_line = first.json()["story"]["dialogue"][1]
+    assert system_line["speaker_name"] == "系統"
+    assert "維達利亞" in system_line["text"]
+    assert "玩家" in system_line["text"]
+    assert state["session_id"] not in system_line["text"]
+    assert quests.status_code == 200
+    assert len(quests.json()) == 1
+    assert quests.json()[0]["status"] == "offered"
+    assert "鳴霖・平衡議會" in quests.json()[0]["title"]
+    assert second.status_code == 200
+    assert quests.json()[0]["title"] in second.json()["story"]["dialogue"][0]["text"]
+    assert len(quests_after_second_turn.json()) == 1
 
 
 def test_repeated_action_id_does_not_advance_the_turn_twice(client: TestClient) -> None:

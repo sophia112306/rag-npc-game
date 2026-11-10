@@ -87,46 +87,17 @@ class StoryPlanner(Protocol):
     ) -> StoryProposal: ...
 
 
-class DevelopmentStoryPlanner:
-    """Explicit non-AI planner used until B's ModelGateway is available."""
-
-    async def propose(
-        self,
-        action: PlayerAction,
-        parsed_action: ParsedAction,
-        state: GameState,
-    ) -> StoryProposal:
-        return StoryProposal(
-            session_id=action.session_id,
-            turn_number=state.turn_count + 1,
-            intent_summary=f"Development acknowledgement for {parsed_action.intent}",
-            proposed_dialogue=[
-                DialogueLine(
-                    speaker_type=SpeakerType.NPC,
-                    speaker_id=action.target_npc_id or "vidalia",
-                    speaker_name="維達利亞",
-                    text=(
-                        f"（開發替身）我收到你的話：「{action.message}」。"
-                        "事件只會在後端規則核准後成立；真實模型與 RAG 尚未接入。"
-                    ),
-                    emotion="neutral",
-                )
-            ],
-            event_proposals=[],
-        )
-
-
 class GameOrchestrator:
     """Coordinate input parsing, story generation, and state updates."""
 
     def __init__(
         self,
         repository: GameRepository,
-        story_planner: StoryPlanner | None = None,
+        story_planner: StoryPlanner,
         proposal_resolver: ProposalResolver | None = None,
     ) -> None:
         self._repository = repository
-        self._story_planner = story_planner or DevelopmentStoryPlanner()
+        self._story_planner = story_planner
         self._proposal_resolver = proposal_resolver or ProposalResolver()
 
     async def start_game(self, session_id: str) -> GameState:

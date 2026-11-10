@@ -4,7 +4,7 @@
 
 ## 啟用方式
 
-未設定 `MODEL_GATEWAY_URL` 時，後端使用明確標示的 `DevelopmentStoryPlanner`，不會呼叫外部服務。設定後，`MODEL_GATEWAY_PROVIDER` 可選兩種接法：
+未設定 `MODEL_GATEWAY_URL` 時，後端使用明確標示的 `RuleBasedStoryPlanner`，依玩家輸入及已保存狀態產生程序式動態回覆，不會呼叫外部服務。設定後，`MODEL_GATEWAY_PROVIDER` 可選兩種接法：
 
 - `contract_http`：將本文件的 `ModelTurnRequest` 直接 POST 給 B 的自訂服務。
 - `openai_compatible`：呼叫標準 Chat Completions 介面，可接雲端 OpenAI 或校內 vLLM 類相容服務。
@@ -37,7 +37,7 @@ MODEL_GATEWAY_MAX_ATTEMPTS=2
 
 `json_schema` 會傳送 `strict: true` 的回應 schema，並依該回合的 operation 白名單縮小可生成的操作。若實際部署模型只支援 JSON mode，可改成 `MODEL_GATEWAY_RESPONSE_FORMAT=json_object`；這只保證輸出為 JSON，後端的 Pydantic、操作白名單及規則驗證仍然保留。OpenAI 官方也建議在模型支援時優先使用 Structured Outputs，而非只使用 JSON mode。[OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=chat)
 
-目前 repository 沒有保存真實 URL、模型名稱或 API key，所以僅代表 adapter 已完成；未設定上述環境變數時，畫面仍會顯示「開發替身」。
+目前 repository 沒有保存真實 URL、模型名稱或 API key，所以僅代表 adapter 已完成；未設定上述環境變數時，畫面會顯示「規則動態」，不會誤標為 AI。
 
 ## 自訂契約 Request
 

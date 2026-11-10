@@ -11,7 +11,7 @@ from backend.schemas.story import OperationType
 class CapabilitiesResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    generation_mode: Literal["development_stub", "external_model"]
+    generation_mode: Literal["rule_based", "external_model"]
     dynamic_dialogue: bool
     rag_integration: Literal["pending"] = "pending"
     voice_integration: Literal["pending"] = "pending"
@@ -30,7 +30,7 @@ def get_capabilities(request: Request) -> CapabilitiesResponse:
     generation_mode = request.app.state.generation_mode
     return CapabilitiesResponse(
         generation_mode=generation_mode,
-        dynamic_dialogue=generation_mode == "external_model",
+        dynamic_dialogue=True,
         allowed_operations=[
             OperationType.TRANSFER_ITEM,
             OperationType.ESTABLISH_COMMITMENT,
