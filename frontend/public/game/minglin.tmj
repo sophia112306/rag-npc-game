@@ -1,0 +1,70 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.12.2",
+  "orientation": "isometric",
+  "renderorder": "right-down",
+  "width": 13,
+  "height": 15,
+  "tilewidth": 128,
+  "tileheight": 64,
+  "infinite": false,
+  "nextlayerid": 4,
+  "nextobjectid": 4,
+  "layers": [
+    {
+      "id": 1,
+      "name": "Background",
+      "type": "imagelayer",
+      "image": "forest-council.png",
+      "x": 0,
+      "y": 0,
+      "opacity": 1,
+      "visible": true
+    },
+    {
+      "id": 2,
+      "name": "Walkable",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {
+          "id": 1,
+          "name": "forest_path_and_dais",
+          "type": "walkable",
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "polygon": [
+            {"x": 570, "y": 941},
+            {"x": 915, "y": 941},
+            {"x": 1520, "y": 650},
+            {"x": 1550, "y": 390},
+            {"x": 1410, "y": 145},
+            {"x": 1040, "y": 125},
+            {"x": 725, "y": 320},
+            {"x": 640, "y": 495}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Actors",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {"id": 2, "name": "player_spawn", "type": "spawn", "point": true, "x": 835, "y": 535, "width": 0, "height": 0, "rotation": 0, "visible": true},
+        {"id": 3, "name": "vidalia", "type": "npc", "point": true, "x": 1055, "y": 375, "width": 0, "height": 0, "rotation": 0, "visible": true}
+      ]
+    }
+  ],
+  "tilesets": []
+}
