@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
+  ApiRequestError,
   GAME_SESSION_STORAGE_KEY,
   requestJson,
   type GameStateSummary,
@@ -49,6 +50,24 @@ export default function TrialExperience() {
   const currentScene = gameState?.current_scene ?? previewScene;
   const title = currentScene.display_name;
 
+  function showBackdrop(scene: PlayerScene, context: "initial" | "turn" = "turn") {
+    const load = driverRef.current?.setBackdrop?.(scene.horizon_url);
+    if (!load) return;
+    void load.catch(() => {
+      const message = context === "initial"
+        ? `無法載入${scene.display_name}遠景；目前保留預設場景。`
+        : `已抵達${scene.display_name}，但遠景載入失敗；可再試一次或重新整理。`;
+      setTurnError(message);
+      setNotice(message);
+    });
+  }
+
+  function applyGameState(state: GameStateSummary, context: "initial" | "turn" = "turn") {
+    sceneRef.current = state.current_scene;
+    setGameState(state);
+    showBackdrop(state.current_scene, context);
+  }
+
   useEffect(() => {
     const id = window.localStorage.getItem(GAME_SESSION_STORAGE_KEY) ?? window.crypto.randomUUID();
     window.localStorage.setItem(GAME_SESSION_STORAGE_KEY, id);
@@ -64,10 +83,8 @@ export default function TrialExperience() {
         });
         const initialChoices = await requestJson<PlayerChoice[]>(`/api/game/${id}/choices`);
         if (cancelled) return;
-        sceneRef.current = state.current_scene;
-        setGameState(state);
+        applyGameState(state, "initial");
         setChoices(initialChoices);
-        driverRef.current?.setBackdrop?.(state.current_scene.horizon_url);
       } catch (cause) {
         if (!cancelled) setTurnError(cause instanceof Error ? cause.message : "無法連線到遊戲服務。");
       }
@@ -80,6 +97,7 @@ export default function TrialExperience() {
     if (!sessionId || !gameState || turnBusy) return;
     setTurnBusy(true);
     setTurnError("");
+    setNotice(`正在處理「${choice.label}」…`);
     try {
       const turn = await requestJson<GameTurnResponse>("/api/game/turn", {
         method: "POST",
@@ -95,17 +113,38 @@ export default function TrialExperience() {
           expected_state_version: gameState.state_version,
         }),
       });
-      const nextChoices = await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`);
-      sceneRef.current = turn.state.current_scene;
-      setGameState(turn.state);
-      setChoices(nextChoices);
-      driverRef.current?.setBackdrop?.(turn.state.current_scene.horizon_url);
+      applyGameState(turn.state);
       const responseText = turn.story.dialogue.map((line) => line.text).join(" ");
       if (responseText) setStoryLine(`「${responseText}」`);
       setNotice(`第 ${turn.turn_number} 回合完成 · 目前位於${turn.state.current_scene.display_name}`);
       if (choice.action_mode === "movement") controllerRef.current?.exit();
+      try {
+        const nextChoices = await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`);
+        setChoices(nextChoices);
+      } catch {
+        setTurnError("行動已完成，但選項暫時無法更新；可重新接近維達利亞或重新整理。");
+        setNotice(`第 ${turn.turn_number} 回合已完成 · 選項同步暫時失敗`);
+      }
     } catch (cause) {
-      setTurnError(cause instanceof Error ? cause.message : "行動送出失敗。");
+      if (cause instanceof ApiRequestError && cause.code === "STATE_VERSION_CONFLICT") {
+        try {
+          const [latest, latestChoices] = await Promise.all([
+            requestJson<GameStateSummary>(`/api/game/${sessionId}/state`),
+            requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`),
+          ]);
+          applyGameState(latest);
+          setChoices(latestChoices);
+          setTurnError("偵測到另一頁更新了進度，已同步最新狀態；請再點一次選項。");
+          setNotice(`已同步第 ${latest.turn_count} 回合 · 目前位於${latest.current_scene.display_name}`);
+        } catch {
+          setTurnError("遊戲進度版本衝突，且無法重新同步；請重新整理後再試。");
+          setNotice("進度同步失敗，請重新整理頁面。");
+        }
+      } else {
+        const message = cause instanceof Error ? cause.message : "行動送出失敗。";
+        setTurnError(message);
+        setNotice(`行動未完成：${message}`);
+      }
     } finally {
       setTurnBusy(false);
     }
@@ -302,7 +341,12 @@ export default function TrialExperience() {
         if (cancelled) { loaded.dispose(); return; }
         driver = loaded;
         driverRef.current = loaded;
-        loaded.setBackdrop?.(sceneRef.current.horizon_url);
+        const backdrop = loaded.setBackdrop?.(sceneRef.current.horizon_url);
+        if (backdrop) void backdrop.catch(() => {
+          const message = `無法載入${sceneRef.current.display_name}遠景；目前保留預設場景。`;
+          setTurnError(message);
+          setNotice(message);
+        });
         driver.resize();
         driver.setView(player.x, player.z, 0, -0.13);
         setReady(true);

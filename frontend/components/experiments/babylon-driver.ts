@@ -85,7 +85,10 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   const backgroundTexture = new Texture("/game/forest-eye-backdrop.png", scene);
   const backgroundMat = material("painted forest horizon", "#ffffff");
   let activeBackgroundTexture = backgroundTexture;
-  let requestedBackgroundUrl = "/game/forest-eye-backdrop.png";
+  let activeBackgroundUrl = "/game/forest-eye-backdrop.png";
+  let backdropRequest = 0;
+  let backdropLoad: { request: number; url: string; promise: Promise<void> } | null = null;
+  let disposed = false;
   backgroundMat.diffuseTexture = activeBackgroundTexture;
   backgroundMat.emissiveColor = new Color3(0.4, 0.42, 0.4);
   backgroundMat.disableLighting = true;
@@ -248,18 +251,43 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   const started = performance.now();
   return {
     setBackdrop(url) {
-      if (requestedBackgroundUrl === url) return;
-      requestedBackgroundUrl = url;
-      const nextTexture = new Texture(url, scene, false, false, Texture.TRILINEAR_SAMPLINGMODE, () => {
-        if (requestedBackgroundUrl !== url) {
-          nextTexture.dispose();
-          return;
+      if (activeBackgroundUrl === url) {
+        if (backdropLoad && backdropLoad.url !== url) {
+          backdropRequest += 1;
+          backdropLoad = null;
         }
-        const previousTexture = activeBackgroundTexture;
-        activeBackgroundTexture = nextTexture;
-        backgroundMat.diffuseTexture = nextTexture;
-        previousTexture.dispose();
+        return Promise.resolve();
+      }
+      if (backdropLoad?.url === url) return backdropLoad.promise;
+
+      const request = ++backdropRequest;
+      let nextTexture: Texture;
+      const promise = new Promise<void>((resolve, reject) => {
+        nextTexture = new Texture(url, scene, false, false, Texture.TRILINEAR_SAMPLINGMODE, () => {
+          if (disposed || request !== backdropRequest) {
+            nextTexture.dispose();
+            resolve();
+            return;
+          }
+          const previousTexture = activeBackgroundTexture;
+          activeBackgroundTexture = nextTexture;
+          activeBackgroundUrl = url;
+          backgroundMat.diffuseTexture = nextTexture;
+          backdropLoad = null;
+          previousTexture.dispose();
+          resolve();
+        }, (message, exception) => {
+          nextTexture.dispose();
+          if (disposed || request !== backdropRequest) {
+            resolve();
+            return;
+          }
+          backdropLoad = null;
+          reject(exception instanceof Error ? exception : new Error(message || `Unable to load backdrop: ${url}`));
+        });
       });
+      backdropLoad = { request, url, promise };
+      return promise;
     },
     setTalking(talking) {
       npcTalking = talking;
@@ -290,6 +318,9 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       engine.resize();
     },
     dispose() {
+      disposed = true;
+      backdropRequest += 1;
+      backdropLoad = null;
       scene.dispose();
       engine.dispose();
     },
