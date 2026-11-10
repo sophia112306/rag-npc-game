@@ -2,6 +2,7 @@
 
 from enum import Enum
 from typing import Any
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -66,6 +67,26 @@ class KnowledgeItem(BaseModel):
     provenance: dict[str, Any]
 
 
+class KnowledgeRecordInput(BaseModel):
+    """Validated write contract for one NPC-scoped knowledge item."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    knowledge_id: UUID = Field(default_factory=uuid4)
+    session_id: str = Field(..., min_length=1, max_length=100)
+    knower_npc_id: str = Field(..., min_length=1, max_length=100)
+    subject_key: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1)
+    epistemic_status: str = Field(..., min_length=1, max_length=30)
+    source_kind: str = Field(..., min_length=1, max_length=30)
+    source_id: str | None = Field(default=None, max_length=100)
+    acquired_turn: int = Field(..., ge=0)
+    available_from_turn: int = Field(..., ge=0)
+    is_unlocked: bool = False
+    disclosure_scope: DisclosureScope = DisclosureScope.AUTHOR_ONLY
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+
 class MemoryItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -77,6 +98,25 @@ class MemoryItem(BaseModel):
     occurred_turn: int
     importance: int
     provenance: dict[str, Any]
+
+
+class MemoryRecordInput(BaseModel):
+    """Validated write contract for one sourced episodic NPC memory."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    memory_id: UUID = Field(default_factory=uuid4)
+    session_id: str = Field(..., min_length=1, max_length=100)
+    npc_id: str = Field(..., min_length=1, max_length=100)
+    content: str = Field(..., min_length=1)
+    memory_type: str = Field(..., min_length=1, max_length=30)
+    source_event_id: UUID | None = None
+    source_action_id: UUID | None = None
+    occurred_turn: int = Field(..., ge=0)
+    importance: int = Field(default=0, ge=0, le=100)
+    is_active: bool = True
+    is_private: bool = True
+    provenance: dict[str, Any] = Field(default_factory=dict)
 
 
 class NPCGenerationContext(BaseModel):

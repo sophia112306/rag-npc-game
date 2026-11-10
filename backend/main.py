@@ -7,6 +7,8 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.content.characters import CHARACTER_DEFINITIONS
+from backend.content.context_repository import NPCContextRepository
 from backend.database import create_async_session_factory, create_database_engine, upgrade_database
 from backend.database.session import get_database_url
 from backend.database.repository import SqlAlchemyGameRepository
@@ -25,9 +27,14 @@ def create_app(database_url: str | None = None) -> FastAPI:
         resolved_database_url = database_url or get_database_url()
         await upgrade_database(resolved_database_url)
         engine = create_database_engine(resolved_database_url)
-        repository = SqlAlchemyGameRepository(create_async_session_factory(engine))
+        session_factory = create_async_session_factory(engine)
+        repository = SqlAlchemyGameRepository(session_factory)
+        context_repository = NPCContextRepository(session_factory)
+        for definition in CHARACTER_DEFINITIONS.values():
+            await context_repository.ensure_character_definition(definition)
         application.state.database_engine = engine
         application.state.game_orchestrator = GameOrchestrator(repository)
+        application.state.npc_context_repository = context_repository
         try:
             yield
         finally:
