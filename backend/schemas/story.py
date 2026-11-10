@@ -31,6 +31,7 @@ class OperationType(str, Enum):
 
     TRANSFER_ITEM = "transfer_item"
     ESTABLISH_COMMITMENT = "establish_commitment"
+    OFFER_QUEST = "offer_quest"
 
 
 class TransferItemOperation(BaseModel):
@@ -58,8 +59,21 @@ class EstablishCommitmentOperation(BaseModel):
     due_in_turns: int | None = Field(default=None, ge=1, le=20)
 
 
+class OfferQuestOperation(BaseModel):
+    """Offer, but do not auto-accept or complete, a dynamic quest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation_type: Literal[OperationType.OFFER_QUEST] = OperationType.OFFER_QUEST
+    title: str = Field(..., min_length=1, max_length=200)
+    summary: str = Field(..., min_length=1, max_length=1_000)
+    giver_id: str = Field(..., min_length=1, max_length=100)
+    recipient_id: str = Field(..., min_length=1, max_length=100)
+    due_in_turns: int | None = Field(default=None, ge=1, le=30)
+
+
 ProposedOperation = Annotated[
-    TransferItemOperation | EstablishCommitmentOperation,
+    TransferItemOperation | EstablishCommitmentOperation | OfferQuestOperation,
     Field(discriminator="operation_type"),
 ]
 

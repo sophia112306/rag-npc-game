@@ -20,6 +20,7 @@ class GenerationBudget(BaseModel):
     max_event_proposals: int = Field(default=1, ge=0, le=1)
     max_active_goals: int = Field(default=2, ge=0, le=2)
     max_active_commitments: int = Field(default=3, ge=0, le=3)
+    max_active_quests: int = Field(default=2, ge=0, le=2)
 
 
 class ModelTurnRequest(BaseModel):

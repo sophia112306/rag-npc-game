@@ -72,6 +72,7 @@ async def test_http_gateway_posts_contract_json_with_optional_bearer_token() -> 
         "max_event_proposals": 1,
         "max_active_goals": 2,
         "max_active_commitments": 3,
+        "max_active_quests": 2,
     }
     assert "truth_level" not in captured["payload"]
 

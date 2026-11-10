@@ -1,6 +1,6 @@
 # A／D 整合進度
 
-整體里程碑：`████████░░ 80%`（M0～M2c 完成；M3 程式整合完成、真實服務待驗收；M4 待辦）
+整體里程碑：`█████████░ 90%`（M0～M2c、M4 完成；M3 程式整合完成、真實服務待驗收）
 
 | 階段 | 狀態 | 可驗收成果 |
 | --- | --- | --- |
@@ -10,7 +10,7 @@
 | M2b：內容與知識隔離 | `██████████ 100%` | 世界／角色內容結構、NPC 記憶來源、授權後生成背景與 PlayerViewState 已完成 |
 | M2c：核准事件介面 | `██████████ 100%` | 初始操作白名單、事件原子核准、私有決策稽核與同交易保存已完成 |
 | M3：真正生成 | `█████████░ 90%` | Gateway、動態台詞、安全回復已完成；待 B 的真實端點、RAG 與角色品質驗收 |
-| M4：世界持續發展 | `░░░░░░░░░░ 0%` | 待接 NPC 目標、承諾、回合時鐘與動態任務 |
+| M4：世界持續發展 | `██████████ 100%` | 有來源的 NPC 目標、承諾、回合時鐘、記憶承接與動態任務已完成 |
 
 ## M1 已完成
 
@@ -98,6 +98,26 @@
 - `npm run build`：Next.js、TypeScript 與全部既有 routes 通過 production build。
 - 尚未使用 B 的真實服務做延遲、角色一致性、RAG 召回與多回合品質驗收，因此 M3 不記為 100%。
 
+## M4 已完成
+
+- 新增有來源的 NPCGoal、Commitment 與 Quest 持久化結構及 Alembic migration。
+- 回合時鐘只選取目標 NPC 最多 2 個到期目標、3 個未完成承諾及 2 個 open quests，避免無限制擴張 prompt。
+- 新增 `establish_commitment` 白名單操作；參與者、行動者、對象及期限驗證通過後，才與來源 GameEvent 同交易保存。
+- 新增 `offer_quest` 白名單操作；只能建立 `offered` 任務，模型不能替玩家自動接受、完成或失敗。
+- 玩家發言保存為目標 NPC 的 interaction memory；成立事件保存為目擊 NPC 的 observed-event memory，均附 action／event 來源。
+- 下一回合的 ModelGateway context 會取得相關記憶、未完成承諾、到期目標及動態任務。
+- 每回合最多一個事件提案；Gateway 嘗試上限為 1～3 次，預設 2 次。
+- 新增玩家安全的 quests API，前端任務列會顯示最新任務提議或目前任務。
+
+## M4 驗收
+
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：49 passed。
+- 端到端兩回合測試證明第一回合的承諾、玩家原話、目擊記憶與任務會進入第二回合的目標 NPC context。
+- 同一 action 重送不會重複建立 Commitment、Quest 或 Memory；交易失敗時記憶也一起 rollback。
+- 任務由已登記 giver 提供給不同的已登記 recipient；玩家 API 只回傳 visibility=player 的 open quests。
+- Alembic `20261110_0005` upgrade／downgrade 與 app 啟動升級通過。
+- `npm run build`：Next.js、TypeScript 與全部既有 routes 通過 production build。
+
 ## 已知限制
 
 - M1 的 `minglin` 起始場景是為沿用現有可玩前端的暫時整合值，不視為最終世界觀定案。
@@ -105,7 +125,7 @@
 - 真實 ModelGateway 端點尚未提供；目前程式可接入，但預設仍為開發替身。
 - 預設 `DevelopmentStoryPlanner` 不產生事件；要看到真正動態內容仍需接入 B 的 ModelGateway／RAG。
 - 目前只有維達利亞的前端公開原型資料；私有角色設定、正式來源、初始知識與秘密解鎖條件仍待團隊提供。
-- 初始白名單只有 `transfer_item`；關係、承諾、線索、固定事件與結局效果需依 C 的正式介面逐項加入，不能由模型任意指定。
+- 目前白名單為 `transfer_item`、`establish_commitment`、`offer_quest`；關係、線索、任務接受／完成、固定事件與結局效果仍需依 C 的正式介面加入。
 
 ## 待 B／C 協調
 
@@ -117,4 +137,4 @@
 ## 下一步
 
 1. B 提供正式 URL、認證方式、模型／RAG 能力後完成 M3 live 驗收與角色品質案例。
-2. 等待 B 資料期間，開始 M4 的通用 NPC 目標、承諾、回合時鐘與每回合生成量限制；不自行補寫角色目標或故事真相。
+2. C 確認任務接受／完成、關係、固定事件與結局操作後再擴充白名單；不自行改寫現有規則語意。

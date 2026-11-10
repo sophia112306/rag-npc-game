@@ -5,6 +5,7 @@ from backend.schemas.game_state import GameState
 from backend.schemas.story import (
     EstablishCommitmentOperation,
     EventProposal,
+    OfferQuestOperation,
     ProposalStatus,
     StoryProposal,
     TransferItemOperation,
@@ -172,3 +173,29 @@ def test_commitment_with_unknown_participant_is_rejected() -> None:
 
     assert result.established_events == ()
     assert result.decisions[0].reason_code == "unknown_entity"
+
+
+def test_quest_offer_does_not_mark_quest_as_accepted_or_completed() -> None:
+    state = make_state()
+    event = EventProposal(
+        event_type="quest_offered",
+        description="Untrusted wording.",
+        actor_id="vidalia",
+        target_id="player",
+        operations=[
+            OfferQuestOperation(
+                title="測試委託",
+                summary="只建立待接受任務。",
+                giver_id="vidalia",
+                recipient_id="player",
+                due_in_turns=2,
+            )
+        ],
+    )
+
+    result = ProposalResolver().resolve(state, make_proposal(event))
+
+    operation = result.established_events[0].effect["operations"][0]
+    assert operation["operation_type"] == "offer_quest"
+    assert "status" not in operation
+    assert operation["due_turn"] == 3

@@ -254,3 +254,32 @@ class CommitmentRecord(Base):
     provenance_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class QuestRecord(Base):
+    """A sourced dynamic task offered to or accepted by one recipient."""
+
+    __tablename__ = "quests"
+    __table_args__ = (
+        Index("ix_quests_open", "session_id", "recipient_id", "status", "created_turn"),
+    )
+
+    quest_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        String(100),
+        ForeignKey("game_sessions.session_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    giver_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    recipient_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_turn: Mapped[int] = mapped_column(Integer, nullable=False)
+    due_turn: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False)
+    provenance_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

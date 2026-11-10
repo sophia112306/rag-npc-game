@@ -90,6 +90,7 @@ class GatewayStoryPlanner:
             allowed_operations=[
                 OperationType.TRANSFER_ITEM,
                 OperationType.ESTABLISH_COMMITMENT,
+                OperationType.OFFER_QUEST,
             ],
             generation_budget=GenerationBudget(max_model_calls=self._max_attempts),
         )

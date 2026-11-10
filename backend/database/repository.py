@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import PlayerAction
+from backend.schemas.progression import PlayerQuestView
 from backend.schemas.story import ProposalDecision
 
 from .models import (
@@ -24,6 +25,7 @@ from .models import (
     GameEventRecord,
     GameSessionRecord,
     MemoryRecord,
+    QuestRecord,
 )
 
 
@@ -125,6 +127,35 @@ class SqlAlchemyGameRepository:
         async with self._session_factory() as database:
             record = await self._find_action(database, session_id, action_id)
             return self._validated_cached_response(record, action_id, request_digest)
+
+    async def get_player_quests(self, session_id: str) -> list[PlayerQuestView]:
+        async with self._session_factory() as database:
+            session = await database.get(GameSessionRecord, session_id)
+            if session is None:
+                raise PersistentSessionNotFoundError(session_id)
+            player_id = GameState.model_validate(session.state_json).player.player_id
+            result = await database.execute(
+                select(QuestRecord)
+                .where(
+                    QuestRecord.session_id == session_id,
+                    QuestRecord.recipient_id == player_id,
+                    QuestRecord.visibility == "player",
+                    QuestRecord.status.in_(["offered", "active"]),
+                )
+                .order_by(QuestRecord.created_turn.desc())
+            )
+            return [
+                PlayerQuestView(
+                    quest_id=item.quest_id,
+                    title=item.title,
+                    summary=item.summary,
+                    giver_id=item.giver_id,
+                    status=item.status,
+                    created_turn=item.created_turn,
+                    due_turn=item.due_turn,
+                )
+                for item in result.scalars()
+            ]
 
     async def commit_turn(
         self,
@@ -278,29 +309,51 @@ class SqlAlchemyGameRepository:
                                 )
                             )
                         for operation in (event.effect or {}).get("operations", []):
-                            if operation.get("operation_type") != "establish_commitment":
-                                continue
-                            database.add(
-                                CommitmentRecord(
-                                    commitment_id=operation["commitment_id"],
-                                    session_id=action.session_id,
-                                    summary=operation["summary"],
-                                    promisor_id=operation["promisor_id"],
-                                    promisee_id=operation["promisee_id"],
-                                    status="active",
-                                    created_turn=operation["created_turn"],
-                                    due_turn=operation["due_turn"],
-                                    source_kind="established_event",
-                                    source_id=event_id,
-                                    visibility=operation["visibility"],
-                                    provenance_json={
-                                        "action_id": str(action.action_id),
-                                        "proposal_id": operation["proposal_id"],
-                                    },
-                                    created_at=completed_at,
-                                    updated_at=completed_at,
+                            if operation.get("operation_type") == "establish_commitment":
+                                database.add(
+                                    CommitmentRecord(
+                                        commitment_id=operation["commitment_id"],
+                                        session_id=action.session_id,
+                                        summary=operation["summary"],
+                                        promisor_id=operation["promisor_id"],
+                                        promisee_id=operation["promisee_id"],
+                                        status="active",
+                                        created_turn=operation["created_turn"],
+                                        due_turn=operation["due_turn"],
+                                        source_kind="established_event",
+                                        source_id=event_id,
+                                        visibility=operation["visibility"],
+                                        provenance_json={
+                                            "action_id": str(action.action_id),
+                                            "proposal_id": operation["proposal_id"],
+                                        },
+                                        created_at=completed_at,
+                                        updated_at=completed_at,
+                                    )
                                 )
-                            )
+                            elif operation.get("operation_type") == "offer_quest":
+                                database.add(
+                                    QuestRecord(
+                                        quest_id=operation["quest_id"],
+                                        session_id=action.session_id,
+                                        title=operation["title"],
+                                        summary=operation["summary"],
+                                        giver_id=operation["giver_id"],
+                                        recipient_id=operation["recipient_id"],
+                                        status="offered",
+                                        created_turn=operation["created_turn"],
+                                        due_turn=operation["due_turn"],
+                                        source_kind="established_event",
+                                        source_id=event_id,
+                                        visibility=operation["visibility"],
+                                        provenance_json={
+                                            "action_id": str(action.action_id),
+                                            "proposal_id": operation["proposal_id"],
+                                        },
+                                        created_at=completed_at,
+                                        updated_at=completed_at,
+                                    )
+                                )
                     await database.flush()
                 return response.model_copy(deep=True)
         except IntegrityError:

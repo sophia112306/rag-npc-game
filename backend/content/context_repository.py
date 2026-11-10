@@ -9,6 +9,7 @@ from backend.database.models import (
     KnowledgeRecord,
     MemoryRecord,
     NPCGoalRecord,
+    QuestRecord,
 )
 from backend.schemas.content import (
     CharacterDefinition,
@@ -25,6 +26,9 @@ from backend.schemas.progression import (
     GoalStatus,
     NPCGoalItem,
     NPCGoalRecordInput,
+    QuestItem,
+    QuestRecordInput,
+    QuestStatus,
 )
 
 
@@ -137,6 +141,27 @@ class NPCContextRepository:
             )
             await database.commit()
 
+    async def add_quest(self, item: QuestRecordInput) -> None:
+        async with self._session_factory() as database:
+            database.add(
+                QuestRecord(
+                    quest_id=str(item.quest_id),
+                    session_id=item.session_id,
+                    title=item.title,
+                    summary=item.summary,
+                    giver_id=item.giver_id,
+                    recipient_id=item.recipient_id,
+                    status=item.status.value,
+                    created_turn=item.created_turn,
+                    due_turn=item.due_turn,
+                    source_kind=item.source_kind.value,
+                    source_id=item.source_id,
+                    visibility=item.visibility,
+                    provenance_json=item.provenance,
+                )
+            )
+            await database.commit()
+
     async def get_generation_context(
         self,
         session_id: str,
@@ -197,8 +222,26 @@ class NPCContextRepository:
                 .order_by(CommitmentRecord.created_turn.desc())
                 .limit(3)
             )
+            quests_result = await database.execute(
+                select(QuestRecord)
+                .where(
+                    QuestRecord.session_id == session_id,
+                    QuestRecord.status.in_([
+                        QuestStatus.OFFERED.value,
+                        QuestStatus.ACTIVE.value,
+                    ]),
+                    QuestRecord.created_turn <= current_turn,
+                    or_(
+                        QuestRecord.giver_id == npc_id,
+                        QuestRecord.recipient_id == npc_id,
+                    ),
+                )
+                .order_by(QuestRecord.created_turn.desc())
+                .limit(2)
+            )
             goals = list(goals_result.scalars())
             commitments = list(commitments_result.scalars())
+            quests = list(quests_result.scalars())
 
         missing_data: list[str] = []
         if definition.completeness_status != "complete":
@@ -267,6 +310,23 @@ class NPCContextRepository:
                     provenance=item.provenance_json,
                 )
                 for item in commitments
+            ],
+            active_quests=[
+                QuestItem(
+                    quest_id=item.quest_id,
+                    title=item.title,
+                    summary=item.summary,
+                    giver_id=item.giver_id,
+                    recipient_id=item.recipient_id,
+                    status=item.status,
+                    created_turn=item.created_turn,
+                    due_turn=item.due_turn,
+                    source_kind=item.source_kind,
+                    source_id=item.source_id,
+                    visibility=item.visibility,
+                    provenance=item.provenance_json,
+                )
+                for item in quests
             ],
             missing_data=missing_data,
         )

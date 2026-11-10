@@ -32,6 +32,12 @@ type Capabilities = {
   dynamic_dialogue: boolean;
 };
 
+type PlayerQuest = {
+  quest_id: string;
+  title: string;
+  status: "offered" | "active" | "completed" | "failed" | "cancelled";
+};
+
 type ChatMessage = {
   id: string;
   speaker: string;
@@ -103,6 +109,7 @@ export default function Home() {
   const [turnNumber, setTurnNumber] = useState(0);
   const [stateVersion, setStateVersion] = useState(1);
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("development_stub");
+  const [questLabel, setQuestLabel] = useState("與維達利亞交談");
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
@@ -147,6 +154,8 @@ export default function Home() {
       ]);
       setProfile(character);
       setGenerationMode(capabilities.generation_mode);
+      const quests = await requestJson<PlayerQuest[]>(`/api/game/${id}/quests`);
+      setQuestLabel(quests[0] ? `${quests[0].status === "offered" ? "任務提議" : "目前任務"}：${quests[0].title}` : "與維達利亞交談");
       setTurnNumber(state.turn_count);
       setStateVersion(state.state_version);
       const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: character.name, text: character.greeting, kind: "npc" }];
@@ -208,6 +217,10 @@ export default function Home() {
       pendingActionRef.current = null;
       setTurnNumber(turn.turn_number);
       setStateVersion(turn.state.state_version);
+      try {
+        const quests = await requestJson<PlayerQuest[]>(`/api/game/${sessionId}/quests`);
+        setQuestLabel(quests[0] ? `${quests[0].status === "offered" ? "任務提議" : "目前任務"}：${quests[0].title}` : "與維達利亞交談");
+      } catch { /* The committed turn remains valid if the optional quest refresh fails. */ }
       const nextMessages: ChatMessage[] = [...messages, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }, ...turn.story.dialogue.map((line) => ({
         id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const,
       }))];
@@ -274,7 +287,7 @@ export default function Home() {
 
         <aside className="quest-banner" aria-label="目前任務">
           <span className="quest-emblem" aria-hidden="true">◇</span>
-          <span>與維達利亞交談</span>
+          <span>{questLabel}</span>
           <button type="button" className="help-button" onClick={() => setHelpOpen(true)} aria-label="查看操作說明" title="操作說明">?</button>
           <button type="button" className="restart-button" onClick={() => setRestartConfirm(true)} disabled={busy} aria-label="重新開始遊戲" title="重新開始">↺</button>
         </aside>

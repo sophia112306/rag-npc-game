@@ -18,6 +18,7 @@ from backend.schemas.game_state import GameState, PlayerState
 from backend.schemas.parsed_action import ActionType, ParsedAction
 from backend.schemas.player_action import ActionMode, PlayerAction
 from backend.schemas.player_view import project_player_view
+from backend.schemas.progression import PlayerQuestView
 from backend.schemas.story import (
     DialogueLine,
     ProposalDecision,
@@ -61,6 +62,8 @@ class GameRepository(Protocol):
         action_id: UUID,
         request_digest: str,
     ) -> GameTurnResponse | None: ...
+
+    async def get_player_quests(self, session_id: str) -> list[PlayerQuestView]: ...
 
     async def commit_turn(
         self,
@@ -196,6 +199,12 @@ class GameOrchestrator:
         if state is None:
             raise SessionNotFoundError(f"Session '{session_id}' does not exist")
         return state
+
+    async def get_player_quests(self, session_id: str) -> list[PlayerQuestView]:
+        try:
+            return await self._repository.get_player_quests(session_id)
+        except PersistentSessionNotFoundError as exc:
+            raise SessionNotFoundError(str(exc)) from exc
 
     @staticmethod
     def _parse_action(action: PlayerAction) -> ParsedAction:

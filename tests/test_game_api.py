@@ -57,7 +57,7 @@ def test_default_capabilities_identify_development_stub(client: TestClient) -> N
         "dynamic_dialogue": False,
         "rag_integration": "pending",
         "voice_integration": "pending",
-        "allowed_operations": ["transfer_item", "establish_commitment"],
+        "allowed_operations": ["transfer_item", "establish_commitment", "offer_quest"],
     }
 
 
@@ -308,3 +308,71 @@ def test_next_model_turn_receives_committed_memory_and_commitment(tmp_path) -> N
         "observed_event",
     }
     assert any("我答應帶回地圖碎片" in memory.content for memory in next_context.memories)
+
+
+def test_dynamic_quest_is_offered_persisted_and_carried_forward(tmp_path) -> None:
+    class QuestGateway:
+        def __init__(self) -> None:
+            self.requests = []
+
+        async def generate_story(self, request):
+            self.requests.append(request)
+            if request.turn_number == 1:
+                return {
+                    "intent_summary": "Offer a generated quest without auto-accepting it.",
+                    "npc_dialogue": [{"text": "你願意替我找回泉邊的地圖碎片嗎？"}],
+                    "event_proposals": [
+                        {
+                            "event_type": "quest_offered",
+                            "description": "Untrusted quest wording.",
+                            "actor_id": request.target_context.npc_id,
+                            "target_id": request.player_id,
+                            "operations": [
+                                {
+                                    "operation_type": "offer_quest",
+                                    "title": "尋回地圖碎片",
+                                    "summary": "調查泉邊並帶回已確認存在的地圖碎片。",
+                                    "giver_id": request.target_context.npc_id,
+                                    "recipient_id": request.player_id,
+                                    "due_in_turns": 5,
+                                }
+                            ],
+                            "witness_ids": [request.player_id, request.target_context.npc_id],
+                            "visible_to_player": True,
+                        }
+                    ],
+                }
+            return {
+                "intent_summary": "Remember the open quest.",
+                "npc_dialogue": [{"text": "那項委託仍等著你的答覆。"}],
+                "event_proposals": [],
+            }
+
+    gateway = QuestGateway()
+    application = create_app(
+        f"sqlite+aiosqlite:///{tmp_path / 'quest.db'}",
+        story_planner_factory=lambda context: GatewayStoryPlanner(gateway, context),
+    )
+    with TestClient(application) as quest_client:
+        state = start_session(quest_client, "quest-session")
+        first = quest_client.post(
+            "/api/game/turn",
+            json={**action_payload(state["session_id"]), "message": "有什麼需要幫忙？"},
+        )
+        quests = quest_client.get(f"/api/game/{state['session_id']}/quests")
+        second = quest_client.post(
+            "/api/game/turn",
+            json={
+                **action_payload(state["session_id"], expected_state_version=2),
+                "message": "讓我想想。",
+            },
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert quests.status_code == 200
+    assert quests.json()[0]["title"] == "尋回地圖碎片"
+    assert quests.json()[0]["status"] == "offered"
+    assert [item.title for item in gateway.requests[1].target_context.active_quests] == [
+        "尋回地圖碎片"
+    ]

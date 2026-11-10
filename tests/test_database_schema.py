@@ -16,6 +16,7 @@ EXPECTED_TABLES = {
     "memory_records",
     "npc_goals",
     "commitments",
+    "quests",
     "world_canon",
 }
 

@@ -46,14 +46,16 @@ API key 有值時以 `Authorization: Bearer <token>` 傳送。timeout 必須大�
     "memories": [],
     "active_goals": [],
     "active_commitments": [],
+    "active_quests": [],
     "missing_data": ["character_definition_incomplete"]
   },
-  "allowed_operations": ["transfer_item", "establish_commitment"],
+  "allowed_operations": ["transfer_item", "establish_commitment", "offer_quest"],
   "generation_budget": {
     "max_model_calls": 2,
     "max_event_proposals": 1,
     "max_active_goals": 2,
-    "max_active_commitments": 3
+    "max_active_commitments": 3,
+    "max_active_quests": 2
   }
 }
 ```
@@ -121,6 +123,21 @@ API key 有值時以 `Authorization: Bearer <token>` 傳送。timeout 必須大�
 ```
 
 核准後，Commitment、來源 GameEvent、NPC 目擊記憶、對話與狀態在同一交易保存；下一回合會出現在相關 NPC 的 `active_commitments` 或 `memories`。模型不能直接寫入這些資料表。
+
+`offer_quest` 只能建立 `offered` 任務，不能替玩家自動接受或宣告完成：
+
+```json
+{
+  "operation_type": "offer_quest",
+  "title": "尋回地圖碎片",
+  "summary": "調查泉邊並帶回已確認存在的地圖碎片。",
+  "giver_id": "vidalia",
+  "recipient_id": "session-123-player",
+  "due_in_turns": 5
+}
+```
+
+任務必須由已登記角色提供給不同的已登記對象。核准後會保存為有來源的 Quest，玩家可從 `/api/game/{session_id}/quests` 取得，相關 NPC 下一回合則由 `active_quests` 承接。
 
 ## 錯誤與重試
 

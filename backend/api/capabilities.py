@@ -34,5 +34,6 @@ def get_capabilities(request: Request) -> CapabilitiesResponse:
         allowed_operations=[
             OperationType.TRANSFER_ITEM,
             OperationType.ESTABLISH_COMMITMENT,
+            OperationType.OFFER_QUEST,
         ],
     )

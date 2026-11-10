@@ -8,6 +8,7 @@ from backend.schemas.story import (
     EstablishedEvent,
     EstablishCommitmentOperation,
     EventProposal,
+    OfferQuestOperation,
     OperationType,
     ProposalDecision,
     ProposalStatus,
@@ -102,11 +103,13 @@ class ProposalResolver:
         self,
         state: GameState,
         event: EventProposal,
-        operation: TransferItemOperation | EstablishCommitmentOperation,
+        operation: TransferItemOperation | EstablishCommitmentOperation | OfferQuestOperation,
         turn_number: int,
     ) -> tuple[str, dict[str, object]]:
         if isinstance(operation, EstablishCommitmentOperation):
             return self._establish_commitment(state, event, operation, turn_number)
+        if isinstance(operation, OfferQuestOperation):
+            return self._offer_quest(state, event, operation, turn_number)
 
         if event.actor_id != operation.from_entity_id:
             raise ProposalRuleViolation(
@@ -194,6 +197,47 @@ class ProposalResolver:
                 f"'{operation.promisor_id}' committed to '{operation.promisee_id}': "
                 f"{operation.summary}"
             ),
+            effect,
+        )
+
+    def _offer_quest(
+        self,
+        state: GameState,
+        event: EventProposal,
+        operation: OfferQuestOperation,
+        turn_number: int,
+    ) -> tuple[str, dict[str, object]]:
+        self._require_entity(state, operation.giver_id)
+        self._require_entity(state, operation.recipient_id)
+        if event.actor_id != operation.giver_id:
+            raise ProposalRuleViolation("actor_not_quest_giver", "Only the actor can offer a quest.")
+        if event.target_id is not None and event.target_id != operation.recipient_id:
+            raise ProposalRuleViolation("target_mismatch", "Quest recipient does not match target.")
+        if operation.giver_id == operation.recipient_id:
+            raise ProposalRuleViolation(
+                "same_quest_participant",
+                "A quest requires different giver and recipient entities.",
+            )
+
+        due_turn = (
+            turn_number + operation.due_in_turns
+            if operation.due_in_turns is not None
+            else None
+        )
+        effect: dict[str, object] = {
+            "operation_type": OperationType.OFFER_QUEST.value,
+            "quest_id": str(uuid4()),
+            "title": operation.title,
+            "summary": operation.summary,
+            "giver_id": operation.giver_id,
+            "recipient_id": operation.recipient_id,
+            "created_turn": turn_number,
+            "due_turn": due_turn,
+            "visibility": "player" if event.visible_to_player else "backend",
+            "proposal_id": str(event.proposal_id),
+        }
+        return (
+            f"'{operation.giver_id}' offered quest '{operation.title}' to '{operation.recipient_id}'.",
             effect,
         )
 

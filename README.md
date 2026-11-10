@@ -54,12 +54,15 @@ npm run dev
 - `POST /api/game/start`：建立或恢復持久化 Session
 - `POST /api/game/turn`：提交 `action_id`、訊息與預期狀態版本
 - `GET /api/game/{session_id}/state`：取得玩家可見狀態
+- `GET /api/game/{session_id}/quests`：取得玩家可見且尚未結束的動態任務
 
 同一個 `action_id`、同一內容重送會回傳原結果；同 ID 換成不同內容或提交過期的 `expected_state_version` 會得到 HTTP 409。Session、狀態、對話、核准事件與完整回應會以單一交易保存，後端重啟後仍可接續。
 
 玩家 API 只回傳 `PlayerViewState`，不包含角色私有設定、NPC 關係數值、未解鎖知識或私人記憶。後端已建立 WorldCanon、角色設定、KnowledgeRecord 與 MemoryRecord 結構；NPC 生成背景會依 NPC、Session、解鎖狀態和可用回合過濾。這些結構尚未接到 B 的模型／RAG 服務。
 
 未受信任的 `StoryProposal` 會先通過固定操作白名單。目前第一個可執行操作是 `transfer_item`：後端確認行動者、接收者及實際持有權後才更新狀態。不存在的物品、角色或冒用他人物品會整件拒絕；核准／拒絕紀錄只存後端，玩家只會看見已成立且可公開的事件與最終敘事。
+
+目前白名單也支援 `establish_commitment` 與 `offer_quest`。承諾、任務、玩家發言記憶與目擊事件會和回合同一交易保存，下一回合放入相關 NPC 的授權 context。生成任務只能先成為待接受提議，不能由模型自行標記為已接受或完成。
 
 ## 驗證
 
