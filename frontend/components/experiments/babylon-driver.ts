@@ -311,7 +311,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       const request = ++backdropRequest;
       let nextTexture: Texture;
       const promise = new Promise<void>((resolve, reject) => {
-        nextTexture = new Texture(url, scene, false, false, Texture.TRILINEAR_SAMPLINGMODE, () => {
+        nextTexture = new Texture(url, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE, () => {
           if (disposed || request !== backdropRequest) {
             nextTexture.dispose();
             resolve();
