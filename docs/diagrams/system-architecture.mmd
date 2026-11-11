@@ -1,0 +1,113 @@
+---
+config:
+  theme: base
+  layout: dagre
+  look: classic
+  htmlLabels: false
+  themeVariables:
+    fontFamily: 'PingFang TC, Noto Sans CJK TC, sans-serif'
+    fontSize: '18px'
+    primaryTextColor: '#172b3a'
+    lineColor: '#61798a'
+    clusterBkg: '#f5f8fb'
+    clusterBorder: '#b5c6d3'
+  flowchart:
+    htmlLabels: false
+    curve: basis
+    nodeSpacing: 25
+    rankSpacing: 48
+    padding: 16
+    wrappingWidth: 340
+---
+flowchart TB
+  subgraph CLIENT["A｜玩家介面：Next.js／React"]
+    UI["部分｜玩家介面\nBabylon 3D／Phaser 2D\n探索、對話、地圖、手記、語音"]
+  end
+
+  subgraph API["D｜FastAPI 與 Session 邊界"]
+    ENTRY["部分｜API／Session 存取\nSchema、action_id、state_version\n帳號與 Session 擁有權待補"]
+    IDEM{"已｜action_id 是否已處理？"}
+    REPLAY["已｜重播結果／拒絕衝突\n同內容重播；不同內容或舊版本 409"]
+  end
+
+  subgraph CORE["D 協調，B 生成，C 判定｜回合 Orchestrator"]
+    ROUTE{"已｜狀態快照與行動分流"}
+    DEMO["已｜Demo Story Director\n既有調查分支與合法選項"]
+    EDIT["已｜世界指令解析\n日夜／天氣／地形／三類物件"]
+    CONTEXT["部分｜NPC 授權背景\n設定、狀態、記憶、目標、承諾"]
+    GATE["部分｜StoryPlanner／ModelGateway\nStoryProposal、預算、逾時重試"]
+    RULE{"部分｜事件與規則是否成立？\n人物、知識、所有權、路線、能力"}
+    REJECT["已｜拒絕事件並保留稽核\n違規操作不套用"]
+    CLOCK["部分｜回合時鐘、目標與任務\n危險、死亡、章節、結局待整合"]
+    NARRATE["部分｜依核准結果形成敘事\n語義檢查待補；系統文字保底"]
+    TX["部分｜短交易＋版本條件更新\n保存完整回合；asset outbox 待補"]
+    VIEW["已｜PlayerViewState\n公開結果與選項；排除秘密與私有記憶"]
+  end
+
+  subgraph INTELLIGENCE["B｜可替換的 AI／RAG 服務"]
+    RAG["待｜授權 RAG 檢索\nNPC／Session／解鎖／來源檢查"]
+    VECTOR[("待｜向量索引\nEmbedding、權限與來源 metadata")]
+    LLM["待｜B 的正式敘事 LLM\n目前使用規則替身"]
+  end
+
+  subgraph DATA["D｜持久化與設定來源：目前 SQLite，部署時再評估 PostgreSQL"]
+    CANON[("部分｜核心設定與版本\nworld_canon／character_definitions")]
+    STATE[("已｜權威回合庫\ngame_sessions／action_records\ngame_events／dialogue_records")]
+    MEMORY[("部分｜NPC 知識與發展\nknowledge_records／memory_records\nnpc_goals／commitments／quests")]
+    JOBS[("部分｜圖片／3D 工作庫\nscene_image_jobs／scene_asset_jobs\nasset_outbox 與版本關聯待補")]
+  end
+
+  subgraph AUTHOR["團隊內容維護"]
+    PUBLISH["待｜內容審閱與版本發布\n角色卡、世界觀、秘密授權、正式規則"]
+  end
+
+  subgraph ASSET["A／D｜提交成功後非同步生成資產"]
+    WORKER["部分｜資產排程／Worker\n去重、版本、有限重試、恢復與快取"]
+    GPU["已｜私有 Hunyuan3D Docker\nSSH tunnel／GPU：參考圖 → GLB"]
+    IMAGE["待｜即時 ImageGateway provider\n現在使用版本化插畫"]
+    CHECK["部分｜產物驗收\nGLB 格式／面數；圖片品質待補"]
+    FILES[("部分｜資產檔案與版本\n本機 GLB／圖片；物件儲存待接")]
+    APPLY["部分｜資產版本與載入檢查\n保留核心地標；失敗沿用舊資產"]
+  end
+
+  OBS["部分｜追蹤與品質評測\n事件稽核已有；延遲／成本／品質待補"]
+
+  RESULT["玩家收到核准結果與畫面更新"]
+
+  UI --> ENTRY --> IDEM
+  IDEM -->|已處理或衝突| REPLAY --> RESULT
+  IDEM -->|新行動| ROUTE
+  ROUTE -.->|查詢快照與歷史| STATE
+  ROUTE -->|固定調查選項| DEMO --> RULE
+  ROUTE -->|受限世界編輯| EDIT --> RULE
+  ROUTE -->|一般互動／生成事件| CONTEXT --> GATE --> RULE
+  CONTEXT -.->|查詢核心設定| CANON
+  CONTEXT -.->|查詢 NPC 記憶| MEMORY
+  CONTEXT --> RAG
+  RAG <--> VECTOR
+  RAG -->|只回授權片段| GATE
+  GATE <--> LLM
+  RULE -->|不合法| REJECT --> NARRATE
+  RULE -->|核准並計算效果| CLOCK --> NARRATE
+  NARRATE --> TX
+  TX -->|成功提交| VIEW --> RESULT
+  TX -->|版本競爭／已提交重送| REPLAY
+  TX --> STATE
+  TX --> MEMORY
+  TX -.->|資產需求 outbox：目標設計| JOBS
+  PUBLISH --> CANON
+  PUBLISH -->|審閱後分段、Embedding| VECTOR
+  JOBS --> WORKER
+  WORKER --> GPU --> CHECK
+  WORKER --> IMAGE --> CHECK
+  CHECK -->|通過| FILES --> APPLY --> RESULT
+  CHECK -->|失敗：沿用舊資產| APPLY
+  STATE -.-> OBS
+  JOBS -.-> OBS
+
+  classDef done fill:#e2f4e9,stroke:#2a8062,stroke-width:1.6px,color:#173b2f
+  classDef partial fill:#fff2d8,stroke:#b98329,stroke-width:1.6px,color:#503815
+  classDef planned fill:#eee8f7,stroke:#8b73ad,stroke-width:1.6px,stroke-dasharray:5 3,color:#37274c
+  class UI,ENTRY,CONTEXT,GATE,RULE,CLOCK,NARRATE,TX,CANON,MEMORY,JOBS,WORKER,CHECK,FILES,APPLY,OBS partial
+  class IDEM,REPLAY,ROUTE,DEMO,EDIT,REJECT,VIEW,STATE,GPU,RESULT done
+  class RAG,VECTOR,LLM,PUBLISH,IMAGE planned
