@@ -9,6 +9,8 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
     HF_HOME=/models/huggingface \
+    HY3DGEN_MODELS=/models/hy3dgen \
+    U2NET_HOME=/models/u2net \
     HUNYUAN3D_UPSTREAM_COMMIT=${HUNYUAN3D_COMMIT}
 
 RUN apt-get update \
@@ -19,6 +21,7 @@ RUN apt-get update \
         libegl1 \
         libgl1 \
         libglib2.0-0 \
+        libopengl0 \
         python3 \
         python3-dev \
         python3-pip \
@@ -42,7 +45,7 @@ RUN python3 -m pip install -r /tmp/requirements-runtime.txt \
 WORKDIR /srv/hunyuan3d
 COPY server.py ./server.py
 
-RUN mkdir -p /models/huggingface /outputs \
+RUN mkdir -p /models/huggingface /models/hy3dgen /models/u2net /outputs \
     && python3 -c "import torch; assert torch.version.cuda == '12.8'; print(torch.__version__, torch.version.cuda)"
 
 EXPOSE 8081

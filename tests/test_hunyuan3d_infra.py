@@ -13,6 +13,7 @@ def test_gpu_image_is_pinned_for_blackwell_cuda() -> None:
     assert "torchvision==0.22.1" in dockerfile
     assert "HUNYUAN3D_COMMIT=f8db63096c8282cb27354314d896feba5ba6ff8a" in dockerfile
     assert "--index-url https://download.pytorch.org/whl/cu128" in dockerfile
+    assert "libopengl0" in dockerfile
 
 
 def test_compose_only_publishes_gateway_on_remote_loopback() -> None:
@@ -20,6 +21,8 @@ def test_compose_only_publishes_gateway_on_remote_loopback() -> None:
 
     assert '"127.0.0.1:${HUNYUAN3D_PORT:-8081}:8081"' in compose
     assert '"nvidia.com/gpu=all"' in compose
+    assert "HY3DGEN_MODELS: /models/hy3dgen" in compose
+    assert "U2NET_HOME: /models/u2net" in compose
     assert "privileged:" not in compose
     assert "network_mode: host" not in compose
 

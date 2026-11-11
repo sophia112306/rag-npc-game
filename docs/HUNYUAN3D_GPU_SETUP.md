@@ -53,6 +53,8 @@ docker compose -f infra/hunyuan3d/compose.yaml logs -f api
 
 首次啟動會下載模型權重；`GET /live` 會先回應，`GET /health` 的 `status` 會依序由 `loading` 變成 `ready`。Compose 給模型下載與初始化 20 分鐘的 healthcheck start period。
 
+Hunyuan 模型、Hugging Face cache 與 rembg 的 U2Net 權重都寫入 `hunyuan3d-models` named volume；重建 container 不會重複下載。不要只設定 `HF_HOME`：Hunyuan3D-2 的 shape loader 另讀取 `HY3DGEN_MODELS`，rembg 則讀取 `U2NET_HOME`。
+
 查看狀態：
 
 ```bash

@@ -19,6 +19,8 @@ services:
       HUNYUAN3D_OUTPUT_DIR: /outputs
       HUNYUAN3D_MAX_INPUT_BYTES: "12582912"
       HF_HOME: /models/huggingface
+      HY3DGEN_MODELS: /models/hy3dgen
+      U2NET_HOME: /models/u2net
       PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
     volumes:
       - hunyuan3d-models:/models
