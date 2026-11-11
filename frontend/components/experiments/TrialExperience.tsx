@@ -70,6 +70,7 @@ export default function TrialExperience() {
   const [distance, setDistance] = useState(14);
   const [poseLabel, setPoseLabel] = useState("0.0, 8.0");
   const [assetJobs, setAssetJobs] = useState<SceneAssetJob[]>([]);
+  const [assetLoad, setAssetLoad] = useState({accepted:0,rejected:0});
   const scene = state?.current_scene;
   const world = state?.world_scene;
   const layoutKey = world
@@ -276,6 +277,8 @@ export default function TrialExperience() {
     if (!ready || !sceneReady || !world || !state || !sessionId) return;
     let current = true;
     const applied = new Map<string, string>();
+    const rejected = new Set<string>();
+    setAssetLoad({accepted:0,rejected:0});
     const run = async () => {
       let jobs = await requestJson<SceneAssetJob[]>(
         `/api/game/${sessionId}/scene-assets`,
@@ -296,13 +299,18 @@ export default function TrialExperience() {
           if (
             job.status === "succeeded" &&
             job.model_url &&
-            applied.get(job.kind) !== job.model_url
+            applied.get(job.kind) !== job.model_url && !rejected.has(job.job_id)
           ) {
-            await driverRef.current?.setAsset(
-              job.kind,
-              resolveApiAsset(job.model_url),
-            );
-            applied.set(job.kind, job.model_url);
+            try {
+              await driverRef.current?.setAsset(job.kind, resolveApiAsset(job.model_url));
+              if(!current)return;
+              applied.set(job.kind,job.model_url);
+            } catch {
+              if(!current)return;
+              rejected.add(job.job_id);
+              setNotice("新模型未通過場景尺寸或載入檢查，已保留既有模型；仍可繼續探索。");
+            }
+            setAssetLoad({accepted:applied.size,rejected:rejected.size});
           }
         }
         if (
@@ -460,9 +468,7 @@ export default function TrialExperience() {
     });
   }
 
-  const completed = assetJobs.filter(
-    (job) => job.status === "succeeded",
-  ).length;
+  const completed = assetLoad.accepted;
   return (
     <main className={styles.stage}>
       <audio
@@ -596,7 +602,7 @@ export default function TrialExperience() {
           · <kbd>Esc</kbd> 釋放
         </span>
         <span>
-          {assetJobs.some(
+          {assetLoad.rejected ? `新模型已載入 ${completed} 項；${assetLoad.rejected} 項保留既有模型` : assetJobs.some(
             (j) => j.status === "queued" || j.status === "processing",
           )
             ? `3D 模型生成中 ${completed}/${assetJobs.length}`

@@ -53,19 +53,14 @@ def build_world_scene(
         [(x, z, 2.0) for x, z, _ in council_trees[:config.tree_count]]
         if scene_id == "minglin" else []
     )
+    landmark_kind = {"minglin_life_spring":"altar", "minglin_rune_grove":"runestone", "lieyi_plains":"altar"}.get(scene_id)
     for kind, count, span, base_scale, radius in (
         ("altar", config.altar_count, 16, 3.6, 2.5),
         ("runestone", config.runestone_count, 23, 2.5, 1.4),
         ("tree", config.tree_count, 39, 8.0, 2.0),
     ):
-        for index in range(count):
-            primary = index == 0 and (
-                (
-                    kind == "altar"
-                    and scene_id in {"minglin_life_spring", "lieyi_plains"}
-                )
-                or (kind == "runestone" and scene_id == "minglin_rune_grove")
-            )
+        for index in range(max(count, 1 if kind == landmark_kind else 0)):
+            primary = index == 0 and kind == landmark_kind
             authored_tree = scene_id == "minglin" and kind == "tree" and index < len(council_trees)
             if authored_tree:
                 x, z, authored_scale = council_trees[index]
@@ -90,6 +85,7 @@ def build_world_scene(
             scale = (
                 authored_scale if authored_tree
                 else 6.8 if primary and kind == "altar"
+                else 2.8 if primary
                 else round(base_scale * rng.uniform(0.8, 1.25), 3)
             )
             objects.append(
@@ -99,7 +95,8 @@ def build_world_scene(
                     x=round(x, 3),
                     z=round(z, 3),
                     scale=scale,
-                    yaw=round(rng.uniform(0, math.tau), 3),
+                    yaw=.25 if primary else round(rng.uniform(0, math.tau), 3),
+                    protected=primary,
                 )
             )
 

@@ -226,6 +226,7 @@ export type WorldScene = {
     z: number;
     scale: number;
     yaw: number;
+    protected?: boolean;
   }>;
   spawn_x: number;
   spawn_z: number;

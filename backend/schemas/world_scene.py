@@ -28,6 +28,7 @@ class WorldObject(BaseModel):
     z: float
     scale: float
     yaw: float
+    protected: bool = False
 
 
 class WorldDiscovery(BaseModel):

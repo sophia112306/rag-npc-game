@@ -150,7 +150,7 @@ class SceneAssetCoordinator:
         world = build_world_scene(
             state.current_scene_id, state.world_scenes.get(state.current_scene_id)
         )
-        kinds = sorted({obj.kind for obj in world.objects})
+        kinds = sorted({obj.kind for obj in world.objects if not obj.protected})
         needs_new_geometry = (
             world.config.seed != default_config(state.current_scene_id).seed
         )

@@ -127,14 +127,16 @@ class ProposalResolver:
         if isinstance(operation, ConfigureSceneOperation):
             if event.actor_id != state.player.player_id or operation.scene_id != state.current_scene_id:
                 raise ProposalRuleViolation("scene_edit_not_authorized", "Only the current player scene can be configured.")
-            from backend.content.world_scenes import default_config
+            from backend.content.world_scenes import build_world_scene, default_config
             current = state.world_scenes.get(operation.scene_id) or default_config(operation.scene_id)
             if operation.config.revision != current.revision + 1:
                 raise ProposalRuleViolation("scene_revision_conflict", "Scene revision must advance exactly once.")
             state.world_scenes[operation.scene_id] = operation.config.model_copy(deep=True)
             weather = {"clear": "晴朗", "mist": "薄霧", "rain": "雨天", "dust": "沙塵"}[operation.config.weather]
             time = {"day": "白天", "dusk": "黃昏", "night": "夜晚"}[operation.config.time_of_day]
-            return (f"場景已重建：{time}、{weather}；{operation.config.tree_count} 棵樹、{operation.config.runestone_count} 個符石、{operation.config.altar_count} 座祭壇。", operation.model_dump(mode="json"))
+            protected = any(obj.protected for obj in build_world_scene(operation.scene_id, operation.config).objects)
+            note = "固定互動地標保留，不受裝飾重生或移除影響。" if protected else ""
+            return (f"場景已重建：{time}、{weather}；{operation.config.tree_count} 棵樹、{operation.config.runestone_count} 個符石、{operation.config.altar_count} 座祭壇。{note}", operation.model_dump(mode="json"))
         if isinstance(operation, ChangeSceneOperation):
             return self._change_scene(state, event, operation)
         if isinstance(operation, AdvanceStoryOperation):

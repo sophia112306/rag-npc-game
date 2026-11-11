@@ -32,6 +32,8 @@ import {
   type TrialDriver,
 } from "./world";
 import { addForestTree, createForestFoliage, createForestSanctuary } from "./forest-sanctuary";
+import { fitAsset } from "./asset-layout";
+import { createReflectiveWater } from "./water-material";
 
 registerBuiltInLoaders();
 
@@ -76,7 +78,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   let landmark: TransformNode | null = null;
   let particles: ParticleSystem | null = null;
   let waterSurface: Mesh | null = null;
-  let waterShader: ShaderMaterial | null = null;
+  let springWater: ReturnType<typeof createReflectiveWater> | null = null;
   let fireShader: ShaderMaterial | null = null;
   let lavaShader: ShaderMaterial | null = null;
   let flameRoot: TransformNode | null = null;
@@ -86,6 +88,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   let disposed = false;
   let sceneGeneration = 0;
   const modelGroups = new Map<AssetKind, TransformNode>();
+  const modelColliders = new Map<AssetKind, {x:number;z:number;radius:number}[]>();
   const modelVersions = new Map<AssetKind, number>();
   const modelUrls = new Map<AssetKind, string>();
   const containers = new Map<string, Promise<AssetContainer>>();
@@ -133,9 +136,10 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     return m;
   }
   function disposeGroup(group: TransformNode) {
+    const owned = (group.metadata?.ownedMaterials ?? []) as Material[];
     for (const mesh of group.getChildMeshes()) shadows.removeShadowCaster(mesh);
     group.dispose(false);
-    for (const material of (group.metadata?.ownedMaterials ?? []) as Material[]) material.dispose(false, false);
+    for (const material of owned) material.dispose(false, false);
   }
   const particleTexture = new DynamicTexture("soft particle", 32, scene, false);
   const ctx = particleTexture.getContext();
@@ -145,6 +149,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, 32, 32);
   particleTexture.update();
+  particleTexture.hasAlpha = true;
 
   function buildTerrain(current: WorldScene) {
     terrain?.dispose();
@@ -204,8 +209,8 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     lavaShader?.dispose();
     lavaShader = null;
     flameRoot = null;
-    waterShader?.dispose();
-    waterShader = null;
+    springWater?.dispose();
+    springWater = null;
     waterSurface = null;
     if (landmark) disposeGroup(landmark);
     particles?.dispose(false);
@@ -277,21 +282,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       water.parent = landmark;
       water.rotation.x = Math.PI / 2;
       water.position.y = 0.13;
-      waterShader = new ShaderMaterial(
-        "rippling spring",
-        scene,
-        {
-          vertexSource: `precision highp float; attribute vec3 position;attribute vec2 uv;uniform mat4 worldViewProjection;varying vec2 v;void main(){v=uv;gl_Position=worldViewProjection*vec4(position,1.);}`,
-          fragmentSource: `precision highp float;varying vec2 v;uniform float clock;uniform vec3 discovery;void main(){vec2 p=v-.5;float r=length(p);float wave=sin(r*90.-clock*2.+sin(p.x*21.+clock)*.4)*.5+.5;float caustic=pow(wave,10.)*.18;vec3 c=mix(vec3(.025,.18,.21),vec3(.08,.43,.44),1.-r);c+=(vec3(.25,.5,.42)+discovery*.8)*caustic;gl_FragColor=vec4(c,1.);}`,
-        },
-        {
-          attributes: ["position", "uv"],
-          uniforms: ["worldViewProjection", "clock", "discovery"],
-        },
-      );
-      waterShader.backFaceCulling = false;
-      waterShader.setColor3("discovery", current.discovery ? Color3.FromHexString(current.discovery.signal==="ember"?"#d99d42":"#72b5ce") : Color3.Black());
-      water.material = waterShader;
+      springWater = createReflectiveWater(scene, water);
       waterSurface = water;
     }
     accent.position.set(x, y + 2, z);
@@ -366,7 +357,8 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
         channel.material = lavaShader;
       }
     }
-    if (current.fire || current.config.weather !== "clear") {
+    // Mist already uses distance fog; large particle sprites look like confetti.
+    if (current.fire || ["rain", "dust"].includes(current.config.weather)) {
       const rain = current.config.weather === "rain" && !current.fire;
       particles = new ParticleSystem(
         "weather and fire",
@@ -374,6 +366,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
         scene,
       );
       particles.particleTexture = particleTexture;
+      particles.blendMode = ParticleSystem.BLENDMODE_STANDARD;
       particles.emitter = new Vector3(
         current.fire ? x : 0,
         current.fire ? y + 0.5 : 5,
@@ -393,17 +386,17 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
         current.fire ? 1 : 0.72,
         current.fire ? 0.4 : 0.82,
         current.fire ? 0.06 : 0.83,
-        current.fire ? 0.9 : 0.3,
+        current.fire ? 0.9 : rain ? 0.3 : 0.12,
       );
       particles.color2 = new Color4(
         1,
         current.fire ? 0.7 : 0.87,
         current.fire ? 0.15 : 0.75,
-        0.15,
+        rain || current.fire ? 0.15 : 0.06,
       );
       particles.colorDead = new Color4(0.1, 0.1, 0.1, 0);
-      particles.minSize = rain ? 0.025 : current.fire ? 0.02 : 0.2;
-      particles.maxSize = current.fire ? 0.06 : rain ? 0.08 : 0.8;
+      particles.minSize = rain ? 0.025 : current.fire ? 0.02 : 0.015;
+      particles.maxSize = current.fire ? 0.06 : rain ? 0.08 : 0.05;
       particles.minLifeTime = current.fire ? 0.6 : rain ? 1 : 4;
       particles.maxLifeTime = current.fire ? 2 : rain ? 2 : 9;
       particles.emitRate = current.fire ? 24 : rain ? 200 : 45;
@@ -434,21 +427,17 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       discoveryParticles.emitter=new Vector3(x,y+.8,z+.3);
       discoveryParticles.minEmitBox=new Vector3(-.8,0,-.8);discoveryParticles.maxEmitBox=new Vector3(.8,.1,.8);
       const tint=Color3.FromHexString(colour);
-      discoveryParticles.color1=new Color4(tint.r,tint.g,tint.b,.8);discoveryParticles.color2=new Color4(tint.r,tint.g,tint.b,.3);
+      discoveryParticles.blendMode=ParticleSystem.BLENDMODE_STANDARD;
+      discoveryParticles.color1=new Color4(tint.r,tint.g,tint.b,.3);discoveryParticles.color2=new Color4(tint.r,tint.g,tint.b,.12);
       discoveryParticles.colorDead=new Color4(0,0,0,0);
-      discoveryParticles.minSize=.015;discoveryParticles.maxSize=.04;
-      discoveryParticles.minLifeTime=1;discoveryParticles.maxLifeTime=2.4;discoveryParticles.emitRate=12;
-      discoveryParticles.direction1=new Vector3(-.05,.2,-.05);discoveryParticles.direction2=new Vector3(.05,.5,.05);
+      discoveryParticles.minSize=.005;discoveryParticles.maxSize=.012;
+      discoveryParticles.minLifeTime=1;discoveryParticles.maxLifeTime=2.4;discoveryParticles.emitRate=5;
+      discoveryParticles.direction1=new Vector3(-.02,.02,-.02);discoveryParticles.direction2=new Vector3(.02,.06,.02);
       discoveryParticles.start();
     }
   }
 
-  async function setAsset(kind: AssetKind, url: string) {
-    if (!world || disposed) return;
-    const token = (modelVersions.get(kind) || 0) + 1;
-    modelVersions.set(kind, token);
-    const generation = sceneGeneration;
-    const current = world;
+  function loadContainer(url:string) {
     if (!containers.has(url))
       containers.set(
         url,
@@ -459,7 +448,19 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
           },
         ),
       );
-    const container = await containers.get(url)!;
+    return containers.get(url)!;
+  }
+
+  async function setAsset(kind: AssetKind, url: string) {
+    if (!world || disposed) return;
+    const token = (modelVersions.get(kind) || 0) + 1;
+    modelVersions.set(kind, token);
+    const generation = sceneGeneration;
+    const current = world;
+    const [container, protectedContainer] = await Promise.all([
+      loadContainer(url),
+      current.objects.some(object=>object.kind===kind&&object.protected) ? loadContainer(`/game/models/${kind}-v1.glb`) : Promise.resolve(null),
+    ]);
     if (
       disposed ||
       generation !== sceneGeneration ||
@@ -470,84 +471,97 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     const forestTree = kind === "tree" && current.scene_id.startsWith("minglin");
     const ownedMaterials: Material[] = [];
     group.metadata = { ownedMaterials };
-    for (const object of current.objects.filter((o) => o.kind === kind)) {
-      const pivot = new TransformNode(object.object_id, scene);
-      pivot.parent = group;
-      const instance = container.instantiateModelsToScene(
-        (name) => `${object.object_id}:${name}`,
-        false,
-        { doNotInstantiate: forestTree },
-      );
-      for (const root of instance.rootNodes) root.parent = pivot;
-      const bounds = pivot.getHierarchyBoundingVectors(true);
-      const size = bounds.max.subtract(bounds.min);
-      const scale =
-        object.scale / Math.max(size.y, kind === "altar" ? size.x : 0, 0.001);
-      const vertical =
-        kind === "altar" && current.water && object.x === 0 && object.z === -6
-          ? 0.42
-          : 1;
-      const center = bounds.min.add(size.scale(0.5));
-      if (
-        kind === "altar" &&
-        object.x === current.interaction_x &&
-        object.z === current.interaction_z
-      ) {
-        const top = size.y * scale * vertical;
-        if (waterSurface) waterSurface.position.y = top * 0.99;
-        if (discoveryRoot) discoveryRoot.position.y = top + .15;
-        if (current.fire && flameRoot) flameRoot.position.y = top + 0.05;
-        if (current.fire && particles)
-          particles.emitter = new Vector3(
-            object.x,
-            terrainHeight(object.x, object.z, current) + top + 0.15,
-            object.z,
-          );
-      }
-      const normalizer = new TransformNode(
-        `${object.object_id}:normalizer`,
-        scene,
-      );
-      normalizer.parent = pivot;
-      for (const root of instance.rootNodes) root.parent = normalizer;
-      normalizer.position.set(-center.x, -bounds.min.y, -center.z);
-      const spread = forestTree ? .30 : 1;
-      pivot.scaling.set(scale * spread, scale * vertical, scale * spread);
-      pivot.rotation.y = object.yaw;
-      pivot.position.set(
-        object.x,
-        terrainHeight(object.x, object.z, current) - 0.03 - (forestTree ? object.scale * .055 : 0),
-        object.z,
-      );
-      for (const mesh of pivot.getChildMeshes()) {
-        mesh.receiveShadows = true;
-        mesh.isPickable = false;
-        shadows.addShadowCaster(mesh);
-        if (forestTree && mesh.material) {
-          const bark = mesh.material.clone(`${object.object_id}:cropped trunk`);
-          if (bark) {
-            // Keep generated root detail below the restored continuous trunk.
-            // The original leaf artwork replaces the rough generated crown.
-            bark.clipPlane2 = new Plane(0, 1, 0, -(pivot.position.y + object.scale * .075));
-            mesh.material = bark;
-            ownedMaterials.push(bark);
+    const colliders: {x:number;z:number;radius:number}[] = [];
+    try {
+      for (const object of current.objects.filter((o) => o.kind === kind)) {
+        const pivot = new TransformNode(object.object_id, scene);
+        pivot.parent = group;
+        const source = object.protected ? protectedContainer! : container;
+        const instance = source.instantiateModelsToScene(
+          (name) => `${object.object_id}:${name}`,
+          false,
+          { doNotInstantiate: forestTree },
+        );
+        for (const root of instance.rootNodes) root.parent = pivot;
+        const bounds = pivot.getHierarchyBoundingVectors(true);
+        const size = bounds.max.subtract(bounds.min);
+        const fitted = fitAsset(size, object.scale);
+        const scale = fitted.scale;
+        const vertical =
+          kind === "altar" && current.water && object.x === 0 && object.z === -6
+            ? 0.42
+            : 1;
+        const center = bounds.min.add(size.scale(0.5));
+        if (
+          kind === "altar" &&
+          object.x === current.interaction_x &&
+          object.z === current.interaction_z
+        ) {
+          const top = size.y * scale * vertical;
+          if (waterSurface) waterSurface.position.y = top * 0.99;
+          if (discoveryRoot) discoveryRoot.position.y = top + .15;
+          if (current.fire && flameRoot) flameRoot.position.y = top + 0.05;
+          if (current.fire && particles)
+            particles.emitter = new Vector3(
+              object.x,
+              terrainHeight(object.x, object.z, current) + top + 0.15,
+              object.z,
+            );
+        }
+        const normalizer = new TransformNode(
+          `${object.object_id}:normalizer`,
+          scene,
+        );
+        normalizer.parent = pivot;
+        for (const root of instance.rootNodes) root.parent = normalizer;
+        normalizer.position.set(-center.x, -bounds.min.y, -center.z);
+        const spread = forestTree ? .30 : 1;
+        pivot.scaling.set(scale * spread, scale * vertical, scale * spread);
+        pivot.rotation.y = object.yaw;
+        pivot.position.set(
+          object.x,
+          terrainHeight(object.x, object.z, current) - 0.03 - (forestTree ? object.scale * .055 : 0),
+          object.z,
+        );
+        colliders.push({x:object.x,z:object.z,radius:forestTree ? Math.max(.5,object.scale*.065) : object.protected ? Math.max(fitted.width,fitted.depth)/2+.1 : Math.hypot(fitted.width,fitted.depth)/2+.2});
+        for (const mesh of pivot.getChildMeshes()) {
+          mesh.receiveShadows = true;
+          mesh.isPickable = false;
+          shadows.addShadowCaster(mesh);
+          if (forestTree && mesh.material) {
+            const bark = mesh.material.clone(`${object.object_id}:cropped trunk`);
+            if (bark) {
+              // Keep generated root detail below the restored continuous trunk.
+              // The original leaf artwork replaces the rough generated crown.
+              bark.clipPlane2 = new Plane(0, 1, 0, -(pivot.position.y + object.scale * .075));
+              mesh.material = bark;
+              ownedMaterials.push(bark);
+            }
           }
         }
+        if (forestTree) {
+          const wood = addForestTree(scene, group, foliage.material, foliage.bark,
+            object.x, terrainHeight(object.x, object.z, current), object.z,
+            object.scale, object.yaw, Number(object.object_id.split("-").at(-1)));
+          for (const mesh of wood) shadows.addShadowCaster(mesh);
+        }
       }
-      if (forestTree) {
-        const wood = addForestTree(scene, group, foliage.material, foliage.bark,
-          object.x, terrainHeight(object.x, object.z, current), object.z,
-          object.scale, object.yaw, Number(object.object_id.split("-").at(-1)));
-        for (const mesh of wood) shadows.addShadowCaster(mesh);
+    } catch (error) {
+      disposeGroup(group);
+      if(!url.startsWith("/game/models/") && ![...modelUrls.values()].includes(url)) {
+        containers.delete(url);
+        container.dispose();
       }
+      throw error;
     }
     const previousGroup = modelGroups.get(kind);
     if (previousGroup) disposeGroup(previousGroup);
     modelGroups.set(kind, group);
+    modelColliders.set(kind, colliders);
     modelUrls.set(kind, url);
     if (containers.size > 9) {
       for (const [key, promise] of containers) {
-        if (![...modelUrls.values()].includes(key)) {
+        if (!key.startsWith("/game/models/") && ![...modelUrls.values()].includes(key)) {
           containers.delete(key);
           void promise.then((c) => c.dispose()).catch(() => {});
           if (containers.size <= 6) break;
@@ -591,6 +605,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       sceneGeneration++;
       for (const group of modelGroups.values()) disposeGroup(group);
       modelGroups.clear();
+      modelColliders.clear();
       for (const material of createdMaterials) material.dispose(false, false);
       createdMaterials.length = 0;
       const night = next.config.time_of_day === "night";
@@ -652,6 +667,10 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       );
     },
     move(x, z, dx, dz) {
+      const hitsObject=(px:number,pz:number)=>{
+        for(const colliders of modelColliders.values())if(colliders.some(c=>Math.hypot(px-c.x,pz-c.z)<c.radius))return true;
+        return false;
+      };
       const blocked = (px: number, pz: number) =>
         !world ||
         Math.abs(px) > 64 ||
@@ -662,15 +681,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
             0.8) ||
         Math.abs(terrainHeight(px, pz, world) - terrainHeight(x, z, world)) >
           0.45 ||
-        world.objects.some(
-          (o) =>
-            Math.hypot(px - o.x, pz - o.z) <
-            (o.kind === "tree"
-              ? 0.7
-              : o.kind === "altar"
-                ? o.scale * 0.43
-                : 1.05),
-        );
+        hitsObject(px,pz);
       const nx = Math.max(-64, Math.min(64, x + dx)),
         nz = Math.max(-64, Math.min(64, z + dz));
       return { x: blocked(nx, z) ? x : nx, z: blocked(x, nz) ? z : nz };
@@ -682,7 +693,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       }
       sanctuary?.update(performance.now() / 1000);
       skyMaterial.setFloat("clock", performance.now() / 1000);
-      waterShader?.setFloat("clock", performance.now() / 1000);
+      springWater?.update(performance.now() / 1000);
       fireShader?.setFloat("clock", performance.now() / 1000);
       lavaShader?.setFloat("clock", performance.now() / 1000);
       scene.render();
@@ -696,6 +707,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       particles?.dispose();
       discoveryParticles?.dispose(false);
       sanctuary?.dispose();
+      springWater?.dispose();
       foliage.dispose();
       for (const pending of containers.values())
         void pending.then((c) => c.dispose()).catch(() => {});

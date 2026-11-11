@@ -126,6 +126,35 @@ def test_council_preserves_sanctuary_when_generated_prop_count_changes():
             assert ((obj.x + 7.8) / 3.6) ** 2 + ((obj.z + 9.3) / 4.7) ** 2 > 1
 
 
+def test_required_landmark_is_stable_even_when_decor_is_removed_or_reseeded():
+    from backend.content.world_scenes import build_world_scene, default_config
+
+    for scene_id in ("minglin_life_spring", "minglin_rune_grove", "lieyi_plains"):
+        reference = next(obj for obj in build_world_scene(scene_id).objects if obj.protected)
+        for seed in range(40):
+            config = default_config(scene_id).model_copy(update={"seed":seed,"tree_count":0,"runestone_count":0,"altar_count":0})
+            world = build_world_scene(scene_id,config)
+            assert world.objects == [reference]
+            assert reference.x == world.interaction_x and reference.z == world.interaction_z
+
+
+def test_removing_decor_keeps_spring_interactive_without_queuing_its_fixed_model(tmp_path):
+    with TestClient(create_app(f"sqlite+aiosqlite:///{tmp_path / 'protected.db'}")) as client:
+        from test_demo_story_flow import _start, _submit_choice
+        _start(client,"protected")
+        state = _submit_choice(client,"protected",1,"travel_to_minglin_life_spring")["state"]
+        result = _command(client,"protected",state["state_version"],"移除樹木，移除符石，移除祭壇")
+        assert result.status_code == 200
+        state=result.json()["state"]
+        assert len(state["world_scene"]["objects"]) == 1
+        assert state["world_scene"]["objects"][0]["protected"]
+        assert "固定互動地標保留" in result.json()["story"]["dialogue"][0]["text"]
+        jobs=client.post("/api/game/protected/scene-assets",json={"expected_state_version":state["state_version"]})
+        assert jobs.json() == []
+        observed = _submit_choice(client,"protected",state["state_version"],"study_spring_ash")
+        assert observed["state"]["world_scene"]["discovery"]["signal"] == "ember"
+
+
 def test_unconfigured_model_jobs_are_deduplicated_and_session_scoped(tmp_path):
     with TestClient(
         create_app(f"sqlite+aiosqlite:///{tmp_path / 'assets.db'}")

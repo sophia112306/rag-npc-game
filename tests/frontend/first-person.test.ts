@@ -19,7 +19,7 @@ function setup(){
   let picked:{x:number;z:number;interaction?:boolean}|null={x:0,z:4};let interactions=0;
   const driver={pickGround:()=>picked,move:(x:number,z:number,dx:number,dz:number)=>({x:x+dx,z:z+dz}),setView(){},setWorld:async()=>{},setAsset:async()=>{},render(){},resize(){},dispose(){}};
   const controls=createFirstPerson(canvas as unknown as HTMLCanvasElement,driver,()=>interactions++,()=>{});
-  return{canvas,windowSurface,controls,setPicked:(point:typeof picked)=>{picked=point;},interactions:()=>interactions};
+  return{canvas,windowSurface,controls,driver,setPicked:(point:typeof picked)=>{picked=point;},interactions:()=>interactions};
 }
 
 test("WASD still moves after a toolbar button has focus",()=>{
@@ -58,5 +58,15 @@ test("map route tracking shares walking and stops near the landmark before inter
   assert.equal(interactions(),1);
   assert.ok(controls.pose.z>-8+2.5 && controls.pose.z<-8+3.6);
   assert.deepEqual(target,{x:0,z:-8,interaction:true});
+  controls.dispose();
+});
+
+test("a solid protected landmark still allows interaction at the advertised distance",()=>{
+  const {controls,driver,interactions}=setup();
+  driver.move=(x,z,dx,dz)=>({x:x+dx,z:Math.max(-4.5,z+dz)});
+  controls.walkTo({x:0,z:-8,interaction:true});
+  for(let i=0;i<100;i++)controls.tick(.05);
+  assert.equal(interactions(),1);
+  assert.ok(controls.pose.z>=-4.5&&controls.pose.z<-4.4);
   controls.dispose();
 });

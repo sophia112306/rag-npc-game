@@ -33,7 +33,7 @@ export function createFirstPerson(
   const keys = new Set<string>();
   let paused = false,
     bob = 0;
-  let goal: GroundTarget | null = null;
+  let goal: (GroundTarget & {origin?:{x:number;z:number}}) | null = null;
   let drag: { x: number; y: number; travel: number } | null = null;
   const isTyping = (target: EventTarget | null) =>
     target instanceof HTMLElement &&
@@ -111,7 +111,7 @@ export function createFirstPerson(
       target.x += (pose.x - target.x) * stop;
       target.z += (pose.z - target.z) * stop;
     }
-    goal = target;
+    goal = {...target, origin:target.interaction?{x:point.x,z:point.z}:undefined};
     onNotice(
       target.interaction
         ? "正走向交談地點…"
@@ -180,7 +180,8 @@ export function createFirstPerson(
           (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 6 : 3.5) * dt;
         if (goal && !forward && !strafe) {
           const distance = Math.hypot(goal.x - pose.x, goal.z - pose.z);
-          if (distance < (goal.interaction ? 0.45 : 0.18)) {
+          const reached = goal.origin ? Math.hypot(goal.origin.x-pose.x,goal.origin.z-pose.z)<=3.6 : distance<.18;
+          if (reached) {
             const interact = goal.interaction;
             goal = null;
             onNotice("已抵達。拖曳環視，或繼續點選地面探索。");

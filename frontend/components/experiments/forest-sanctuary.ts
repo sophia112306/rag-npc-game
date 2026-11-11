@@ -1,6 +1,7 @@
-import { Color3, Color4, DynamicTexture, FresnelParameters, Material, Mesh, MeshBuilder, MirrorTexture, ParticleSystem, Plane, Scene, ShaderMaterial, StandardMaterial, Texture, TransformNode, Vector3 } from "@babylonjs/core";
+import { Color3, Color4, DynamicTexture, Material, Mesh, MeshBuilder, ParticleSystem, Scene, ShaderMaterial, StandardMaterial, Texture, TransformNode, Vector3 } from "@babylonjs/core";
 import type { WorldScene } from "../../lib/game-api";
 import { COUNCIL_LAKE, insideCouncilLake } from "./sanctuary-layout";
+import { createReflectiveWater } from "./water-material";
 
 /** Original painted leaves are reused over real tree trunks, not solid polygon crowns. */
 export function createForestFoliage(scene: Scene) {
@@ -219,39 +220,7 @@ export function createForestSanctuary(scene: Scene, parent: TransformNode, world
   lake.rotation.x = Math.PI / 2;
   lake.scaling.set(COUNCIL_LAKE.rx, COUNCIL_LAKE.rz, 1);
   lake.isPickable = false;
-  const water = material("reflecting teal forest water", "#0b302e", "#010505");
-  water.alpha = .98;
-  water.specularColor = new Color3(.2, .3, .22);
-  water.specularPower = 128;
-  const reflection = new MirrorTexture("council lake reflection", 512, scene, true);
-  reflection.mirrorPlane = new Plane(0, -1, 0, .035);
-  reflection.level = .35;
-  reflection.refreshRate = 2;
-  water.reflectionTexture = reflection;
-  const fresnel = new FresnelParameters();
-  fresnel.bias = .2;
-  fresnel.power = 3;
-  fresnel.leftColor = Color3.White();
-  fresnel.rightColor = new Color3(.16, .22, .20);
-  water.reflectionFresnelParameters = fresnel;
-  const ripples = new DynamicTexture("soft water normal ripples", 128, scene, false);
-  const ctx = ripples.getContext();
-  const image = new ImageData(128, 128);
-  for (let j = 0; j < 128; j++) for (let i = 0; i < 128; i++) {
-    const n = (j * 128 + i) * 4;
-    image.data[n] = 128 + Math.sin(i * .22 + j * .13) * 12;
-    image.data[n + 1] = 128 + Math.cos(j * .21 - i * .09) * 10;
-    image.data[n + 2] = 250;
-    image.data[n + 3] = 255;
-  }
-  ctx.putImageData(image, 0, 0);
-  ripples.update();
-  ripples.uScale = 3;
-  ripples.vScale = 4;
-  ripples.level = .14;
-  water.bumpTexture = ripples;
-  textures.push(ripples);
-  lake.material = water;
+  const water = createReflectiveWater(scene, lake);
   for (let i = 0; i < 28; i++) {
     const a = i / 28 * Math.PI * 2;
     const size = .22 + i % 4 * .055;
@@ -328,13 +297,11 @@ export function createForestSanctuary(scene: Scene, parent: TransformNode, world
       return insideCouncilLake(x, z, .2) || columns.some(([px, pz]) => Math.hypot(x - px, z - pz) < .62);
     },
     update(time: number) {
-      ripples.uOffset = time * .008;
-      ripples.vOffset = time * .005;
-      reflection.renderList = scene.meshes.filter(mesh => mesh !== lake && mesh !== backdrop && !mesh.name.includes("sky") && !mesh.name.startsWith("flame"));
+      water.update(time);
     },
     dispose() {
       motes.dispose();
-      reflection.dispose();
+      water.dispose();
       backdropMaterial.dispose();
       for (const m of materials) m.dispose(false, false);
       for (const t of textures) t.dispose();
