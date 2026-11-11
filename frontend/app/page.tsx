@@ -17,6 +17,7 @@ import {
   type GameTurnResponse,
   type PlayerChoice,
   type PlayerScene,
+  type PlayerNavigation,
 } from "../lib/game-api";
 
 type CharacterProfile = {
@@ -159,6 +160,7 @@ export default function Home() {
   const [turnNumber, setTurnNumber] = useState(0);
   const [stateVersion, setStateVersion] = useState(1);
   const [scene, setScene] = useState<PlayerScene>(previewScene);
+  const [navigation, setNavigation] = useState<PlayerNavigation | null>(null);
   const [sceneImageUrl, setSceneImageUrl] = useState(previewScene.background_url);
   const [sceneImageStatus, setSceneImageStatus] = useState<"queued" | "processing" | "succeeded" | "fallback">("fallback");
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
@@ -271,6 +273,7 @@ export default function Home() {
       setTurnNumber(state.turn_count);
       setStateVersion(state.state_version);
       setScene(state.current_scene);
+      setNavigation(state.navigation ?? null);
       const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: character.name, text: character.greeting, kind: "npc" }];
       let restored = fallback;
       try {
@@ -433,6 +436,7 @@ export default function Home() {
       setTurnNumber(turn.turn_number);
       setStateVersion(turn.state.state_version);
       setScene(turn.state.current_scene);
+      setNavigation(turn.state.navigation ?? null);
       setQuestLabel(`故事進度：${turn.state.story_progress.chapter_title}`);
       try {
         const choices = await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`);
@@ -454,6 +458,7 @@ export default function Home() {
           setTurnNumber(latest.turn_count);
           setStateVersion(latest.state_version);
           setScene(latest.current_scene);
+          setNavigation(latest.navigation ?? null);
           setError("遊戲進度已在其他請求中更新，請確認內容後重新送出。");
         } catch {
           setError("遊戲進度版本衝突，且無法重新取得最新狀態。請稍後重試。");
@@ -516,7 +521,7 @@ export default function Home() {
           <span className="location-ornament" aria-hidden="true">✧</span>
         </header>
 
-        <WorldMap sceneId={scene.scene_id} sceneName={`${scene.region_name}・${scene.display_name}`} expanded={worldMapOpen} onExpandedChange={setWorldMapOpen} />
+        <WorldMap sceneId={scene.scene_id} sceneName={`${scene.region_name}・${scene.display_name}`} expanded={worldMapOpen} onExpandedChange={setWorldMapOpen} navigation={navigation} />
 
         <button
           type="button"

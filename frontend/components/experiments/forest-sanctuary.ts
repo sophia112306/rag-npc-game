@@ -277,9 +277,11 @@ export function createForestSanctuary(scene: Scene, parent: TransformNode, world
   backdrop.isPickable = false;
   const forestTexture = new Texture("/game/forest-eye-backdrop.png", scene);
   textures.push(forestTexture);
+  // Overlap the source image's two edges instead of reflecting its UVs.
+  // This preserves asymmetric tree shapes without a hard seam or fog stripe.
   const backdropMaterial = new ShaderMaterial("mist blended forest artwork", scene, {
     vertexSource: `precision highp float;attribute vec3 position;attribute vec2 uv;uniform mat4 worldViewProjection;varying vec2 v;void main(){v=uv;gl_Position=worldViewProjection*vec4(position,1.);}`,
-    fragmentSource: `precision highp float;varying vec2 v;uniform sampler2D forest;uniform vec3 mist;uniform float daylight;void main(){float u=1.-abs(fract(v.x*2.)*2.-1.);vec3 c=texture2D(forest,vec2(u,v.y)).rgb;float edge=smoothstep(.01,.30,v.y)*(1.-smoothstep(.67,1.,v.y));c=mix(c,mist,.32)*daylight;gl_FragColor=vec4(c,edge*.94);}`
+    fragmentSource: `precision highp float;varying vec2 v;uniform sampler2D forest;uniform vec3 mist;uniform float daylight;void main(){float u=fract(v.x*4.+.5)*.85;vec3 c=texture2D(forest,vec2(u,v.y)).rgb;vec3 previous=texture2D(forest,vec2(min(u+.85,1.),v.y)).rgb;c=mix(previous,c,smoothstep(0.,.15,u));float edge=smoothstep(.01,.30,v.y)*(1.-smoothstep(.67,1.,v.y));c=mix(c,mist,.32)*daylight;gl_FragColor=vec4(c,edge*.94);}`
   }, {
     attributes: ["position", "uv"],
     uniforms: ["worldViewProjection", "mist", "daylight"],

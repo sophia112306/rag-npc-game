@@ -419,6 +419,8 @@ def test_map_routes_are_server_choices_and_unlock_after_investigation(tmp_path):
         assert scenes["minglin_rune_grove"]["travel_choice"] in choices
         assert "記憶" not in str(scenes) and "truth_level" not in str(scenes)
         grove = _submit_choice(client, "map-routes", 1, "travel_to_minglin_rune_grove")
+        assert "辨認風沙路徑" in grove["state"]["navigation"]["objective"]
+        assert "前往平衡議會" not in grove["state"]["navigation"]["objective"]
         route = _submit_choice(client, "map-routes", grove["state"]["state_version"], "trace_dust_runes")
         valley = next(s for s in route["state"]["navigation"]["scenes"] if s["scene_id"] == "liuchen_valley")
         assert valley["unlocked"] and valley["travel_choice"]["story_choice_id"] == "enter_liuchen_valley"

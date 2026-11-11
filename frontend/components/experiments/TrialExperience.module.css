@@ -116,6 +116,47 @@
   letter-spacing: 0.1em;
   margin: 7px 0;
 }
+.objective .nextStep {
+  margin: 13px 0 8px;
+  padding-top: 11px;
+  border-top: 1px solid #b6c4a733;
+  color: #eedca7;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.routeLink {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #b9d9c8;
+  font-size: 11px;
+  cursor: pointer;
+}
+.milestone {
+  position: absolute;
+  z-index: 7;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-block: 1px solid #c4ae74;
+  background: linear-gradient(90deg,transparent,#142d2aec 15%,#142d2aec 85%,transparent);
+  color: #efddaa;
+  font-size: 15px;
+  letter-spacing: .08em;
+  pointer-events: none;
+  text-align: center;
+}
+.dialogue .dialogueNext {
+  margin: 8px 0;
+  color: #d7ca9c;
+  font-size: 12px;
+}
+.choices button[data-tracked="true"] {
+  border-color: #e7ca7f;
+  background: #55513a;
+  box-shadow: 0 0 0 1px #e7ca7f44;
+}
 .objective p {
   font-size: 13px;
   margin: 8px 0;

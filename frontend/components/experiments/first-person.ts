@@ -98,15 +98,9 @@ export function createFirstPerson(
         travel: drag.travel + Math.hypot(dx, dy),
       };
   };
-  const pointerUp = (event: PointerEvent) => {
-    const click = drag && drag.travel < 6;
-    drag = null;
-    if (!click || paused) return;
-    const target = driver.pickGround(event.clientX, event.clientY);
-    if (!target) {
-      onNotice("請點石板路或可行走的地面。按住滑鼠拖曳可以環視。");
-      return;
-    }
+  const walkTo = (point: GroundTarget) => {
+    if (paused) return;
+    const target = {...point};
     const distance = Math.hypot(target.x - pose.x, target.z - pose.z);
     if (target.interaction && distance <= 3.6) {
       onInteract();
@@ -124,6 +118,17 @@ export function createFirstPerson(
         : "正在走向你點選的位置；WASD 可隨時接手。",
     );
   };
+  const pointerUp = (event: PointerEvent) => {
+    const click = drag && drag.travel < 6;
+    drag = null;
+    if (!click || paused) return;
+    const target = driver.pickGround(event.clientX, event.clientY);
+    if (!target) {
+      onNotice("請點石板路或可行走的地面。按住滑鼠拖曳可以環視。");
+      return;
+    }
+    walkTo(target);
+  };
   const cancel = () => {
     drag = null;
   };
@@ -138,6 +143,7 @@ export function createFirstPerson(
   canvas.addEventListener("contextmenu", context);
   return {
     pose,
+    walkTo,
     setMove(direction: MoveDirection, pressed: boolean) {
       goal = null;
       if (pressed && !paused) {

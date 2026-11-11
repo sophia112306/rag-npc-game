@@ -49,3 +49,14 @@ test("touch directions stop when paused and work after returning",()=>{
   const {controls}=setup();controls.setMove("forward",true);controls.tick(.2);const moved=controls.pose.z;
   controls.pause(true);controls.tick(.2);assert.equal(controls.pose.z,moved);controls.pause(false);controls.setMove("right",true);controls.tick(.2);assert.ok(controls.pose.x>0);controls.dispose();
 });
+
+test("map route tracking shares walking and stops near the landmark before interacting",()=>{
+  const {controls,interactions}=setup();
+  const target={x:0,z:-8,interaction:true};
+  controls.pause(true);controls.pause(false);controls.walkTo(target);
+  for(let i=0;i<120;i++)controls.tick(.05);
+  assert.equal(interactions(),1);
+  assert.ok(controls.pose.z>-8+2.5 && controls.pose.z<-8+3.6);
+  assert.deepEqual(target,{x:0,z:-8,interaction:true});
+  controls.dispose();
+});

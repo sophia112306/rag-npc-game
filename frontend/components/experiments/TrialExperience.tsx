@@ -15,6 +15,7 @@ import {
 import { getSceneMusic } from "../../lib/scene-music";
 import { useSceneMusic } from "../../lib/use-scene-music";
 import { createFirstPerson, type MoveDirection } from "./first-person";
+import WorldMap from "../WorldMap";
 import type { TrialDriver } from "./world";
 import styles from "./TrialExperience.module.css";
 
@@ -41,6 +42,7 @@ export default function TrialExperience() {
   const interactionRef = useRef<() => void>(() => {});
   const journalRef = useRef<() => void>(() => {});
   const pendingRef = useRef<Pending | null>(null);
+  const pendingMapWalk = useRef(false);
   const [sessionId, setSessionId] = useState("");
   const [state, setState] = useState<GameStateSummary | null>(null);
   const [ready, setReady] = useState(false);
@@ -52,6 +54,9 @@ export default function TrialExperience() {
   const [choices, setChoices] = useState<PlayerChoice[]>([]);
   const [panel, setPanel] = useState(false);
   const [journal, setJournal] = useState(false);
+  const [worldMapOpen, setWorldMapOpen] = useState(false);
+  const [trackedDestination, setTrackedDestination] = useState<string | null>(null);
+  const [milestone, setMilestone] = useState("");
   const [command, setCommand] = useState("");
   const [npcMessage, setNpcMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -80,6 +85,8 @@ export default function TrialExperience() {
         next.world_scene.spawn_z,
       );
       setPanel(false);
+      pendingMapWalk.current = false;
+      setTrackedDestination(null);
       setLine(next.current_scene.description);
     }
   }
@@ -122,6 +129,11 @@ export default function TrialExperience() {
     setPanel((value) => !value);
   };
   journalRef.current = () => setJournal((value) => !value);
+
+  function showMap(open: boolean) {
+    setWorldMapOpen(open);
+    if (open) { setPanel(false); setJournal(false); }
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -192,16 +204,34 @@ export default function TrialExperience() {
   }, []);
 
   useEffect(() => {
-    controlsRef.current?.pause(panel || journal || !sceneReady || !state);
+    const paused = panel || journal || worldMapOpen || !sceneReady || !state;
+    controlsRef.current?.pause(paused);
+    if (!paused && pendingMapWalk.current && stateRef.current) {
+      pendingMapWalk.current = false;
+      const current = stateRef.current.world_scene;
+      controlsRef.current?.walkTo({x:current.interaction_x,z:current.interaction_z,interaction:true});
+    }
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setPanel(false);
         setJournal(false);
+        setWorldMapOpen(false);
+      } else if (event.code === "KeyM" && !event.repeat &&
+        !(event.target instanceof HTMLElement && event.target.closest("input,textarea,[contenteditable=true]"))) {
+        event.preventDefault();
+        setWorldMapOpen(open => !open);
+        setPanel(false);setJournal(false);
       }
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [ready, panel, journal, sceneReady, state?.session_id]);
+  }, [ready, panel, journal, worldMapOpen, sceneReady, state?.session_id]);
+
+  useEffect(() => {
+    if (!milestone) return;
+    const timer = window.setTimeout(() => setMilestone(""), 6500);
+    return () => window.clearTimeout(timer);
+  }, [milestone]);
 
   useEffect(() => {
     if (!ready || !world || !driverRef.current) return;
@@ -315,6 +345,11 @@ export default function TrialExperience() {
       });
       pendingRef.current = null;
       applyState(turn.state);
+      if (snapshot.story_progress.node_id !== turn.state.story_progress.node_id) {
+        setMilestone(`調查進度更新 · ${turn.state.story_progress.chapter_title}`);
+      } else if (turn.state.story_progress.public_clue_ids.length > snapshot.story_progress.public_clue_ids.length) {
+        setMilestone("新的調查線索已記錄");
+      }
       const result = turn.story.dialogue.map((l) => l.text).join(" ");
       setLine(result);
       setNotice(result);
@@ -326,11 +361,11 @@ export default function TrialExperience() {
     } catch (cause) {
       if (
         cause instanceof ApiRequestError &&
-        cause.code === "STATE_VERSION_CONFLICT"
+        ["STATE_VERSION_CONFLICT", "STORY_CHOICE_UNAVAILABLE"].includes(cause.code ?? "")
       ) {
         pendingRef.current = null;
         await sync(sessionId);
-        setError("另一頁已更新進度，現在已同步；請再送一次。");
+        setError("進度或路線已更新，現在已同步；請依新的選項繼續。");
       } else {
         setError(
           cause instanceof Error ? cause.message : "行動沒有完成，請重試。",
@@ -352,6 +387,15 @@ export default function TrialExperience() {
     });
   }
 
+  function followMapRoute(choice: PlayerChoice) {
+    if (busy || !sceneReady) return;
+    setWorldMapOpen(false);
+    if (near) { select(choice); return; }
+    setTrackedDestination(choice.destination_scene_id);
+    pendingMapWalk.current = true;
+    setNotice("路線已追蹤。先走近人物／地標，抵達後選擇目的地出發。");
+  }
+
   async function restartJourney() {
     if (busy) return;
     const id = window.crypto.randomUUID();
@@ -363,6 +407,10 @@ export default function TrialExperience() {
     setSessionId(id);
     setPanel(false);
     setJournal(false);
+    setWorldMapOpen(false);
+    setTrackedDestination(null);
+    pendingMapWalk.current = false;
+    setMilestone("");
     setBusy(true);
     setError("");
     setAssetJobs([]);
@@ -420,6 +468,7 @@ export default function TrialExperience() {
           </div>
         </div>
         <nav>
+          <button onClick={() => showMap(true)}>旅途地圖 <kbd>M</kbd></button>
           <button disabled={busy} onClick={() => void restartJourney()}>
             新旅程
           </button>
@@ -432,6 +481,10 @@ export default function TrialExperience() {
           <Link href="/">2D 版</Link>
         </nav>
       </header>
+      <WorldMap sceneId={scene?.scene_id ?? "minglin"} sceneName={scene?.display_name ?? "平衡議會"}
+        expanded={worldMapOpen} onExpandedChange={showMap} navigation={state?.navigation}
+        onTravel={followMapRoute} near={near} busy={busy} exploration />
+      {milestone && <div className={styles.milestone} role="status">✧ {milestone}</div>}
       <div className={styles.crosshair} aria-hidden>
         ·
       </div>
@@ -449,11 +502,13 @@ export default function TrialExperience() {
               : "白天"}{" "}
           · 場景版本 {world?.config.revision ?? 0}
         </span>
+        <p className={styles.nextStep}>{state?.navigation?.objective ?? "走近維達利亞，選擇一條調查路線。"}</p>
+        <button className={styles.routeLink} onClick={() => showMap(true)}>查看路線 <kbd>M</kbd></button>
       </aside>
       <div className={styles.coordinates} aria-label="玩家位置">
         ⌖ {poseLabel}
       </div>
-      {!panel && !journal && ready && (
+      {!panel && !journal && !worldMapOpen && ready && (
         <div className={styles.movePad} aria-label="按住方向鍵移動">
           {(
             [
@@ -483,7 +538,7 @@ export default function TrialExperience() {
           ))}
         </div>
       )}
-      {ready && sceneReady && !panel && !journal && (
+      {ready && sceneReady && !panel && !journal && !worldMapOpen && (
         <div className={styles.interaction}>
           <button disabled={!near} onClick={() => interactionRef.current()}>
             <kbd>E</kbd>{" "}
@@ -519,7 +574,7 @@ export default function TrialExperience() {
               : "3D 場景就緒"}
         </span>
       </footer>
-      {!panel && !journal && (
+      {!panel && !journal && !worldMapOpen && (
         <div className={styles.notice} role="status">
           {notice}
         </div>
@@ -554,11 +609,13 @@ export default function TrialExperience() {
                   : scene?.display_name}
             </small>
             <p>{line}</p>
+            <p className={styles.dialogueNext}>{state?.navigation?.objective}</p>
             <div className={styles.choices}>
               {choices.map((choice) => (
                 <button
                   key={choice.choice_id}
                   disabled={busy}
+                  data-tracked={choice.destination_scene_id === trackedDestination && !!trackedDestination}
                   onClick={() => select(choice)}
                 >
                   {choice.label}
@@ -584,7 +641,7 @@ export default function TrialExperience() {
               >
                 <input
                   aria-label="對角色說話"
-                  placeholder="也可以直接說出你的想法…"
+                  placeholder="也可以說出你的想法，或輸入上方對話選項…"
                   value={npcMessage}
                   onChange={(event) => setNpcMessage(event.target.value)}
                   maxLength={2000}
