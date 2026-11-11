@@ -49,9 +49,7 @@ def test_scene_registry_references_existing_assets_and_destinations() -> None:
         profile = SCENES[story_scene_id].visual_profile
         assert profile.show_vidalia is False
         assert profile.show_ground is False
-
-    assert SCENES["liuchen_valley"].visual_profile.prop_groups == ()
-    assert SCENES["lieyi_plains"].visual_profile.prop_groups == ()
+        assert profile.prop_groups == ()
 
     for isolated_scene_id in ("liuchen_valley", "lieyi_plains"):
         assert all(

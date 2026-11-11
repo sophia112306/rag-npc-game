@@ -127,7 +127,10 @@ SCENES: dict[str, SceneDefinition] = {
             rune_emissive_color="#17695f",
             liquid_color="#25b4bd",
             liquid_emissive_color="#147b8b",
-            prop_groups=("forest", "spring"),
+            # The generated background is a complete perspective illustration.
+            # Primitive forest/spring meshes break that perspective and are kept
+            # disabled until matching scene-specific GLB assets are available.
+            prop_groups=(),
             show_ground=False,
             show_vidalia=False,
         ),
@@ -166,7 +169,9 @@ SCENES: dict[str, SceneDefinition] = {
             rune_emissive_color="#4a267c",
             liquid_color="#415f83",
             liquid_emissive_color="#263a63",
-            prop_groups=("forest", "pillars"),
+            # Do not layer the council prototype's primitive props over this
+            # complete illustration; it creates visible scale/perspective seams.
+            prop_groups=(),
             show_ground=False,
             show_vidalia=False,
         ),
