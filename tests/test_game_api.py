@@ -48,6 +48,73 @@ def test_public_character_profile_is_available(client: TestClient) -> None:
     assert "secrets" not in response.json()
 
 
+def test_andre_profile_choices_and_dialogue_are_available(client: TestClient) -> None:
+    profile = client.get("/api/characters/andre")
+    assert profile.status_code == 200
+    assert profile.json()["portrait_url"] == "/images/andre.png"
+
+    state = start_session(client, "andre-session")
+    choices = client.get("/api/game/andre-session/choices?npc_id=andre")
+    assert choices.status_code == 200
+    assert choices.json()
+    assert all(choice["target_npc_id"] == "andre" for choice in choices.json())
+
+    action = action_payload("andre-session", expected_state_version=state["state_version"])
+    action.update(message=choices.json()[0]["message"], target_npc_id="andre")
+    response = client.post("/api/game/turn", json=action)
+    assert response.status_code == 200
+    assert response.json()["story"]["dialogue"][0]["speaker_name"] == "安德烈"
+    assert "地脈" in response.json()["story"]["dialogue"][0]["text"]
+    assert response.json()["state"]["npc_states"]["andre"]["met"] is True
+    assert response.json()["state"]["state_version"] == state["state_version"] + 1
+
+
+def test_menmesvento_appears_on_dust_route_without_revealing_later_truths(client: TestClient) -> None:
+    profile = client.get("/api/characters/menmesvento")
+    assert profile.status_code == 200
+    assert profile.json()["portrait_url"] == "/images/menmesvento.png"
+
+    session_id = "menmesvento-session"
+    state = start_session(client, session_id)
+    for choice_id in (
+        "travel_to_minglin_rune_grove",
+        "trace_dust_runes",
+        "enter_liuchen_valley",
+    ):
+        choices = client.get(f"/api/game/{session_id}/choices")
+        assert choices.status_code == 200
+        choice = next(item for item in choices.json() if item["choice_id"] == choice_id)
+        assert choice["story_choice_id"] == choice_id
+        response = client.post(
+            "/api/game/turn",
+            json={
+                **action_payload(session_id, expected_state_version=state["state_version"]),
+                "message": choice["message"],
+                "target_npc_id": choice["target_npc_id"],
+                "action_mode": choice["action_mode"],
+                "destination_scene_id": choice["destination_scene_id"],
+                "story_choice_id": choice["story_choice_id"],
+            },
+        )
+        assert response.status_code == 200, response.text
+        state = response.json()["state"]
+
+    assert state["current_scene_id"] == "liuchen_valley"
+    npc_choices = client.get(f"/api/game/{session_id}/choices?npc_id=menmesvento")
+    assert npc_choices.status_code == 200
+    assert all(choice["target_npc_id"] == "menmesvento" and choice["story_choice_id"] is None for choice in npc_choices.json())
+    action = action_payload(session_id, expected_state_version=state["state_version"])
+    action.update(message=npc_choices.json()[0]["message"], target_npc_id="menmesvento")
+    reply = client.post("/api/game/turn", json=action)
+    assert reply.status_code == 200, reply.text
+    dialogue = reply.json()["story"]["dialogue"][0]
+    assert dialogue["speaker_name"] == "門梅司文托"
+    assert "名字" in dialogue["text"]
+    assert "空白頁" not in dialogue["text"]
+    assert "外部組織" not in dialogue["text"]
+    assert reply.json()["state"]["npc_states"]["menmesvento"]["met"] is True
+
+
 def test_default_capabilities_identify_rule_based_generation(client: TestClient) -> None:
     response = client.get("/api/capabilities")
 

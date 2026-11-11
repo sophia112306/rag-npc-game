@@ -16,3 +16,4 @@ class PlayerChoice(BaseModel):
     target_npc_id: str | None = Field(default=None, max_length=100)
     action_mode: ActionMode = ActionMode.DIALOGUE
     destination_scene_id: str | None = Field(default=None, max_length=100)
+    story_choice_id: str | None = Field(default=None, max_length=100)

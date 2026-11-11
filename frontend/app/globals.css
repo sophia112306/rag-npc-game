@@ -19,8 +19,38 @@ button { cursor: pointer; }
 .location-copy strong { color: #fff0c4; font-size: clamp(18px, 1.8vw, 28px); font-weight: 500; letter-spacing: .15em; text-shadow: 0 2px 3px #000; }
 .location-copy span { color: #d6bb7c; font-size: 10px; letter-spacing: .14em; white-space: nowrap; }
 .location-ornament { margin-left: auto; margin-right: 22px; font-size: 24px; }
+.world-map-preview { position: absolute; z-index: 3; top: calc(2.2% + 78px); left: 18px; width: 258px; border: 1px solid #c5a568; color: #f6e6b9; background: #0c1813e8; box-shadow: inset 0 0 0 2px #302a1c, 0 7px 20px #0008; backdrop-filter: blur(5px); }
+.world-map-open { display: block; width: 100%; padding: 0; border: 0; color: inherit; background: none; text-align: left; }
+.world-map-open:hover, .world-map-open:focus-visible { outline: 1px solid #f2d38e; box-shadow: 0 0 16px #e7c67b55; }
+.world-map-preview-heading { min-height: 30px; padding: 5px 9px; display: flex; align-items: center; justify-content: space-between; color: #f3d89c; background: #17251bd9; font-size: 12px; letter-spacing: .12em; }
+.world-map-preview-heading span { font: 18px Georgia, serif; line-height: 1; }
+.world-map-preview-image { position: relative; display: block; margin: 5px; overflow: hidden; border: 1px solid #b39c6f; aspect-ratio: 1672 / 941; background: #23382f; }
+.world-map-preview-image img, .world-map-full-image img { display: block; width: 100%; height: auto; }
+.world-map-preview-footer { min-height: 24px; padding: 2px 7px 5px; display: flex; align-items: center; justify-content: space-between; gap: 5px; color: #e9d4a3; font-size: 10px; white-space: nowrap; }
+.world-map-preview-footer span { color: #f7df9d; }
+.world-map-current { position: absolute; z-index: 2; width: 19px; height: 19px; transform: translate(-50%, -50%); display: grid; place-items: center; border: 2px solid #f6f0cd; border-radius: 50%; background: #35d9d3a8; box-shadow: 0 0 0 4px #4bebd251, 0 0 18px 7px #52f5e4; pointer-events: none; }
+.world-map-current span { width: 6px; height: 6px; border-radius: 50%; background: #ffffff; }
+.world-map-preview .world-map-current { width: 10px; height: 10px; border-width: 1px; box-shadow: 0 0 0 2px #4bebd27a, 0 0 7px 3px #52f5e4; }
+.world-map-preview .world-map-current span { width: 3px; height: 3px; }
+.game-overlay.world-map-overlay { z-index: 9; }
+.world-map-dialog { width: min(1450px, calc(100vw - 48px)); max-height: calc(100svh - 40px); padding: 9px; display: flex; flex-direction: column; border: 1px solid #d7b369; background: #0e1712f5; box-shadow: inset 0 0 0 3px #2b2b1c, 0 18px 55px #000c; }
+.world-map-dialog-header { min-height: 39px; padding: 1px 8px 7px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #f0d696; }
+.world-map-dialog-header div { display: flex; align-items: baseline; gap: 18px; }
+.world-map-dialog-header div > span { font-size: 20px; letter-spacing: .1em; }
+.world-map-dialog-header small { color: #d0c3a2; font-size: 11px; }
+.world-map-dialog-header button { padding: 2px 6px; border: 0; color: #e1d3b3; background: none; font-size: 20px; }
+.world-map-dialog-header button:hover, .world-map-dialog-header button:focus-visible { color: #fff4cf; outline: 1px solid #d7b369; }
+.world-map-scroll { min-height: 0; overflow: auto; border: 1px solid #9f844e; background: #17251b; scrollbar-color: #ae9257 #18221b; }
+.world-map-scroll:focus-visible { outline: 2px solid #e8ce86; }
+.world-map-full-image { position: relative; width: 100%; min-width: 900px; aspect-ratio: 1672 / 941; }
+.world-map-caption { margin: 0; padding: 8px 5px 2px; display: flex; justify-content: space-between; gap: 12px; color: #dbcca5; font-size: 11px; line-height: 1.5; }
+.world-map-caption span { white-space: nowrap; }
+.music-toggle { position: absolute; z-index: 3; top: 2.2%; right: 1.5%; min-width: 108px; padding: 7px 11px; border: 1px solid #c9a764; border-radius: 3px; color: #f1d9a1; background: #10190edb; box-shadow: inset 0 0 0 2px #332a16, 0 5px 18px #071007aa; font-size: 12px; letter-spacing: .08em; }
+.music-toggle:hover, .music-toggle:focus-visible { color: #fff4cd; background: #473a1d; outline: 1px solid #f2d38e; }
+.music-toggle.is-playing { color: #fff0bc; border-color: #e2c27e; }
 
 .quest-banner { position: absolute; z-index: 3; top: 8.4%; right: 1.5%; min-width: min(320px, 29vw); height: 68px; padding: 0 17px; display: flex; align-items: center; gap: 15px; border: 1px solid #d2ad65; background: #0d120cdb; box-shadow: inset 0 0 0 3px #211c0caa, 0 8px 20px #0009; color: #ffedbc; font-size: clamp(16px, 1.45vw, 22px); letter-spacing: .12em; white-space: nowrap; }
+.quest-banner > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .quest-emblem { color: #f8d778; font-size: 43px; line-height: 1; }
 .help-button, .restart-button { padding: 5px; border: 0; color: #bba268; background: transparent; line-height: 1; }
 .help-button { margin-left: auto; font-family: Georgia, serif; font-size: 19px; }
@@ -45,7 +75,7 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
 .dialogue-panel::after { bottom: -3px; right: -3px; border-bottom: 3px solid #e3c47d; border-right: 3px solid #e3c47d; }
 .dialogue-portrait { position: absolute; left: -1px; top: -18px; bottom: -1px; width: 180px; overflow: hidden; border: 2px solid #d9b768; background: #46502b; box-shadow: inset 0 0 0 3px #24230e, 5px 0 22px #0009; }
 .dialogue-portrait img { object-fit: cover; object-position: center 17%; }
-.dialogue-main { width: 100%; min-width: 0; margin-left: 184px; padding: 12px 21px 12px 19px; display: flex; flex-direction: column; }
+.dialogue-main { flex: 1; min-width: 0; margin-left: 184px; padding: 12px 21px 12px 19px; display: flex; flex-direction: column; }
 .dialogue-heading { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 5px; border-bottom: 1px solid #a88a4cb0; }
 .dialogue-heading > div { display: flex; align-items: baseline; gap: 18px; }
 .dialogue-heading h1 { margin: 0; color: #f6dc9d; font-size: clamp(19px, 1.6vw, 26px); font-weight: 500; letter-spacing: .12em; text-shadow: 0 2px 4px #000; }
@@ -109,6 +139,7 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
 
 @media (max-width: 900px) {
   .location-banner { width: 290px; height: 54px; }
+  .world-map-preview { top: calc(2.2% + 68px); left: 12px; width: 220px; }
   .compass-mark { flex-basis: 66px; width: 66px; height: 66px; margin-left: 7px; }
   .location-copy { margin-left: 5px; }
   .location-copy span { font-size: 8px; }
@@ -118,18 +149,28 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
 }
 
 @media (max-width: 640px) {
+  .world-map-preview { top: 122px; left: 10px; width: min(210px, 54vw); }
+  .world-map-preview-heading { min-height: 27px; font-size: 10px; }
+  .world-map-preview-footer { font-size: 9px; }
+  .world-map-dialog { width: calc(100vw - 20px); padding: 6px; }
+  .world-map-dialog-header div { flex-direction: column; gap: 0; }
+  .world-map-dialog-header div > span { font-size: 17px; }
+  .world-map-caption { font-size: 10px; flex-direction: column; gap: 2px; }
+  .music-toggle { top: 12px; right: 10px; min-width: 84px; padding: 7px 8px; font-size: 10px; }
   .location-banner { top: 12px; width: 198px; height: 48px; }
   .location-banner::after { left: 56px; }
   .compass-mark { flex-basis: 48px; width: 54px; height: 54px; margin-left: 3px; }
   .location-copy strong { font-size: 19px; }
   .location-copy span, .location-ornament { display: none; }
-  .quest-banner { top: 72px; right: 10px; min-width: 190px; height: 42px; font-size: 13px; }
-  .quest-emblem { font-size: 23px; }
-  .restart-button { font-size: 17px; }
+  .quest-banner { top: 72px; right: 10px; width: min(190px, calc(100vw - 160px)); min-width: 0; height: 42px; gap: 4px; padding: 0 6px; font-size: 12px; }
+  .quest-emblem { flex: 0 0 auto; font-size: 19px; }
+  .quest-banner button { flex: 0 0 auto; }
+  .help-button { margin-left: 0; font-size: 16px; }
+  .restart-button { font-size: 16px; }
   .zoom-controls { top: 130px; right: 10px; }
   .zoom-controls button { width: 37px; min-height: 35px; font-size: 22px; }
   .zoom-controls .zoom-level { font-size: 10px; }
-  .control-hint { left: 10px; bottom: 225px; font-size: 9px; }
+  .control-hint { left: 10px; bottom: 208px; font-size: 9px; }
   .touch-controls { position: absolute; z-index: 3; left: 10px; bottom: 245px; display: grid; grid-template-columns: repeat(3, 34px); grid-template-rows: repeat(2, 34px); gap: 3px; }
   .touch-controls button { border: 1px solid #ebd18c; border-radius: 3px; background: #1c281cc7; color: #f4dfa7; font-size: 12px; }
   .touch-up { grid-column: 2; grid-row: 1; }

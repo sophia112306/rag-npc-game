@@ -2,7 +2,10 @@
 
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import MinglinGame, { interactWithNpc, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP } from "../components/MinglinGame";
+import MinglinGame, { interactWithNpc, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP, type NpcId } from "../components/MinglinGame";
+import WorldMap from "../components/WorldMap";
+import { getSceneMusic } from "../lib/scene-music";
+import { useSceneMusic } from "../lib/use-scene-music";
 import {
   ApiRequestError,
   DEFAULT_SCENE_VISUAL_PROFILE,
@@ -32,6 +35,7 @@ type ChatMessage = {
   speaker: string;
   text: string;
   kind: "npc" | "player";
+  npcId?: NpcId;
 };
 
 type PendingAction = {
@@ -59,6 +63,33 @@ type BrowserSpeechRecognition = {
 type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
 const conversationKey = (id: string) => `vidalia-conversation:${id}`;
+const legacyNpcDialogue: Record<string, string> = {
+  "這裡是鳴霖的平衡議會。泉水在第一次入侵後停止擴張，而現在出現的失序值得重新調查。": "這裡是鳴霖的平衡議會。命脈之泉已經很久沒有向外延伸；最近又出現異象，我還不知道兩者是否相關。",
+  "人族長老害怕失去輪迴，木乃伊則害怕被世界遺忘。他們都可能注意到唯一連著維塔意識的外來者。": "人族長老與流塵谷的居民都在留意這場異象。各自為何而來，還需要查證。",
+  "結界若破裂，人族就失去下一世。長老想控制維塔的力量，但他真正知道多少仍需要證據。": "我們只知道長老會最近在泉水附近活動；他們的目的尚無確證。",
+  "他們想被能返回外界的你記住。那不等於復活，卻是他們對抗遺忘的方式。": "流塵谷的人很重視記憶與名字。若你遇見他們，先聽他們說自己的故事。",
+  "你沒有把長老的說法直接當成真相，而是記下他對失去下一世的恐懼與控制規則的企圖。": "長老會也在關注聖火，但你還沒有足夠證據判斷他們的目的。",
+  "他們沒有因此獲得外部復活，卻把被你記住視為在世界之外留下存在的唯一方式。": "他們希望自己的名字不只留在沙裡。你記住了其中幾個，卻還不知道這份請求背後的原因。",
+  "符石的缺口組成一張不穩定的裂隙地圖；它足以在追殺或崩塌發生時指向流塵谷。": "符石的缺口指向流塵谷。你記下這條暫定路線，準備前往查探。",
+  "符石路徑在腳下崩解，你借助地圖標出的地理優勢甩開封閉路線，進入流塵谷。": "符石路徑在腳下崩解，你循著先前記下的風沙方向穿過裂隙，進入流塵谷。",
+};
+
+function migrateRecordedDialogue(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((message) => {
+    if (message.kind === "player" && message.text === "我把符石間的風沙軌跡拼成一張路線圖。") {
+      return { ...message, text: "我從符石間的風沙軌跡辨認流塵谷的方向。" };
+    }
+    if (message.kind === "player" && message.text === "我依照裂隙地圖進入流塵谷。") {
+      return { ...message, text: "我沿著符石間辨認的風沙方向進入流塵谷。" };
+    }
+    if (message.kind !== "npc") return message;
+    const text = (legacyNpcDialogue[message.text] ?? message.text)
+      .replaceAll("Demo 完成：長老的企圖", "Demo 完成：長老的行蹤")
+      .replaceAll("裂隙地圖", "流塵谷的路標");
+    return text === message.text ? message : { ...message, text };
+  });
+}
+
 const previewProfile: CharacterProfile = {
   npc_id: "vidalia",
   name: "維達利亞",
@@ -68,6 +99,28 @@ const previewProfile: CharacterProfile = {
   portrait_url: "/images/vidalia.png",
   description: "鳴霖的精靈領袖與史官，守護命脈之泉，也在世界異象中尋找平衡。",
   greeting: "旅人，歡迎來到鳴霖。命脈之泉近來沉默得太久了；你願意告訴我，你沿途看見了什麼嗎？",
+};
+
+const previewAndreProfile: CharacterProfile = {
+  npc_id: "andre",
+  name: "安德烈",
+  romanized_name: "Andre",
+  title: "鳴霖精靈・邊界調查官",
+  scene_name: "鳴霖・平衡議會",
+  portrait_url: "/images/andre.png",
+  description: "長年在各地邊界調查的精靈，正在查找命脈之泉與林地異象的線索。",
+  greeting: "我剛從林地邊緣回來。最近的地脈有些異動；你在路上看見什麼異常嗎？",
+};
+
+const previewMenmesventoProfile: CharacterProfile = {
+  npc_id: "menmesvento",
+  name: "門梅司文托",
+  romanized_name: "Menmesvento",
+  title: "流塵谷隱者・古卷守護者",
+  scene_name: "流塵谷",
+  portrait_url: "/images/menmesvento.png",
+  description: "在流塵谷記錄名字與記憶的隱者，言談沉靜，常攜著一本古卷。",
+  greeting: "風沙會掩去腳印，名字卻值得留下。旅人，你是從哪條路來的？",
 };
 
 const previewScene: PlayerScene = {
@@ -83,10 +136,11 @@ const previewScene: PlayerScene = {
 };
 
 export default function Home() {
-  const [profile, setProfile] = useState(previewProfile);
+  const [profiles, setProfiles] = useState<Record<NpcId, CharacterProfile>>({ vidalia: previewProfile, andre: previewAndreProfile, menmesvento: previewMenmesventoProfile });
+  const [activeNpcId, setActiveNpcId] = useState<NpcId>("vidalia");
   const [sessionId, setSessionId] = useState("");
   const [dialogueOpen, setDialogueOpen] = useState(false);
-  const [nearNpc, setNearNpc] = useState(false);
+  const [nearNpcId, setNearNpcId] = useState<NpcId | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [inputType, setInputType] = useState<"text" | "speech_transcript">("text");
@@ -100,6 +154,7 @@ export default function Home() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  const [worldMapOpen, setWorldMapOpen] = useState(false);
   const [restartConfirm, setRestartConfirm] = useState(false);
   const [turnNumber, setTurnNumber] = useState(0);
   const [stateVersion, setStateVersion] = useState(1);
@@ -109,10 +164,30 @@ export default function Home() {
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
   const [questLabel, setQuestLabel] = useState("與維達利亞交談");
   const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
+  const [andreChoices, setAndreChoices] = useState<PlayerChoice[]>([]);
+  const [menmesventoChoices, setMenmesventoChoices] = useState<PlayerChoice[]>([]);
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const sceneMusic = getSceneMusic(scene.scene_id);
+  const music = useSceneMusic(sceneMusic.src, speaking ? 0.07 : dialogueOpen ? 0.11 : 0.2);
+  const displayNpcId = dialogueOpen ? activeNpcId : nearNpcId ?? activeNpcId;
+  const profile = profiles[displayNpcId];
+  const visibleMessages = messages.filter((message) => (message.npcId ?? "vidalia") === displayNpcId);
+  const visibleChoices = activeNpcId === "andre" ? andreChoices
+    : activeNpcId === "menmesvento" ? [...menmesventoChoices, ...playerChoices]
+      : playerChoices;
+
+  useEffect(() => {
+    if (scene.scene_id === "liuchen_valley") {
+      setActiveNpcId("menmesvento");
+      setLastNpcSpeech(previewMenmesventoProfile.greeting);
+    } else if (scene.scene_id === "minglin") {
+      setActiveNpcId("vidalia");
+    }
+    setNearNpcId(null);
+  }, [scene.scene_id]);
 
   useEffect(() => {
     const id = window.localStorage.getItem(GAME_SESSION_STORAGE_KEY) ?? window.crypto.randomUUID();
@@ -155,6 +230,7 @@ export default function Home() {
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setHelpOpen(false);
+        setWorldMapOpen(false);
         setRestartConfirm(false);
         setDialogueOpen(false);
       }
@@ -170,8 +246,10 @@ export default function Home() {
     setError("");
     setReady(false);
     try {
-      const [character, state, capabilities] = await Promise.all([
+      const [character, andre, menmesvento, state, capabilities] = await Promise.all([
         requestJson<CharacterProfile>("/api/characters/vidalia"),
+        requestJson<CharacterProfile>("/api/characters/andre"),
+        requestJson<CharacterProfile>("/api/characters/menmesvento"),
         requestJson<GameStateSummary>("/api/game/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -179,11 +257,17 @@ export default function Home() {
         }),
         requestJson<Capabilities>("/api/capabilities"),
       ]);
-      setProfile(character);
+      setProfiles({ vidalia: character, andre, menmesvento });
       setGenerationMode(capabilities.generation_mode);
-      const choices = await requestJson<PlayerChoice[]>(`/api/game/${id}/choices`);
+      const [choices, andreOptions, menmesventoOptions] = await Promise.all([
+        requestJson<PlayerChoice[]>(`/api/game/${id}/choices`),
+        requestJson<PlayerChoice[]>(`/api/game/${id}/choices?npc_id=andre`),
+        requestJson<PlayerChoice[]>(`/api/game/${id}/choices?npc_id=menmesvento`),
+      ]);
       setQuestLabel(`故事進度：${state.story_progress.chapter_title}`);
       setPlayerChoices(choices);
+      setAndreChoices(andreOptions);
+      setMenmesventoChoices(menmesventoOptions);
       setTurnNumber(state.turn_count);
       setStateVersion(state.state_version);
       setScene(state.current_scene);
@@ -196,7 +280,10 @@ export default function Home() {
           cached.messages.every((message: ChatMessage) => typeof message.id === "string" &&
             typeof message.speaker === "string" && typeof message.text === "string" &&
             (message.kind === "npc" || message.kind === "player"))) {
-          restored = cached.messages;
+          restored = migrateRecordedDialogue(cached.messages);
+          if (restored.some((message, index) => message !== cached.messages[index])) {
+            window.localStorage.setItem(conversationKey(id), JSON.stringify({ ...cached, messages: restored }));
+          }
         }
       } catch { /* A missing or old browser record starts with the greeting. */ }
       setMessages(restored);
@@ -211,10 +298,12 @@ export default function Home() {
     }
   }
 
-  const openDialogue = useCallback(() => {
+  const openDialogue = useCallback((npcId: NpcId) => {
+    setActiveNpcId(npcId);
+    setLastNpcSpeech(messages.filter((message) => message.kind === "npc" && (message.npcId ?? "vidalia") === npcId).at(-1)?.text ?? profiles[npcId].greeting);
     setHelpOpen(false);
     setDialogueOpen(true);
-  }, []);
+  }, [messages, profiles]);
 
   function toggleListening() {
     if (listening) {
@@ -285,7 +374,7 @@ export default function Home() {
     void sendAction(
       text,
       inputType,
-      retryingPending ? pending.targetNpcId : "vidalia",
+      retryingPending ? pending.targetNpcId : activeNpcId,
       retryingPending ? pending.actionMode : "dialogue",
       retryingPending ? pending.destinationSceneId : null,
       retryingPending ? pending.storyChoiceId : null,
@@ -299,7 +388,7 @@ export default function Home() {
       choice.target_npc_id,
       choice.action_mode,
       choice.destination_scene_id,
-      choice.choice_id,
+      choice.story_choice_id,
     );
   }
 
@@ -317,7 +406,8 @@ export default function Home() {
     setInputType("text");
     setBusy(true);
     setError("");
-    setMessages((current) => [...current, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }]);
+    const messageNpcId: NpcId = targetNpcId === "andre" || targetNpcId === "menmesvento" ? targetNpcId : activeNpcId;
+    setMessages((current) => [...current, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player", npcId: messageNpcId }]);
     const pending = pendingActionRef.current;
     const canRetryPending = pending?.text === text && pending.inputType === actionInputType && pending.targetNpcId === targetNpcId && pending.actionMode === actionMode && pending.destinationSceneId === destinationSceneId && pending.storyChoiceId === storyChoiceId && pending.expectedStateVersion === stateVersion;
     const actionId = canRetryPending ? pending.actionId : window.crypto.randomUUID();
@@ -348,8 +438,8 @@ export default function Home() {
         const choices = await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`);
         setPlayerChoices(choices);
       } catch { /* The committed turn remains valid if the optional quest refresh fails. */ }
-      const nextMessages: ChatMessage[] = [...messages, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player" }, ...turn.story.dialogue.map((line) => ({
-        id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const,
+      const nextMessages: ChatMessage[] = [...messages, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player", npcId: messageNpcId }, ...turn.story.dialogue.map((line) => ({
+        id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const, npcId: messageNpcId,
       }))];
       setMessages(nextMessages);
       setLastNpcSpeech(turn.story.dialogue.filter((line) => line.speaker_name !== "系統").map((line) => line.text).join("\n"));
@@ -387,21 +477,32 @@ export default function Home() {
     setDialogueOpen(false);
     setRestartConfirm(false);
     setHelpOpen(false);
-    setNearNpc(false);
+    setWorldMapOpen(false);
+    setNearNpcId(null);
+    setActiveNpcId("vidalia");
     setInput("");
     setInputType("text");
     pendingActionRef.current = null;
     void initialize(id);
   }
 
-  const previewLine = turnNumber > 0
-    ? messages.filter((message) => message.kind === "npc").at(-1)?.text
-    : "……你來了。";
+  const previewLine = displayNpcId === "vidalia" && turnNumber === 0
+    ? "……你來了。"
+    : visibleMessages.filter((message) => message.kind === "npc").at(-1)?.text ?? profile.greeting;
 
   return (
     <main className="game-page">
-      <section className="map-stage" aria-label="斜俯視的鳴霖遊戲地圖">
-        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} paused={dialogueOpen || helpOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpc} onInteract={openDialogue} onZoomChange={setMapZoom} />}
+      <audio
+        ref={music.audioRef}
+        src={sceneMusic.src}
+        loop
+        preload="none"
+        onPlay={music.onPlay}
+        onPause={music.onPause}
+        onError={music.onError}
+      />
+      <section className="map-stage" aria-label={`斜俯視的${scene.region_name}遊戲地圖`}>
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} sceneName={scene.region_name} paused={dialogueOpen || helpOpen || worldMapOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpcId} onInteract={openDialogue} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
 
         <header className="location-banner" aria-label="目前場景">
@@ -415,6 +516,17 @@ export default function Home() {
           <span className="location-ornament" aria-hidden="true">✧</span>
         </header>
 
+        <WorldMap sceneId={scene.scene_id} sceneName={`${scene.region_name}・${scene.display_name}`} expanded={worldMapOpen} onExpandedChange={setWorldMapOpen} />
+
+        <button
+          type="button"
+          className={`music-toggle ${music.playing ? "is-playing" : ""}`}
+          onClick={() => void music.toggle()}
+          aria-label={music.error ? `${music.error}點擊重試` : music.playing ? `關閉${sceneMusic.title}背景音樂` : `播放${sceneMusic.title}背景音樂`}
+          aria-pressed={music.playing}
+          title={music.error || (music.playing ? `關閉${sceneMusic.title}背景音樂` : `播放${sceneMusic.title}背景音樂`)}
+        >♫ {music.error ? "重試音樂" : music.playing ? "音樂開" : "播放音樂"}</button>
+
         <aside className="quest-banner" aria-label="目前任務">
           <span className="quest-emblem" aria-hidden="true">◇</span>
           <span>{questLabel}</span>
@@ -422,9 +534,9 @@ export default function Home() {
           <button type="button" className="restart-button" onClick={() => setRestartConfirm(true)} disabled={busy} aria-label="重新開始遊戲" title="重新開始">↺</button>
         </aside>
 
-        {!dialogueOpen && nearNpc && (
+        {!dialogueOpen && nearNpcId && (
           <button type="button" className="near-prompt" onClick={interactWithNpc}>
-            <kbd>E</kbd> 與維達利亞交談
+            <kbd>E</kbd> 與{profiles[nearNpcId].name}交談
           </button>
         )}
 
@@ -445,9 +557,9 @@ export default function Home() {
           <button type="button" className="touch-right" onClick={() => movePlayer({ dx: 1, dy: 0 })} aria-label="向右移動">▶</button>
         </div>
 
-        <section className={`dialogue-panel ${dialogueOpen ? "is-open" : "is-preview"}`} aria-label="與維達利亞對話">
+        <section className={`dialogue-panel ${dialogueOpen ? "is-open" : "is-preview"}`} aria-label={`與${profile.name}對話`}>
           <div className="dialogue-portrait">
-            <Image src={profile.portrait_url} alt="維達利亞肖像" fill sizes="(max-width: 640px) 90px, 175px" />
+            <Image src={profile.portrait_url} alt={`${profile.name}肖像`} fill sizes="(max-width: 640px) 90px, 175px" />
           </div>
           <div className="dialogue-main">
             <div className="dialogue-heading">
@@ -458,13 +570,14 @@ export default function Home() {
             {dialogueOpen ? (
               <>
                 <div className="dialogue-history" aria-live="polite">
-                  {messages.map((message) => <p key={message.id} className={`line-${message.kind}`}><span>{message.speaker}：</span>{message.text}</p>)}
-                  {busy && ready && <p className="thinking">維達利亞正在思索……</p>}
+                  {visibleMessages.length === 0 && <p className="line-npc"><span>{profile.name}：</span>{profile.greeting}</p>}
+                  {visibleMessages.map((message) => <p key={message.id} className={`line-${message.kind}`}><span>{message.speaker}：</span>{message.text}</p>)}
+                  {busy && ready && <p className="thinking">{profile.name}正在思索……</p>}
                   <div ref={endRef} />
                 </div>
-                {playerChoices.length > 0 && (
+                {visibleChoices.length > 0 && (
                   <div className="dialogue-choices" aria-label="可選行動">
-                    {playerChoices.map((choice) => (
+                    {visibleChoices.map((choice) => (
                       <button key={choice.choice_id} type="button" disabled={!ready || busy} onClick={() => selectChoice(choice)}>
                         {choice.label}
                       </button>
@@ -473,7 +586,7 @@ export default function Home() {
                 )}
                 {error && <p className="dialogue-error" role="alert">{error}</p>}
                 <form className="dialogue-form" onSubmit={submit}>
-                  <label htmlFor="dialogue-input" className="sr-only">對維達利亞說話</label>
+                  <label htmlFor="dialogue-input" className="sr-only">對{profile.name}說話</label>
                   <input id="dialogue-input" value={input} onChange={(event) => { setInput(event.target.value); setInputType("text"); }} placeholder={ready ? (listening ? "正在聆聽……" : "說出你的想法……") : "等待後端連線……"} disabled={!ready || busy || listening} maxLength={2000} />
                   <button type="button" className={`voice-button ${listening ? "is-listening" : ""}`} onClick={toggleListening} disabled={!ready || busy || !voiceSupported} aria-label={listening ? "停止語音辨識" : "使用麥克風輸入"} title={voiceSupported ? "語音轉文字" : "瀏覽器不支援語音辨識"}>{listening ? "■" : "🎙"}</button>
                   <button type="button" className={`voice-button ${speaking ? "is-speaking" : ""}`} onClick={speakLastResponse} disabled={!ttsSupported || !lastNpcSpeech} aria-label={speaking ? "停止播放 NPC 回覆" : "播放 NPC 最近回覆"} title={speaking ? "停止播放" : "播放 NPC 最近回覆"}>{speaking ? "■" : "🔊"}</button>
@@ -483,7 +596,7 @@ export default function Home() {
             ) : (
               <div className="dialogue-preview">
                 <p>{previewLine}</p>
-                <button type="button" className="talk-button" onClick={openDialogue}>對話 <span aria-hidden="true">❯</span></button>
+                <button type="button" className="talk-button" onClick={() => openDialogue(displayNpcId)}>對話 <span aria-hidden="true">❯</span></button>
               </div>
             )}
           </div>
@@ -506,7 +619,7 @@ export default function Home() {
             <section className="game-overlay-card help-card" role="dialog" aria-modal="true" aria-label="操作說明">
               <button type="button" className="overlay-close" onClick={() => setHelpOpen(false)} aria-label="關閉說明">✕</button>
               <span className="overlay-rune">✧</span><h2>旅人指南</h2>
-              <dl><div><dt>移動</dt><dd>左鍵點林間步道，或使用 WASD／方向鍵。角色會朝移動方向轉身。</dd></div><div><dt>縮放</dt><dd>滑鼠滾輪、右側 ＋／－，或手機雙指縮放。點倍率可恢復全景。</dd></div><div><dt>轉身</dt><dd>右鍵點想面對的方向，或按 Q／R 原地轉身；手機可用 ↶／↷。</dd></div><div><dt>交談</dt><dd>點擊維達利亞，或靠近後按 E。</dd></div><div><dt>返回</dt><dd>按 Esc 關閉對話與說明。</dd></div></dl>
+              <dl><div><dt>移動</dt><dd>左鍵點道路，或使用 WASD／方向鍵。角色會朝移動方向轉身。</dd></div><div><dt>旅途地圖</dt><dd>點左上角地圖可查看鳴霖、流塵谷、烈燚原及路線；青色光點標示目前場景。前往各地仍依劇情選項。</dd></div><div><dt>縮放</dt><dd>滑鼠滾輪、右側 ＋／－，或手機雙指縮放。點倍率可恢復全景。</dd></div><div><dt>轉身</dt><dd>右鍵點想面對的方向，或按 Q／R 原地轉身；手機可用 ↶／↷。</dd></div><div><dt>交談</dt><dd>鳴霖可與維達利亞、安德烈交談；流塵谷可與門梅司文托交談。點擊角色，或靠近後按 E。</dd></div><div><dt>音樂</dt><dd>右上角可播放或關閉背景音樂。</dd></div><div><dt>返回</dt><dd>按 Esc 關閉對話、地圖與說明。</dd></div></dl>
               <button type="button" onClick={() => setHelpOpen(false)}>繼續探索</button>
             </section>
           </div>

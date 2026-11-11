@@ -13,6 +13,8 @@ import {
   type PlayerChoice,
   type PlayerScene,
 } from "../../lib/game-api";
+import { getSceneMusic } from "../../lib/scene-music";
+import { useSceneMusic } from "../../lib/use-scene-music";
 import { COUNCIL_ROUTE, easeAngle, RELIC_ROUTE, routeDistanceToPoint, routeHeading, routePoint } from "./route";
 import { NPC, RELIC, START, type Pick, type TrialDriver } from "./world";
 import styles from "./TrialExperience.module.css";
@@ -53,6 +55,8 @@ export default function TrialExperience() {
   const [sceneImageStatus, setSceneImageStatus] = useState<"queued" | "processing" | "succeeded" | "fallback">("fallback");
   const currentScene = gameState?.current_scene ?? previewScene;
   const title = currentScene.display_name;
+  const track = getSceneMusic(currentScene.scene_id);
+  const music = useSceneMusic(track.src, focus ? 0.11 : 0.2);
 
   function showBackdrop(scene: PlayerScene, context: "initial" | "turn" = "turn") {
     driverRef.current?.setSceneProfile?.(scene.visual_profile);
@@ -399,11 +403,16 @@ export default function TrialExperience() {
   const nextAction = step === 0 ? "沿路走向議會" : "轉往議會右側";
   return (
     <main className={`${styles.stage} ${styles.cool}`}>
+      <audio ref={music.audioRef} src={track.src} loop preload="none" onPlay={music.onPlay} onPause={music.onPause} onError={music.onError} />
       <canvas ref={canvasRef} className={styles.canvas} aria-label={`${title}第一人稱 3D 場景；點擊路面沿固定路線前進`} />
       <div className={styles.vignette} aria-hidden="true" />
       <header className={styles.topbar}>
         <div className={styles.brand}><span className={styles.compass}>✧</span><div><small>{currentScene.region_name} · 第一人稱試玩</small><strong>{title}</strong></div></div>
-        <div className={styles.toplinks}><span>BABYLON.JS</span><Link href="/">返回原版</Link></div>
+        <div className={styles.toplinks}>
+          <span>BABYLON.JS</span>
+          <button type="button" onClick={() => void music.toggle()} aria-pressed={music.playing} aria-label={music.error ? `${music.error}點擊重試` : music.playing ? `關閉${track.title}背景音樂` : `播放${track.title}背景音樂`} title={music.error || track.title}>♫ {music.error ? "重試音樂" : music.playing ? "音樂開" : "播放音樂"}</button>
+          <Link href="/">返回原版</Link>
+        </div>
       </header>
       <div className={styles.reticle} aria-hidden="true">◇</div>
       <aside className={styles.mission}>

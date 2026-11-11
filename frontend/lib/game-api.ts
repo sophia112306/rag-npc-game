@@ -87,6 +87,7 @@ export type GameTurnResponse = {
 
 export type PlayerChoice = {
   choice_id: string;
+  story_choice_id: string | null;
   label: string;
   message: string;
   target_npc_id: string | null;

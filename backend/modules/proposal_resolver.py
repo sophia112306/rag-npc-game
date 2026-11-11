@@ -313,9 +313,6 @@ class ProposalResolver:
             if scene_id not in state.story_progress.unlocked_scene_ids:
                 state.story_progress.unlocked_scene_ids.append(scene_id)
 
-        if "fissure_map" in choice.reveal_clue_ids:
-            state.flags["fissure_map"] = True
-
         state.story_progress.node_id = choice.next_node_id
         state.story_progress.chapter_title = choice.next_chapter_title
         effect: dict[str, object] = {

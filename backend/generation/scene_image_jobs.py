@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from backend.content.scenes import require_scene
+from backend.content.reveal_policy import is_demo_first_stage, public_chapter_title, public_clue_ids
 from backend.database.models import SceneImageJobRecord
 from backend.schemas.game_state import GameState
 from backend.schemas.scene_image import SceneImageJobView
@@ -43,7 +44,10 @@ class SceneImageCoordinator:
                     "style": self.STYLE_VERSION,
                     "scene_id": scene.scene_id,
                     "story_node_id": state.story_progress.node_id,
-                    "public_clue_ids": sorted(state.story_progress.public_clue_ids),
+                    "public_clue_ids": sorted(public_clue_ids(
+                        state.story_progress.public_clue_ids,
+                        demo_act1=is_demo_first_stage(state),
+                    )),
                     "prompt": prompt,
                 },
                 ensure_ascii=False,
@@ -175,12 +179,15 @@ class SceneImageCoordinator:
     @classmethod
     def _build_prompt(cls, state: GameState) -> str:
         scene = require_scene(state.current_scene_id)
-        clues = ", ".join(sorted(state.story_progress.public_clue_ids)) or "none"
+        clues = ", ".join(sorted(public_clue_ids(
+            state.story_progress.public_clue_ids,
+            demo_act1=is_demo_first_stage(state),
+        ))) or "none"
         return (
             f"Style guide: {cls.STYLE_VERSION}. "
             f"Create a 16:9 environment-only game scene for {scene.display_name} "
             f"({scene.subtitle}). Public description: {scene.description}. "
-            f"Current public story chapter: {state.story_progress.chapter_title}. "
+            f"Current public story chapter: {public_chapter_title(state.story_progress.chapter_title)}. "
             f"Revealed public clue IDs: {clues}. "
             "No text, UI, portrait, private NPC memory, hidden setting, or unrevealed secret."
         )
