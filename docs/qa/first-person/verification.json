@@ -1,0 +1,49 @@
+{
+  "date": "2026-11-11",
+  "backend_tests": 115,
+  "production_build": "passed",
+  "browser": "local Chrome, WebGL2, 1600x913",
+  "wasd": {
+    "before_z": 8,
+    "after_z": -1.8,
+    "held_seconds": 2.8
+  },
+  "interaction": {
+    "rejected_distance_m": 4.2,
+    "accepted_distance_m": 2.8
+  },
+  "mouse_yaw": {
+    "before": 0,
+    "after": 0.26
+  },
+  "fps_sample": 60,
+  "world_command": "生成 6 個符石，變成夜晚並起霧",
+  "refresh_public_world_equal": true,
+  "models": [
+    {
+      "kind": "altar",
+      "status": "succeeded",
+      "attempts": 1,
+      "seed": 44969978,
+      "model_http_status": 200,
+      "bytes": 1544420
+    },
+    {
+      "kind": "runestone",
+      "status": "succeeded",
+      "attempts": 1,
+      "seed": 44969978,
+      "model_http_status": 200,
+      "bytes": 1621884
+    },
+    {
+      "kind": "tree",
+      "status": "succeeded",
+      "attempts": 1,
+      "seed": 44969978,
+      "model_http_status": 200,
+      "bytes": 1957152
+    }
+  ],
+  "javascript_exceptions": 0
+}

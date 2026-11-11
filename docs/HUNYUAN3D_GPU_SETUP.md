@@ -2,11 +2,13 @@
 
 GPU gateway 階段：`██████████ 100%`（校機 build、私有 API、持久化 cache 與真實 GLB 均已驗收）
 
-完整 A4 串接：`████████░░ 80%`（待 FastAPI 3D asset job、Babylon loader、材質與實際畫面驗收）
+完整 A4 原型串接：`██████████ 100%`（持久化 job、私有 API、投影貼圖、Babylon loader 與 Chrome 真實載入完成；正式角色與精修資產仍待提供）
+
+2026-11-11 更新：遊戲後端設定 `HUNYUAN3D_URL=http://127.0.0.1:8081`，經 `/api/game/{session_id}/scene-assets` 提交持久化工作，再由 Session 範圍的 `/model` 下載 GLB。三種環境物件的即時生成與 Babylon `3/3` 載入已驗收。來源與完整提示見 [3D_ASSET_PROMPTS.md](3D_ASSET_PROMPTS.md)，遊戲操作見 [DEMO_HANDOFF.md](DEMO_HANDOFF.md)。
 
 ## 這一階段的範圍
 
-本階段提供一個可重現的 Hunyuan3D shape-only 服務，用單張 PNG／JPEG／WebP 產生 GLB。它不會把風景圖直接變成完整可玩的 3D 關卡；第一個用途是生成祭壇、遺跡、枯木、符石等可獨立擺放的 mesh，之後再由 Babylon.js 組裝場景。
+本階段提供可重現的 Hunyuan3D shape 服務，用單張 PNG／JPEG／WebP 產生獨立 mesh，後處理加入參考圖投影材質與平滑法線。目前已用樹木、符石與祭壇接入 Babylon 組裝場景；整張風景圖片不能直接變成完整可玩的 3D 關卡。
 
 已在校機確認的環境：
 
@@ -22,7 +24,7 @@ Hunyuan3D 官方文件標示 shape generation 約需 6 GB VRAM，shape＋texture
 - Hunyuan3D-2mini shape model。
 - 不載入 Hunyuan3D Paint。
 - 同時間只允許一個 generation。
-- 先輸出無貼圖 GLB，再由既有場景圖或後續 Blender／材質流程處理外觀。
+- Shape 生成後加上參考圖投影貼圖；不額外載入 Paint 模型。側面／背面品質仍有限，正式資產可再用 Blender 精修。
 
 ## 安全邊界
 
@@ -47,7 +49,7 @@ SSH 連線恢復後，在校機執行：
 ```bash
 git clone https://github.com/sophia112306/rag-npc-game.git
 cd rag-npc-game
-git switch feature/hunyuan3d-gpu-gateway
+git switch main
 docker compose -f infra/hunyuan3d/compose.yaml build
 docker compose -f infra/hunyuan3d/compose.yaml up -d
 docker compose -f infra/hunyuan3d/compose.yaml logs -f api
@@ -146,9 +148,9 @@ GPU gateway 的完成條件已達成：
 2. 用專案參考圖實際產出一個可由檢視器開啟的 GLB。
 3. 記錄生成時間、VRAM 峰值、GLB 大小與失敗日誌。
 
-完整 A4 尚需：
+後續精修仍需：
 
-1. FastAPI 新增可持久化的 3D asset job，不讓瀏覽器直接呼叫 GPU。
+1. 已完成 FastAPI 持久化 3D asset job；正式多人部署再拆分外部 worker 與租約。
 2. 由團隊提供獨立物件參考圖；不要使用整張風景圖或把角色單張正面結果直接當正式模型。
-3. Babylon.js 加入 GLB loader、尺寸／旋轉／位置 metadata、材質策略與載入失敗 fallback。
+3. Babylon.js 已加入 GLB loader、尺寸／旋轉／位置、貼圖與載入 fallback；後續應提供正式資產的精確碰撞形狀。
 4. 瀏覽器實際檢查 mesh 面數、材質、遮擋、相機穿模，production build 與回歸測試通過。

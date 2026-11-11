@@ -1,5 +1,7 @@
 # RAG NPC Game
 
+第一人稱版本已恢復玩家自行移動：開啟 `http://localhost:3200/experiments/babylon`，WASD 移動、拖曳環視，走近人物／地標按 E。Tab 的「世界指令」可輸入「生成 6 個符石，變成夜晚並起霧」；場景配置經後端驗證保存，校內 Hunyuan 新 GLB 會逐一載入。操作、限制與交接見 [`docs/DEMO_HANDOFF.md`](docs/DEMO_HANDOFF.md)。
+
 生成式 NPC 遊戲的 A／D 整合專案。現階段已串接既有 Next.js＋Phaser 前端、FastAPI 與 SQLite：可以建立持久化 Session、送出文字，並依設定使用後端規則動態或外部 ModelGateway 產生 NPC 台詞與事件提案；玩家 API、NPC 私有生成背景及事件核准流程已分開。
 
 > 預設的「規則動態」不需要模型，能依玩家輸入、回合、背包、NPC 記憶、承諾與任務產生不同回覆。B 的真實模型／RAG 與外部 STT／TTS 服務仍尚未接入；前端會誠實區分「規則動態」與「AI 動態」。
@@ -16,7 +18,8 @@
 | 開場劇情與舊存檔 | 第一階段台詞、線索 ID 和場景圖片 prompt 改為只公開當時可觀察的資訊；符石路徑先給風沙方向，不提早發放正式裂隙地圖。舊 Demo 存檔、舊回合重送及瀏覽器對話紀錄會轉成新版公開用語。 |
 | 場景與旅途地圖 | 流塵谷新增 Tiled 可走區域與 NPC 位置。首頁加入俯視旅途地圖縮圖，可展開查看鳴霖、命脈之泉、符石林、流塵谷、烈燚原；青色光點會依目前場景移動，地圖本身不觸發旅行。 |
 | 音樂與預覽 | 五個遊戲場景各有一首配樂；首頁與 Babylon 試玩頁會隨場景換曲。另有獨立的維塔預覽頁 `/preview/veta`，可切換觀察視角並播放專用配樂。曲目、來源及檔案記錄見 [`docs/AUDIO_ASSETS.md`](docs/AUDIO_ASSETS.md)。 |
-| 驗證 | 新增第一階段揭露、角色選項、劇情路線與 Hunyuan3D 基礎設施設定測試；本次發行整合執行後端 `106 passed`，Next.js production build 通過並產生 `/`、`/experiments/babylon`、`/preview/veta`。 |
+| 3D 與世界指令 | WASD 第一人稱、近距離互動、五場景連續地形、受限世界指令、持久化 Hunyuan asset jobs 與 GLB 即時載入。 |
+| 驗證 | 本次後端 `115 passed`；Next.js production build 通過；Chrome 實際完成兩條故事路線、五場景、文字指令與三件新 GLB 載入。 |
 
 ### 目前還缺什麼
 
@@ -116,11 +119,11 @@ npm run dev
 
 目前已加入 provider-neutral `ImageGateway`、可持久化 scene image jobs、fingerprint 去重、前端 polling 與失敗 fallback。部署端尚未注入正式圖片 provider，因此介面會標示「版本化場景」；圖片失敗不會回滾已成立的文字回合。正式生圖 adapter、API key、成本上限與獨立 worker 仍待團隊選定。
 
-後端的單一 Scene Registry 位於 `backend/content/scenes.py`，同時提供 2D 背景、3D 遠景、玩家可見名稱、合法出口與 visual profile。Phaser 主頁會切換完整背景；Babylon.js 3D 會依同一 Session 切換遠景、地面、霧光、色盤與前景物件群。`current_scene_id`、成立事件、對話與版本會在同一交易保存，重新整理或重啟後仍可承接。
+後端的單一 Scene Registry 位於 `backend/content/scenes.py`，提供玩家可見名稱與合法出口；`backend/content/world_scenes.py` 從保存的設定組合 3D 空間配置。Phaser 主頁沿用生成插畫；Babylon 使用連續地形、天空、天氣與 Hunyuan GLB，玩家可自行移動探索。`current_scene_id`、場景配置、成立事件、對話與版本在同一交易保存，重新整理或重啟後仍可承接。
 
 符石林與烈燚原的具體內容仍標記為暫定。Demo Story Director 可依已核准線索解鎖流塵谷／烈燚原，但這是週四展示用 fallback，並非一般自由旅行出口，也尚未等同 C 的正式危險事件或完整世界路線。仍須由 C 確認正式事件 ID、入口、出口及 E1／E2／E3 對應後才可升格為正式設定。各地點的完整在場 NPC、獨立 GLB 與碰撞配置也仍待提供。若未來需要即時圖片生成，應另建有預算、快取、審核與失敗回復的 ImageGateway，不和文字回合交易綁死。
 
-校內 GPU 的 Hunyuan3D shape-only Docker gateway 已加入 `infra/hunyuan3d`。服務固定官方 commit 與 CUDA 12.8 依賴，只發布在遠端 loopback，並已透過 SSH tunnel 實際產出經減面驗證的 GLB；目前尚未建立遊戲後端 asset job、正式材質或 Babylon loader，因此不宣稱為已完成的 3D 關卡生成器。部署、安全限制、量測與交接步驟見 [`docs/HUNYUAN3D_GPU_SETUP.md`](docs/HUNYUAN3D_GPU_SETUP.md)。
+校內 Hunyuan3D gateway、持久化 3D asset job 與 Babylon loader 已接通。模型有參考圖投影貼圖與平滑法線；單工、有限重試、GLB 大小／面數與外部資源檢查均保留。遊戲後端用 `HUNYUAN3D_URL=http://127.0.0.1:8081` 經 SSH tunnel 呼叫，瀏覽器只連 FastAPI。現階段支援樹木、符石、祭壇與五個已登記地點的空間重建；正式角色模型與任意文字生成整個世界仍待後續。部署與量測見 [`docs/HUNYUAN3D_GPU_SETUP.md`](docs/HUNYUAN3D_GPU_SETUP.md)。
 
 ## 驗證
 
