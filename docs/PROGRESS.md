@@ -1,6 +1,6 @@
 # A／D 整合進度
 
-整體里程碑：`█████████▌ 95%`（M0～M2c、M4、A2～A3 完成；M3 真實服務與 A1 實機語音待驗收）
+整體里程碑：`█████████▌ 95%`（M0～M2c、M4、A2～A3 完成；M3 真實服務、A1 實機語音與 A4 3D 資產管線待驗收）
 
 週四動態故事 Demo：`█████████▌ 95%`（D0～D3 完成；D4 provider 管線使用靜態 fallback；D5 兩條 live 分支與 3D 實機通過，待週四展示環境人工彩排）
 
@@ -17,6 +17,7 @@
 | A1：瀏覽器語音互動 | `█████████░ 90%` | STT transcript 與瀏覽器 TTS 已完成；待實機麥克風中文辨識驗收 |
 | A2：圖片／場景生成 | `██████████ 100%` | 四張版本化生成場景、單一 Registry、合法換場、2D／3D 顯示、保存與重啟承接均已完成 |
 | A3：情境選項介面 | `██████████ 100%` | 後端依 Session 產生最多四個對話／移動選項，前端點選後提交正式回合並隨狀態更新 |
+| A4：Hunyuan3D 資產管線 | `██████░░░░ 60%` | 私有 shape-only Docker API 與 Blackwell/CUDA 12.8 配置完成；待校機 build、首個 GLB、後端 job 與 Babylon loader |
 
 ## M1 已完成
 
@@ -198,6 +199,16 @@
 - Chrome headless＋CDP 實際座標點擊「前往命脈之泉」：turn POST 與 choices GET 均為 200，場景標題及遠景更新、對話面板退出；hard refresh 後仍保留相同 Session 與位置。
 - 瀏覽器故障注入驗收：版本衝突 409 後可自動同步並重試成功；choices GET 被封鎖時已成立回合與場景仍會更新；遠景 PNG 被封鎖時顯示錯誤並保留舊景，解除後重新載入成功。
 
+## A4 Hunyuan3D 資產管線
+
+- 新增固定 Hunyuan3D upstream commit 的 CUDA 12.8 Docker image，使用支援 Blackwell 的 PyTorch cu128 wheel。
+- 第一版只載入 Hunyuan3D-2mini shape model，不載入 Paint／texture model，也不啟用需額外編譯 CUDA extension 的 FlashVDM。
+- 私有 FastAPI gateway 提供 `/live`、`/health` 與 `/generate`；模型在背景初始化，健康狀態可區分 loading、ready 與 error。
+- 生成限制為單工，輸入限制為 12 MiB、24 MP 與三種圖片格式；輸出為 GLB，模型未就緒回 503、已有工作回 429。
+- Compose 使用 rootless Docker 可用的 NVIDIA CDI，且只發布到遠端 `127.0.0.1:8081`；前端不直接呼叫校機。
+- 本機 Python compile、Compose YAML 解析與安全配置測試通過；`PYTHONPATH=. ./.venv/bin/pytest -q` 為 100 passed。
+- 校機已先驗證 RTX 5060 Ti 可由 rootless CUDA container 讀取，但本次 SSH 在 banner 前逾時，尚未進行 Hunyuan image build 或真實 GLB 生成。
+
 ## 已知限制
 
 - M1 的 `minglin` 起始場景是為沿用現有可玩前端的暫時整合值，不視為最終世界觀定案。
@@ -209,6 +220,7 @@
 - Babylon 頁目前是使用完整場景圖、角色 cutout 與狀態式故事 UI 的 2.5D 視覺原型；尚未建立正式 GLB、地形、導航網格或碰撞地圖，介面不再宣稱已完成第一人稱 3D 建模。
 - 正式 3D 應使用 Tripo／Meshy 等 image-to-3D 服務產生模組化 GLB，再經 Blender 清理、減面、PBR 與碰撞設定；專案目前沒有 GLB、Blender 或 3D provider API key。
 - 零預算方案改以校內 GPU 部署 Hunyuan3D：現有圖片生成工具繼續製作透視一致的完整背景；Hunyuan3D 只負責獨立遺跡、祭壇、樹木等 mesh，不把單張風景圖直接當作已完成遊戲關卡。
+- A4 已固定 Hunyuan3D-2mini shape-only、CUDA 12.8、單工生成與遠端 loopback 綁定；校機 SSH 目前在 server banner 前逾時，尚未完成 image build 與實際 GLB 驗收，不能標示為已串進 Babylon。
 - Scene Registry 已登記平衡議會、命脈之泉、符石林、流塵谷與烈燚原；目前只有鳴霖三個場景具普通旅行路線，仍缺完整正式場景清單、在場 NPC、進出條件及 E1／E2／E3 對應。
 - 目前只有維達利亞的前端公開原型資料；私有角色設定、正式來源、初始知識與秘密解鎖條件仍待團隊提供。
 - 目前白名單為 `transfer_item`、`establish_commitment`、`offer_quest`、`change_scene`、`advance_story`；Demo 公開線索與特殊路線由權威選項推進，關係、任務接受／完成、正式固定事件與結局效果仍需依 C 的正式介面加入。
@@ -222,7 +234,9 @@
 
 ## 下一步
 
-1. 取得 Tripo 或 Meshy API key，先為流塵谷與烈燚原產生模組化 GLB；經 Blender 清理、減面與碰撞檢查後再接 Babylon loader。
-2. 選定正式圖片 provider／模型／金鑰環境變數，實作 ImageGateway adapter、timeout、有限重試與獨立 worker；目前無 provider 時必須保持 fallback。
-3. C 確認 Demo fallback 與正式 E3-1／烈燚原入口規則的映射；目前不把暫定選項升格為正式作者設定。
-4. B 提供正式文字 provider、URL、模型名稱與認證方式後，完成 M3 live AI 及 RAG 知識邊界驗收。
+1. 恢復校內 VPN 的 `utun` 路由，依 `docs/HUNYUAN3D_GPU_SETUP.md` 在 GPU 主機 build shape-only container，產出第一個模組化 GLB 並量測 VRAM／時間。
+2. 由 FastAPI 建立持久化 3D asset job，再加入 Babylon GLB loader、transform metadata、fallback 與實際瀏覽器驗收；瀏覽器不直接連校機。
+3. 若 Hunyuan3D 的 mesh 品質或速度不符 Demo，再評估 Tripo／Meshy API；任何付費 provider 必須先取得成本上限與金鑰。
+4. 選定正式圖片 provider／模型／金鑰環境變數，實作 ImageGateway adapter、timeout、有限重試與獨立 worker；目前無 provider 時必須保持 fallback。
+5. C 確認 Demo fallback 與正式 E3-1／烈燚原入口規則的映射；目前不把暫定選項升格為正式作者設定。
+6. B 提供正式文字 provider、URL、模型名稱與認證方式後，完成 M3 live AI 及 RAG 知識邊界驗收。

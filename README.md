@@ -93,6 +93,8 @@ npm run dev
 
 符石林與烈燚原的具體內容仍標記為暫定。Demo Story Director 可依已核准線索解鎖流塵谷／烈燚原，但這是週四展示用 fallback，仍須由 C 確認正式事件 ID、入口、出口及 E1／E2／E3 對應後才可升格為正式設定。各地點的完整在場 NPC、獨立 GLB 與碰撞配置也仍待提供。
 
+校內 GPU 的 Hunyuan3D shape-only Docker gateway 已加入 `infra/hunyuan3d`。服務固定官方 commit 與 CUDA 12.8 依賴，只發布在遠端 loopback，預定透過 SSH tunnel 使用；目前尚未把它宣稱為 Babylon.js 已完成的 3D 關卡生成器。部署、安全限制與交接步驟見 [`docs/HUNYUAN3D_GPU_SETUP.md`](docs/HUNYUAN3D_GPU_SETUP.md)。
+
 ## 驗證
 
 後端契約測試：
