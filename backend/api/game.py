@@ -24,6 +24,7 @@ from backend.schemas.player_choice import PlayerChoice
 from backend.schemas.player_view import PlayerViewState, project_player_view
 from backend.schemas.progression import PlayerQuestView
 from backend.schemas.scene_image import EnqueueSceneImageRequest, SceneImageJobView
+from backend.orchestration.world_commands import UnsupportedWorldCommand
 
 
 class StartGameRequest(BaseModel):
@@ -76,6 +77,8 @@ async def submit_player_action(
 
     try:
         return await orchestrator.process_turn(action)
+    except UnsupportedWorldCommand as exc:
+        raise HTTPException(status_code=422, detail={"code": "UNSUPPORTED_WORLD_COMMAND", "message": str(exc)}) from exc
     except SessionNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

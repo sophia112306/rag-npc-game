@@ -12,6 +12,7 @@ from backend.schemas.game_state import GameState
 from backend.schemas.story import (
     AdvanceStoryOperation,
     ChangeSceneOperation,
+    ConfigureSceneOperation,
     EstablishedEvent,
     EstablishCommitmentOperation,
     EventProposal,
@@ -51,13 +52,15 @@ class ProposalResolution:
 class ProposalResolver:
     """Apply only known commands; reject each event atomically on rule failure."""
 
-    def resolve(self, state: GameState, proposal: StoryProposal) -> ProposalResolution:
+    def resolve(self, state: GameState, proposal: StoryProposal, *, allow_scene_configuration: bool = False) -> ProposalResolution:
         candidate = state.model_copy(deep=True)
         decisions: list[ProposalDecision] = []
 
         for event in proposal.event_proposals:
             event_candidate = candidate.model_copy(deep=True)
             try:
+                if not allow_scene_configuration and any(isinstance(op, ConfigureSceneOperation) for op in event.operations):
+                    raise ProposalRuleViolation("scene_command_required", "Scene configuration requires an explicit player world command.")
                 applied = [
                     self._apply_operation(
                         event_candidate,
@@ -116,9 +119,21 @@ class ProposalResolver:
             | OfferQuestOperation
             | ChangeSceneOperation
             | AdvanceStoryOperation
+            | ConfigureSceneOperation
         ),
         turn_number: int,
     ) -> tuple[str, dict[str, object]]:
+        if isinstance(operation, ConfigureSceneOperation):
+            if event.actor_id != state.player.player_id or operation.scene_id != state.current_scene_id:
+                raise ProposalRuleViolation("scene_edit_not_authorized", "Only the current player scene can be configured.")
+            from backend.content.world_scenes import default_config
+            current = state.world_scenes.get(operation.scene_id) or default_config(operation.scene_id)
+            if operation.config.revision != current.revision + 1:
+                raise ProposalRuleViolation("scene_revision_conflict", "Scene revision must advance exactly once.")
+            state.world_scenes[operation.scene_id] = operation.config.model_copy(deep=True)
+            weather = {"clear": "晴朗", "mist": "薄霧", "rain": "雨天", "dust": "沙塵"}[operation.config.weather]
+            time = {"day": "白天", "dusk": "黃昏", "night": "夜晚"}[operation.config.time_of_day]
+            return (f"場景已重建：{time}、{weather}；{operation.config.tree_count} 棵樹、{operation.config.runestone_count} 個符石、{operation.config.altar_count} 座祭壇。", operation.model_dump(mode="json"))
         if isinstance(operation, ChangeSceneOperation):
             return self._change_scene(state, event, operation)
         if isinstance(operation, AdvanceStoryOperation):

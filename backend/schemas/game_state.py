@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from backend.schemas.world_scene import WorldSceneConfig
 
 
 class StoryPhase(str, Enum):
@@ -106,5 +107,6 @@ class GameState(BaseModel):
     
     player: PlayerState = Field(default_factory=PlayerState)
     story_progress: StoryProgressState = Field(default_factory=StoryProgressState)
+    world_scenes: Dict[str, WorldSceneConfig] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

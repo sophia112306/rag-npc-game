@@ -37,5 +37,6 @@ def get_capabilities(request: Request) -> CapabilitiesResponse:
             OperationType.OFFER_QUEST,
             OperationType.CHANGE_SCENE,
             OperationType.ADVANCE_STORY,
+            OperationType.CONFIGURE_SCENE,
         ],
     )

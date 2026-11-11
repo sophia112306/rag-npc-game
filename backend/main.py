@@ -16,6 +16,8 @@ from backend.generation.config import build_story_planner_from_env
 from backend.generation.image_gateway import ImageGateway
 from backend.generation.rule_based_planner import RuleBasedStoryPlanner
 from backend.generation.scene_image_jobs import SceneImageCoordinator
+from backend.generation.scene_assets import HunyuanAssetGateway, SceneAssetCoordinator, SceneAssetGateway
+from .api.scene_assets import router as scene_assets_router
 from backend.orchestration.game_orchestrator import GameOrchestrator, StoryPlanner
 
 from .api.capabilities import router as capabilities_router
@@ -31,6 +33,7 @@ def create_app(
     database_url: str | None = None,
     story_planner_factory: StoryPlannerFactory | None = None,
     image_gateway: ImageGateway | None = None,
+    asset_gateway: SceneAssetGateway | None = None,
 ) -> FastAPI:
     """Build an application with an isolated persistence lifecycle."""
 
@@ -62,9 +65,13 @@ def create_app(
         )
         application.state.npc_context_repository = context_repository
         application.state.generation_mode = generation_mode
+        asset_url = os.getenv("HUNYUAN3D_URL", "")
+        application.state.scene_asset_coordinator = SceneAssetCoordinator(session_factory, asset_gateway or (HunyuanAssetGateway(asset_url) if asset_url else None))
+        await application.state.scene_asset_coordinator.start()
         try:
             yield
         finally:
+            await application.state.scene_asset_coordinator.close()
             await engine.dispose()
 
     application = FastAPI(
@@ -94,6 +101,7 @@ def create_app(
     application.include_router(capabilities_router)
     application.include_router(character_router)
     application.include_router(game_router)
+    application.include_router(scene_assets_router)
 
     @application.get("/", tags=["meta"], summary="Show API service information")
     def read_root() -> dict[str, str]:

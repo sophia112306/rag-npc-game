@@ -318,3 +318,23 @@ class SceneImageJobRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SceneAssetJobRecord(Base):
+    """Durable model jobs; the GPU never participates in the turn transaction."""
+
+    __tablename__ = "scene_asset_jobs"
+    __table_args__ = (UniqueConstraint("session_id", "fingerprint", name="uq_scene_asset_jobs_session_fingerprint"),)
+    job_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(100), ForeignKey("game_sessions.session_id", ondelete="CASCADE"), nullable=False)
+    scene_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    seed: Mapped[int] = mapped_column(Integer, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    model_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    fallback_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

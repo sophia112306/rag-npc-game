@@ -130,6 +130,7 @@ def test_default_capabilities_identify_rule_based_generation(client: TestClient)
             "offer_quest",
             "change_scene",
             "advance_story",
+            "configure_scene",
         ],
     }
 

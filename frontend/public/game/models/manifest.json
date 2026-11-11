@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "kind": "tree",
+      "file": "tree-v1.glb",
+      "seed": 1234,
+      "bytes": 1954788,
+      "sha256": "7681ab57dbbeee1d090e4eb8a1b9526650e6e795bdc1aacbd94f85403cf2d8fb",
+      "seconds": 44.66,
+      "reference": "references/tree-v1.png",
+      "provider": "Hunyuan3D-2mini-turbo",
+      "material": "reference-projected texture and smooth normals",
+      "status": "provisional"
+    },
+    {
+      "kind": "runestone",
+      "file": "runestone-v1.glb",
+      "seed": 1234,
+      "bytes": 1621880,
+      "sha256": "3e62ba87f49b476d2a394a0b00eb6726e2ab60f52da008d5278319d94805c94e",
+      "seconds": 24.49,
+      "reference": "references/runestone-v1.png",
+      "provider": "Hunyuan3D-2mini-turbo",
+      "material": "reference-projected texture and smooth normals",
+      "status": "provisional"
+    },
+    {
+      "kind": "altar",
+      "file": "altar-v1.glb",
+      "seed": 1234,
+      "bytes": 1544420,
+      "sha256": "14089b5af90702acaa94657a1bdeeed54bfdbac69bbe6d993c7cd9ba63837677",
+      "seconds": 26.29,
+      "reference": "references/altar-v1.png",
+      "provider": "Hunyuan3D-2mini-turbo",
+      "material": "reference-projected texture and smooth normals",
+      "status": "provisional"
+    }
+  ]
+}

@@ -18,6 +18,7 @@ EXPECTED_TABLES = {
     "commitments",
     "quests",
     "scene_image_jobs",
+    "scene_asset_jobs",
     "world_canon",
 }
 

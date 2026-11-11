@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+from backend.schemas.world_scene import WorldSceneConfig
 
 
 class SpeakerType(str, Enum):
@@ -34,6 +35,7 @@ class OperationType(str, Enum):
     OFFER_QUEST = "offer_quest"
     CHANGE_SCENE = "change_scene"
     ADVANCE_STORY = "advance_story"
+    CONFIGURE_SCENE = "configure_scene"
 
 
 class TransferItemOperation(BaseModel):
@@ -93,12 +95,22 @@ class AdvanceStoryOperation(BaseModel):
     story_choice_id: str = Field(..., min_length=1, max_length=100)
 
 
+class ConfigureSceneOperation(BaseModel):
+    """Bounded visual-world changes; never alters inventory or author canon."""
+
+    model_config = ConfigDict(extra="forbid")
+    operation_type: Literal[OperationType.CONFIGURE_SCENE] = OperationType.CONFIGURE_SCENE
+    scene_id: str = Field(min_length=1, max_length=100)
+    config: WorldSceneConfig
+
+
 ProposedOperation = Annotated[
     TransferItemOperation
     | EstablishCommitmentOperation
     | OfferQuestOperation
     | ChangeSceneOperation
-    | AdvanceStoryOperation,
+    | AdvanceStoryOperation
+    | ConfigureSceneOperation,
     Field(discriminator="operation_type"),
 ]
 

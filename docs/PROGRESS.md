@@ -1,5 +1,16 @@
 # A／D 整合進度
 
+## 2026-11-11 第一人稱與指令場景修復（進行中）
+
+前一次「Demo 100%」只驗證了插畫換場與故事選項，沒有涵蓋玩家自由移動與真實 GLB 場景生成；該完成判定撤回。本輪在 `feature/first-person-generated-world` 修復，以下舊紀錄保留為歷史。
+
+- 已新增 `scene_command` 與 `configure_scene`：只允許當前場景的日夜、天氣、地形、樹木／符石／祭壇數量；不支援或超量指令不增加回合。
+- 場景配置、事件與完整回合沿用同一交易、`action_id` 去重與版本檢查；普通 NPC 模型提案不能私自使用場景編輯操作。
+- 已新增持久化 3D asset job、校內 Hunyuan HTTP adapter、GLB 格式／外部資源／面數驗證、最多兩次嘗試、重啟恢復與 Session 隔離。
+- 三張獨立參考圖已由內建圖片工具生成，校內 Hunyuan 已產出三個帶參考貼圖與平滑法線的 GLB，均保存於 `frontend/public/game/models/`；它們是暫定環境資產。
+- 第一人稱 WASD、拖曳環視、近距離 E 互動已由 Chrome 實際操作；完整畫面、連線模型輪替與五場景彩排仍在驗收中。
+- 本階段後端驗收：114 tests passed，含世界指令重送／重啟、白名單／數量限制、模型檔保存、工作重啟恢復與跨 Session 隔離。
+
 ## 2026-11-11 明日 Demo 發行整合
 
 - 從 GitHub 最新 `main` 建立 `release/demo-2026-11-12`，合併 NPC 路線／音樂／世界地圖、揭露安全修正、動態故事穩定修正與 Hunyuan3D gateway。

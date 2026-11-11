@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.content.reveal_policy import is_demo_first_stage, public_chapter_title, public_clue_ids
 from backend.content.scenes import SceneVisualProfile, require_scene
+from backend.content.world_scenes import build_world_scene
+from backend.schemas.world_scene import WorldSceneView
 
 from .game_state import GameState
 
@@ -70,6 +72,7 @@ class PlayerViewState(BaseModel):
     current_scene_id: str
     current_scene: PlayerSceneView
     story_progress: PlayerStoryProgressView
+    world_scene: WorldSceneView | None = None
     player: PlayerIdentityView
     npc_states: dict[str, NPCPublicStateView]
     created_at: datetime
@@ -85,6 +88,7 @@ def project_player_view(state: GameState) -> PlayerViewState:
         state_version=state.state_version,
         turn_count=state.turn_count,
         current_scene_id=state.current_scene_id,
+        world_scene=build_world_scene(state.current_scene_id, state.world_scenes.get(state.current_scene_id)),
         current_scene=PlayerSceneView(
             scene_id=scene.scene_id,
             region_name=scene.region_name,

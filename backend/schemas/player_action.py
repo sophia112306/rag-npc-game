@@ -13,6 +13,7 @@ class ActionMode(str, Enum):
     DIALOGUE = "dialogue"
     INTERACTION = "interaction"
     MOVEMENT = "movement"
+    SCENE_COMMAND = "scene_command"
 
 class PlayerAction(BaseModel):
     model_config = ConfigDict(extra="forbid")

@@ -148,6 +148,8 @@ def _decode_image(encoded: str) -> Image.Image:
 
 
 def _generate_mesh(request: GenerateRequest, image: Image.Image, output_path: Path) -> None:
+    import numpy as np
+    import trimesh
     import torch
 
     processed = RUNTIME.background_remover(image)
@@ -163,7 +165,31 @@ def _generate_mesh(request: GenerateRequest, image: Image.Image, output_path: Pa
     mesh = RUNTIME.floater_remover(mesh)
     mesh = RUNTIME.degenerate_face_remover(mesh)
     mesh = RUNTIME.face_reducer(mesh, max_facenum=request.max_faces)
-    mesh.export(output_path)
+    # Shape-only models have no UVs. Project the supplied object's colours onto
+    # its real geometry, filling silhouette-edge samples from nearby valid pixels.
+    # This is reference vertex colour, not the much larger Hunyuan Paint model.
+    rgba = np.asarray(processed.convert("RGBA"))
+    mask = rgba[:, :, 3] > 100
+    ys, xs = np.where(mask)
+    if len(xs):
+        from scipy.ndimage import distance_transform_edt
+        _, nearest = distance_transform_edt(~mask, return_indices=True)
+        rgb = rgba[:, :, :3][nearest[0], nearest[1]]
+        bounds = mesh.bounds
+        size = np.maximum(bounds[1] - bounds[0], 1e-6)
+        u = (mesh.vertices[:, 0] - bounds[0, 0]) / size[0]
+        v = 1 - (mesh.vertices[:, 1] - bounds[0, 1]) / size[1]
+        px = np.clip((xs.min() + u * (xs.max() - xs.min())).astype(int), 0, rgba.shape[1] - 1)
+        py = np.clip((ys.min() + v * (ys.max() - ys.min())).astype(int), 0, rgba.shape[0] - 1)
+        # Use a full-resolution reference projection rather than sparse vertex
+        # colours so bark, leaf and carved-stone detail survives decimation.
+        texture = Image.fromarray(rgb).convert("RGB")
+        texture.thumbnail((1024, 1024))
+        uv = np.column_stack((px / max(1, rgba.shape[1] - 1), 1 - py / max(1, rgba.shape[0] - 1)))
+        material = trimesh.visual.material.PBRMaterial(baseColorTexture=texture, metallicFactor=0, roughnessFactor=1)
+        mesh.visual = trimesh.visual.texture.TextureVisuals(uv=uv, material=material)
+    mesh.vertex_normals  # Populate smooth shared normals before glTF export.
+    mesh.export(output_path, include_normals=True)
     torch.cuda.empty_cache()
 
 

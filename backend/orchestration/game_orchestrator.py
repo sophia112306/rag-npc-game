@@ -6,6 +6,7 @@ from typing import Protocol
 from uuid import UUID
 
 from backend.content.demo_story import find_available_demo_story_choice
+from backend.orchestration.world_commands import build_world_command_proposal
 from backend.database.repository import (
     ActionIdConflictError as RepositoryActionIdConflictError,
     CommittedGameEvent,
@@ -152,7 +153,11 @@ class GameOrchestrator:
             raise StateVersionConflictError(action.expected_state_version, state.state_version)
 
         parsed_action = self._parse_action(action)
-        if action.story_choice_id:
+        if action.action_mode == ActionMode.SCENE_COMMAND:
+            if action.story_choice_id or action.destination_scene_id or action.target_npc_id:
+                raise StoryChoiceMismatchError("Scene commands cannot impersonate story travel or NPC dialogue.")
+            proposal = build_world_command_proposal(action, state)
+        elif action.story_choice_id:
             try:
                 quests = await self._repository.get_player_quests(action.session_id)
             except PersistentSessionNotFoundError as exc:
@@ -192,7 +197,7 @@ class GameOrchestrator:
                 state.model_copy(deep=True),
             )
         self._validate_proposal_envelope(proposal, state)
-        resolution = self._proposal_resolver.resolve(state, proposal)
+        resolution = self._proposal_resolver.resolve(state, proposal, allow_scene_configuration=action.action_mode == ActionMode.SCENE_COMMAND)
         if action.target_npc_id in resolution.updated_state.npc_states and any(
             line.speaker_id == action.target_npc_id for line in proposal.proposed_dialogue
         ):
