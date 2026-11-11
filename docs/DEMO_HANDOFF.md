@@ -1,6 +1,6 @@
 # 第一人稱動態場景 Demo 交接
 
-更新：2026-11-11；展示：2026-11-12。正式交接分支：`main`；修復分支：`feature/first-person-generated-world`（保留歷史）。
+更新：2026-11-11；展示：2026-11-12。正式交接分支：`main`；森林與操作修復分支：`fix/restore-forest-sanctuary`（保留歷史）。
 
 前版把插畫換場當作第一人稱完成，驗收範圍不足，已撤回該判定。現在 Babylon 頁面使用可行走地形、天空、場景專屬配置與真正載入的 Hunyuan GLB。
 
@@ -9,6 +9,7 @@
 開啟 <http://localhost:3200/experiments/babylon>，右上角「新旅程」建立新 Session，舊存檔仍保留在資料庫。
 
 - WASD／方向鍵移動；Shift 奔跑。
+- 點地面可自由步行；點人物／祭壇會走近並開啟互動。右下方向按鈕可按住移動。中文輸入法啟用時仍使用實體 WASD，對話輸入框內則正常打字。
 - 按住滑鼠拖曳環視，或按「鎖定滑鼠」；Esc 釋放。
 - 走近人物／地標至 3.6 公尺內按 E，才開啟對話與故事選項。
 - 對話框保留自由文字輸入；Esc 或關閉按鈕回到探索。
@@ -52,6 +53,10 @@ curl http://127.0.0.1:8081/health
 4. 改變物件數量／重新生成時，持久化 asset jobs 經私有 Hunyuan API 產出新 GLB。前端先保持可玩的已生成模型，然後逐一替換，畫面顯示進度。
 5. 預設場景使用版本化 Hunyuan GLB；單純日夜／天氣變化保留幾何 seed，避免每個回合浪費 GPU 重新建同一物件。
 
+平衡議會保留原版圓形祭壇、石板路、石柱及水池。森林樹木採彎曲樹幹與原版手繪樹葉，GPU 樹木只保留根部細節；符石／祭壇維持完整 GLB。這是恢復原版美術的混合呈現，尚非完整的高品質森林模型。議會生成物件會避開祭壇、水池與通路，日夜與天氣指令仍生效。
+
+主要程式：`forest-sanctuary.ts` 負責主景及材質生命週期，`sanctuary-layout.ts` 共用水池地形／碰撞範圍，`first-person.ts` 共用鍵盤／點擊／方向按鈕移動。不要再新增另一套固定路線控制。
+
 目前上限：48 棵樹、12 個符石、3 座祭壇。支援晴朗／薄霧／下雨／沙塵、白天／黃昏／夜晚、丘陵／沙丘／岩地。不支援的物件或超量指令會回報原因，不消耗回合。這是有明確操作邊界的場景生成；完整任意文字到整個 3D 世界尚未提供。
 
 ## 可展示路線
@@ -67,12 +72,14 @@ curl http://127.0.0.1:8081/health
 
 ## 測試與畫面證據
 
-- 全套後端測試：115 passed；含原子保存、重送／版本衝突、場景指令限額、NPC 不能擅改場景、GLB 驗證、工作恢復與兩次逾時後 fallback。
+- 全套後端測試：116 passed；含原子保存、重送／版本衝突、場景指令限額、NPC 不能擅改場景、GLB 驗證、工作恢復、兩次逾時後 fallback，以及生成物件避開議會主景。
+- 前端控制：`node --experimental-strip-types --test tests/frontend/first-person.test.ts`，6 passed；涵蓋中文輸入法、按鈕焦點、文字輸入、點地面、拖曳及方向按鈕。
 - Next.js 16.4.4 production build 與 TypeScript：通過。
 - 本機 Chrome WebGL：W 2.8 秒由 z=8.0 移至 z=-1.8；距離 4.2m 拒絕互動，2.8m 可互動；兩條故事路線、五場景與新旅程已實際點選。
 - 即時指令生成：夜晚／薄霧與 6 個符石配置成立；三個新 Hunyuan GLB 工作均一次成功，經遊戲後端 `/model` 取得並在 Babylon 顯示 `3/3`。
 - 世界指令後硬重新整理，公開 `world_scene` 與保存前完全相同。Chrome 本機 90 幀採樣約 60 FPS（不是所有裝置的效能保證）。
 - 截圖見 [qa/first-person](qa/first-person)。來源參考圖、貼圖與完整 prompts 見 [3D_ASSET_PROMPTS.md](3D_ASSET_PROMPTS.md)，GLB 雜湊在 `frontend/public/game/models/manifest.json`。
+- 原版森林復原、點人物步行、水池與夜晚指令的最新截圖見 [qa/forest-sanctuary](qa/forest-sanctuary)。
 
 ## 下一位接手
 

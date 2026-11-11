@@ -7,9 +7,11 @@ import {
   Engine,
   HemisphericLight,
   LoadAssetContainerAsync,
+  Material,
   Mesh,
   MeshBuilder,
   ParticleSystem,
+  Plane,
   PointLight,
   Scene,
   ShaderMaterial,
@@ -29,6 +31,7 @@ import {
   type PlayerPose,
   type TrialDriver,
 } from "./world";
+import { addForestTree, createForestFoliage, createForestSanctuary } from "./forest-sanctuary";
 
 registerBuiltInLoaders();
 
@@ -41,6 +44,8 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     1 / Math.min(window.devicePixelRatio || 1, 1.25),
   );
   const scene = new Scene(engine);
+  // Controls use the conventional +X right / -Z forward coordinate system.
+  scene.useRightHandedSystem = true;
   scene.fogMode = Scene.FOGMODE_EXP2;
   const camera = new UniversalCamera(
     "player eyes",
@@ -75,6 +80,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   let fireShader: ShaderMaterial | null = null;
   let lavaShader: ShaderMaterial | null = null;
   let flameRoot: TransformNode | null = null;
+  let sanctuary: ReturnType<typeof createForestSanctuary> | null = null;
   let disposed = false;
   let sceneGeneration = 0;
   const modelGroups = new Map<AssetKind, TransformNode>();
@@ -83,6 +89,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   const containers = new Map<string, Promise<AssetContainer>>();
   const createdMaterials: StandardMaterial[] = [];
   const portraits = new Map<string, Texture>();
+  const foliage = createForestFoliage(scene);
   const floorTexture = new Texture("/game/forest-floor.png", scene);
   floorTexture.uScale = floorTexture.vScale = 22;
   const stoneTexture = new Texture("/game/forest-stone.png", scene);
@@ -126,6 +133,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   function disposeGroup(group: TransformNode) {
     for (const mesh of group.getChildMeshes()) shadows.removeShadowCaster(mesh);
     group.dispose(false);
+    for (const material of (group.metadata?.ownedMaterials ?? []) as Material[]) material.dispose(false, false);
   }
   const particleTexture = new DynamicTexture("soft particle", 32, scene, false);
   const ctx = particleTexture.getContext();
@@ -159,12 +167,12 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
         ? new Color3(0.76, 0.59, 0.36)
         : lava
           ? new Color3(0.24, 0.19, 0.19)
-          : new Color3(0.35, 0.47, 0.25);
+          : new Color3(0.62, 0.72, 0.50);
       const trail = desert
         ? new Color3(0.85, 0.68, 0.44)
         : lava
           ? new Color3(0.37, 0.28, 0.25)
-          : new Color3(0.67, 0.59, 0.4);
+          : new Color3(0.80, 0.79, 0.62);
       const c = Color3.Lerp(base, trail, path * 0.8).scale(variation);
       colours.push(c.r, c.g, c.b, 1);
     }
@@ -184,6 +192,8 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   }
 
   function buildLandmark(current: WorldScene) {
+    sanctuary?.dispose();
+    sanctuary = null;
     fireShader?.dispose();
     fireShader = null;
     lavaShader?.dispose();
@@ -200,30 +210,35 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       z = current.interaction_z,
       y = terrainHeight(x, z, current);
     landmark.position.set(x, y, z);
-    const stone = mat("landmark stone", current.fire ? "#372622" : "#7f8977");
-    stone.diffuseTexture = stoneTexture;
-    const dais = MeshBuilder.CreateCylinder(
-      "landmark paving",
-      { diameter: 8, height: 0.12, tessellation: 64 },
-      scene,
-    );
-    dais.parent = landmark;
-    dais.position.y = 0.015;
-    dais.material = stone;
-    dais.receiveShadows = true;
-    const ringMaterial = mat(
-      "etched glowing circle",
-      current.fire ? "#dc6d1f" : "#77b3a0",
-      current.fire ? "#6b2609" : "#19493b",
-    );
-    const ring = MeshBuilder.CreateTorus(
-      "landmark etched ring",
-      { diameter: 6.8, thickness: 0.025, tessellation: 64 },
-      scene,
-    );
-    ring.parent = landmark;
-    ring.position.y = 0.09;
-    ring.material = ringMaterial;
+    const council = current.scene_id === "minglin";
+    if (council) {
+      sanctuary = createForestSanctuary(scene, landmark, current);
+    } else {
+      const stone = mat("landmark stone", current.fire ? "#372622" : "#7f8977");
+      stone.diffuseTexture = stoneTexture;
+      const dais = MeshBuilder.CreateCylinder(
+        "landmark paving",
+        { diameter: 8, height: 0.12, tessellation: 64 },
+        scene,
+      );
+      dais.parent = landmark;
+      dais.position.y = 0.015;
+      dais.material = stone;
+      dais.receiveShadows = true;
+      const ringMaterial = mat(
+        "etched glowing circle",
+        current.fire ? "#dc6d1f" : "#77b3a0",
+        current.fire ? "#6b2609" : "#19493b",
+      );
+      const ring = MeshBuilder.CreateTorus(
+        "landmark etched ring",
+        { diameter: 6.8, thickness: 0.025, tessellation: 64 },
+        scene,
+      );
+      ring.parent = landmark;
+      ring.position.y = 0.09;
+      ring.material = ringMaterial;
+    }
     if (current.npc_id) {
       const portrait = MeshBuilder.CreatePlane(
         "npc",
@@ -231,7 +246,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
         scene,
       );
       portrait.parent = landmark;
-      portrait.position.y = 1.35;
+      portrait.position.y = council ? 1.575 : 1.35;
       portrait.billboardMode = Mesh.BILLBOARDMODE_Y;
       const portraitMat = mat("npc artwork", "#ffffff");
       if (!portraits.has(current.npc_id))
@@ -242,6 +257,8 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       portraitMat.diffuseTexture = portraits.get(current.npc_id)!;
       portraitMat.diffuseTexture.hasAlpha = true;
       portraitMat.useAlphaFromDiffuseTexture = true;
+      portraitMat.transparencyMode = Material.MATERIAL_ALPHATEST;
+      portraitMat.alphaCutOff = .45;
       portraitMat.backFaceCulling = false;
       portraitMat.emissiveColor = new Color3(0.12, 0.12, 0.1);
       portrait.material = portraitMat;
@@ -427,13 +444,16 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     )
       return;
     const group = new TransformNode(`generated ${kind} props`, scene);
+    const forestTree = kind === "tree" && current.scene_id.startsWith("minglin");
+    const ownedMaterials: Material[] = [];
+    group.metadata = { ownedMaterials };
     for (const object of current.objects.filter((o) => o.kind === kind)) {
       const pivot = new TransformNode(object.object_id, scene);
       pivot.parent = group;
       const instance = container.instantiateModelsToScene(
         (name) => `${object.object_id}:${name}`,
         false,
-        { doNotInstantiate: false },
+        { doNotInstantiate: forestTree },
       );
       for (const root of instance.rootNodes) root.parent = pivot;
       const bounds = pivot.getHierarchyBoundingVectors(true);
@@ -467,17 +487,34 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       normalizer.parent = pivot;
       for (const root of instance.rootNodes) root.parent = normalizer;
       normalizer.position.set(-center.x, -bounds.min.y, -center.z);
-      pivot.scaling.set(scale, scale * vertical, scale);
+      const spread = forestTree ? .30 : 1;
+      pivot.scaling.set(scale * spread, scale * vertical, scale * spread);
       pivot.rotation.y = object.yaw;
       pivot.position.set(
         object.x,
-        terrainHeight(object.x, object.z, current) - 0.03,
+        terrainHeight(object.x, object.z, current) - 0.03 - (forestTree ? object.scale * .055 : 0),
         object.z,
       );
       for (const mesh of pivot.getChildMeshes()) {
         mesh.receiveShadows = true;
         mesh.isPickable = false;
         shadows.addShadowCaster(mesh);
+        if (forestTree && mesh.material) {
+          const bark = mesh.material.clone(`${object.object_id}:cropped trunk`);
+          if (bark) {
+            // Keep generated root detail below the restored continuous trunk.
+            // The original leaf artwork replaces the rough generated crown.
+            bark.clipPlane2 = new Plane(0, 1, 0, -(pivot.position.y + object.scale * .075));
+            mesh.material = bark;
+            ownedMaterials.push(bark);
+          }
+        }
+      }
+      if (forestTree) {
+        const wood = addForestTree(scene, group, foliage.material, foliage.bark,
+          object.x, terrainHeight(object.x, object.z, current), object.z,
+          object.scale, object.yaw, Number(object.object_id.split("-").at(-1)));
+        for (const mesh of wood) shadows.addShadowCaster(mesh);
       }
     }
     const previousGroup = modelGroups.get(kind);
@@ -505,14 +542,15 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
         (mesh) =>
           mesh === terrain ||
           mesh.name === "npc" ||
-          mesh.name === "landmark paving",
+          mesh.name === "landmark paving" || !!mesh.metadata?.walkable,
         false,
         camera,
       );
       if (!hit?.hit || !hit.pickedPoint) return null;
       if (
         hit.pickedMesh?.name === "npc" ||
-        hit.pickedMesh?.name === "landmark paving"
+        hit.pickedMesh?.name === "landmark paving" ||
+        hit.pickedMesh?.metadata?.interaction
       )
         return {
           x: world.interaction_x,
@@ -542,10 +580,10 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
               ? "#bd7350"
               : dusk
                 ? "#c7b5a0"
-                : "#b6cbb9",
+                : next.scene_id === "minglin" ? "#9bbcb0" : "#b6cbb9",
       );
       const zenith = Color3.FromHexString(
-        night ? "#050d22" : fire ? "#4d353e" : dusk ? "#4b6279" : "#6c9cb9",
+        night ? "#050d22" : fire ? "#4d353e" : dusk ? "#4b6279" : next.scene_id === "minglin" ? "#6a9c94" : "#6c9cb9",
       );
       scene.clearColor = new Color4(horizon.r, horizon.g, horizon.b, 1);
       scene.fogColor = horizon;
@@ -576,7 +614,8 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     setAsset,
     setView(pose: PlayerPose, eyeBob: number) {
       if (!world) return;
-      const y = terrainHeight(pose.x, pose.z, world) + EYE_HEIGHT + eyeBob;
+      const floor = Math.max(terrainHeight(pose.x, pose.z, world), sanctuary?.height(pose.x, pose.z) ?? -Infinity);
+      const y = floor + EYE_HEIGHT + eyeBob;
       camera.position.set(pose.x, y, pose.z);
       camera.setTarget(
         new Vector3(
@@ -591,6 +630,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
         !world ||
         Math.abs(px) > 64 ||
         Math.abs(pz) > 64 ||
+        !!sanctuary?.blocked(px, pz) ||
         (!!world.npc_id &&
           Math.hypot(px - world.interaction_x, pz - world.interaction_z) <
             0.8) ||
@@ -610,6 +650,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       return { x: blocked(nx, z) ? x : nx, z: blocked(x, nz) ? z : nz };
     },
     render() {
+      sanctuary?.update(performance.now() / 1000);
       skyMaterial.setFloat("clock", performance.now() / 1000);
       waterShader?.setFloat("clock", performance.now() / 1000);
       fireShader?.setFloat("clock", performance.now() / 1000);
@@ -623,6 +664,8 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       disposed = true;
       sceneGeneration++;
       particles?.dispose();
+      sanctuary?.dispose();
+      foliage.dispose();
       for (const pending of containers.values())
         void pending.then((c) => c.dispose()).catch(() => {});
       scene.dispose();

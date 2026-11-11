@@ -11,10 +11,10 @@ from backend.schemas.world_scene import WorldObject, WorldSceneConfig, WorldScen
 def default_config(scene_id: str) -> WorldSceneConfig:
     seed = int(sha256(scene_id.encode()).hexdigest()[:7], 16)
     settings = {
-        "minglin": dict(tree_count=32, runestone_count=5),
-        "minglin_life_spring": dict(tree_count=28, runestone_count=3, weather="mist"),
+        "minglin": dict(tree_count=9, runestone_count=2),
+        "minglin_life_spring": dict(tree_count=14, runestone_count=3, weather="mist"),
         "minglin_rune_grove": dict(
-            tree_count=24, runestone_count=8, time_of_day="dusk"
+            tree_count=12, runestone_count=8, time_of_day="dusk"
         ),
         "liuchen_valley": dict(
             tree_count=0,
@@ -43,7 +43,16 @@ def build_world_scene(
     objects: list[WorldObject] = []
     # Keep a wide traversable corridor between spawn and interaction landmark.
     # Props are placed outside it and have spacing so the player cannot spawn inside them.
-    occupied: list[tuple[float, float, float]] = []
+    # Frame the original sanctuary, leaving its path, engraved dais and lake clear.
+    council_trees = [
+        (-7.3, 4.6, 11.6), (7.4, 6.3, 12.4), (-10.7, -4.8, 12.8),
+        (9.6, -3.4, 10.8), (-8.5, -18, 13), (5.8, -18.5, 12.4),
+        (-16, 0, 13.8), (15, -12, 14), (5.3, -24, 16),
+    ]
+    occupied: list[tuple[float, float, float]] = (
+        [(x, z, 2.0) for x, z, _ in council_trees[:config.tree_count]]
+        if scene_id == "minglin" else []
+    )
     for kind, count, span, base_scale, radius in (
         ("altar", config.altar_count, 16, 3.6, 2.5),
         ("runestone", config.runestone_count, 23, 2.5, 1.4),
@@ -57,12 +66,17 @@ def build_world_scene(
                 )
                 or (kind == "runestone" and scene_id == "minglin_rune_grove")
             )
-            if primary:
+            authored_tree = scene_id == "minglin" and kind == "tree" and index < len(council_trees)
+            if authored_tree:
+                x, z, authored_scale = council_trees[index]
+            elif primary:
                 x, z = 0, -6
             else:
                 for _ in range(150):
                     x, z = rng.uniform(-span, span), rng.uniform(-span - 10, span - 2)
                     if abs(x) < 4 or math.hypot(x, z - 8) < 7:
+                        continue
+                    if scene_id == "minglin" and math.hypot(x, z + 8) < 16:
                         continue
                     if all(
                         math.hypot(x - px, z - pz) > radius + pr
@@ -71,16 +85,20 @@ def build_world_scene(
                         break
                 else:
                     continue
-            occupied.append((x, z, radius))
+            if not authored_tree:
+                occupied.append((x, z, radius))
+            scale = (
+                authored_scale if authored_tree
+                else 6.8 if primary and kind == "altar"
+                else round(base_scale * rng.uniform(0.8, 1.25), 3)
+            )
             objects.append(
                 WorldObject(
                     kind=kind,
                     object_id=f"{kind}-{index}",
                     x=round(x, 3),
                     z=round(z, 3),
-                    scale=6.8
-                    if primary and kind == "altar"
-                    else round(base_scale * rng.uniform(0.8, 1.25), 3),
+                    scale=scale,
                     yaw=round(rng.uniform(0, math.tau), 3),
                 )
             )
@@ -99,6 +117,7 @@ def build_world_scene(
         objects=objects,
         npc_id=npc,
         interaction_label=label,
+        interaction_z=-8 if scene_id == "minglin" else -6,
         water=scene_id == "minglin_life_spring",
         fire=scene_id == "lieyi_plains",
     )

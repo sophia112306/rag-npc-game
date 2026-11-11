@@ -109,6 +109,23 @@ def test_distinct_scenes_have_distinct_traversable_worlds(tmp_path):
         )
 
 
+def test_council_preserves_sanctuary_when_generated_prop_count_changes():
+    from backend.content.world_scenes import build_world_scene, default_config
+
+    default = build_world_scene("minglin")
+    assert default.interaction_z == -8
+    assert default.config.tree_count == 9
+    for count in (0, 9, 48):
+        config = default_config("minglin").model_copy(update={"tree_count": count})
+        scene = build_world_scene("minglin", config)
+        assert len([obj for obj in scene.objects if obj.kind == "tree"]) == count
+        for obj in scene.objects:
+            # Generated props must not occupy the altar/path or original pond.
+            assert abs(obj.x) >= 4
+            assert (obj.x / 4.8) ** 2 + ((obj.z + 8) / 4.8) ** 2 > 1
+            assert ((obj.x + 7.8) / 3.6) ** 2 + ((obj.z + 9.3) / 4.7) ** 2 > 1
+
+
 def test_unconfigured_model_jobs_are_deduplicated_and_session_scoped(tmp_path):
     with TestClient(
         create_app(f"sqlite+aiosqlite:///{tmp_path / 'assets.db'}")

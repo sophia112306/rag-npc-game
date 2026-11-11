@@ -1,4 +1,5 @@
 import type { AssetKind, WorldScene } from "../../lib/game-api";
+import { COUNCIL_LAKE } from "./sanctuary-layout";
 
 export const EYE_HEIGHT = 1.68;
 export type PlayerPose = { x: number; z: number; yaw: number; pitch: number };
@@ -37,9 +38,16 @@ export function terrainHeight(x: number, z: number, world: WorldScene): number {
     world.scene_id === "liuchen_valley"
       ? Math.exp(-Math.pow((x + 20 + Math.sin(z * 0.055) * 4) / 4, 4)) * 8
       : 0;
-  return (
+  const height = (
     waves * amplitude * corridor +
     rim * rim * (world.config.terrain === "rocky" ? 5 : 1.7) -
     canyon
   );
+  if (world.scene_id !== "minglin") return height;
+  const courtyard = Math.min(1, Math.max(0, (Math.hypot(x, z + 8) - 20) / 14));
+  const lakeRadius = Math.hypot(
+    (x - COUNCIL_LAKE.x) / COUNCIL_LAKE.rx,
+    (z - COUNCIL_LAKE.z) / COUNCIL_LAKE.rz,
+  );
+  return height * courtyard - Math.max(0, 1 - lakeRadius) * .35;
 }
