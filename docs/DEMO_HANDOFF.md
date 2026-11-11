@@ -4,10 +4,10 @@
 
 目標 Demo：2026-11-12（週四）
 
-工作分支：`feature/hunyuan3d-gpu-gateway`
-GitHub compare：<https://github.com/sophia112306/rag-npc-game/compare/main...feature/hunyuan3d-gpu-gateway>
+正式交接分支：`main`
+整合暫存分支：`release/demo-2026-11-12`
 
-GitHub 現況：`origin/main` 的 PR #7 只合到 `087e82e`；後續四筆故事／視覺修正及三筆 Hunyuan3D commits 都在本交接分支。下一位不要直接從舊 `feature/demo-dynamic-story` 或本機過期的 `main` 開始。
+本次發行分支從 GitHub 最新 `main` 建立，已合併同學的 `feature/ad-poc-integration-20261111`（NPC 路線、揭露安全、音樂、世界地圖），以及動態故事穩定修正與 Hunyuan3D gateway。完整驗收後會快轉合併並推送 `main`；下一位應從遠端 `main` 開始，不要從舊 `feature/demo-dynamic-story` 或過期本機分支接手。
 
 ## 目前狀態
 
@@ -17,7 +17,7 @@ GitHub 現況：`origin/main` 的 PR #7 只合到 `087e82e`；後續四筆故事
 | Babylon 場景呈現 | `██████░░░░ 60%` | 透視衝突與錯誤幾何已移除；目前為 2.5D 視覺原型，正式材質 GLB／碰撞與 loader 待完成 |
 | Hunyuan3D GPU gateway | `██████████ 100%` | 校機 shape-only API、SSH tunnel、持久化 cache、減面與真實 GLB 均已驗收 |
 | 滾動圖片管線 | `████████░░ 80%` | Job／polling／快取／fallback 完成；正式 provider 尚未接入 |
-| Demo 驗收與交接 | `█████████░ 90%` | 自動測試、build、兩條 live API 與 3D 載入通過；待正式彩排 |
+| Demo 驗收與交接 | `██████████ 100%` | 自動測試、production build、首頁實際點選、3D 換場與重整承接均通過 |
 
 目前可以在沒有 B 的模型、RAG 或圖片 API 時完整展示兩條可保存故事分支。介面會顯示「規則動態」及「版本化場景」，不會把 fallback 假稱為 AI 即時生成。
 
@@ -25,8 +25,8 @@ GitHub 現況：`origin/main` 的 PR #7 只合到 `087e82e`；後續四筆故事
 
 ```bash
 cd /Users/qiao/rag-npc-game
-git switch feature/hunyuan3d-gpu-gateway
-git pull --ff-only origin feature/hunyuan3d-gpu-gateway
+git switch main
+git pull --ff-only origin main
 ```
 
 終端一（後端）：
@@ -69,8 +69,8 @@ npm run dev
 ### 風沙分支
 
 1. 在平衡議會選「前往符石林」。
-2. 選「拼合裂隙地圖」。
-3. 選「沿裂隙進入流塵谷」。
+2. 選「辨認風沙路徑」。
+3. 選「循風沙路標進入流塵谷」。
 4. 流塵谷會顯示完整風沙遠景、目前章節與該分支專屬選項。
 5. 選「記住墓葬姓名」或「研究墓葬循環」。
 
@@ -127,10 +127,13 @@ curl http://127.0.0.1:8081/health
 
 ## 驗收紀錄
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：100 passed，1 個既有 Starlette deprecation warning。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：106 passed，1 個既有 Starlette deprecation warning。
 - `npm run build`：Next.js 16.4.4 production build passed。
+- Production Chrome 首頁：實際開啟維達利亞對話、看見四個起始選項，點選「詢問目前所在地」後回合由 0 推進至 1，下一組選項隨狀態更新。
+- Production Chrome Babylon：接近維達利亞、選擇符石林、辨認風沙路徑、進入流塵谷均可點擊；換場後遠景、章節、回合與選項同步更新。
+- Babylon hard refresh：第 2 回合符石林位置、公開線索與下一組選項從 SQLite 恢復；非議會場景不再疊加錯誤比例的錐形樹／方柱原型。
 - Live 火焰分支：平衡議會 → 命脈之泉 → 烈燚原，重啟後 `state_version=4` 且仍在烈燚原。
-- Live 風沙分支：平衡議會 → 符石林 → 流塵谷，公開線索含 `fissure_map`，profile 為 `liuchen_dust_valley`。
+- Live 風沙分支：平衡議會 → 符石林 → 流塵谷，公開線索含 `dust_route_trace`，profile 為 `liuchen_dust_valley`。
 - Headless Chrome：烈燚原與流塵谷皆以 1600×913 WebGL 載入，hard refresh 後位置正確，無 JavaScript exception。
 - 實機驗收曾發現遠景上下顛倒，已由 `087e82e` 修正並重新截圖確認。
 - 實機後續發現交叉遠景平面形成巨大棕色三角遮蔽；已改為單一 screen-space layer，並隱藏非議會場景的角色、符石、假地面與錯誤物件群。獨立 WebGL 截圖確認流塵谷／烈燚原皆無遮蔽，且顯示不同故事選項。
@@ -142,6 +145,9 @@ curl http://127.0.0.1:8081/health
 
 ```text
 4bc6ba8 feat(3d): bound generated mesh complexity
+6af55e5 fix(3d): remove mismatched prototype props
+7afde18 merge: include dynamic story fixes and Hunyuan gateway
+946c0bf merge: include A/D demo POC integration
 30efc21 fix(3d): persist Hunyuan model caches
 1c2ac18 feat(3d): add private Hunyuan GPU gateway
 f6a6e21 fix(visuals): unify council scene perspective

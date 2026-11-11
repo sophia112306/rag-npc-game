@@ -16,7 +16,7 @@
 | 開場劇情與舊存檔 | 第一階段台詞、線索 ID 和場景圖片 prompt 改為只公開當時可觀察的資訊；符石路徑先給風沙方向，不提早發放正式裂隙地圖。舊 Demo 存檔、舊回合重送及瀏覽器對話紀錄會轉成新版公開用語。 |
 | 場景與旅途地圖 | 流塵谷新增 Tiled 可走區域與 NPC 位置。首頁加入俯視旅途地圖縮圖，可展開查看鳴霖、命脈之泉、符石林、流塵谷、烈燚原；青色光點會依目前場景移動，地圖本身不觸發旅行。 |
 | 音樂與預覽 | 五個遊戲場景各有一首配樂；首頁與 Babylon 試玩頁會隨場景換曲。另有獨立的維塔預覽頁 `/preview/veta`，可切換觀察視角並播放專用配樂。曲目、來源及檔案記錄見 [`docs/AUDIO_ASSETS.md`](docs/AUDIO_ASSETS.md)。 |
-| 驗證 | 新增第一階段揭露、角色選項與劇情路線測試；本次執行後端 `102 passed`，Next.js production build 通過並產生 `/`、`/experiments/babylon`、`/preview/veta`。 |
+| 驗證 | 新增第一階段揭露、角色選項、劇情路線與 Hunyuan3D 基礎設施設定測試；本次發行整合執行後端 `106 passed`，Next.js production build 通過並產生 `/`、`/experiments/babylon`、`/preview/veta`。 |
 
 ### 目前還缺什麼
 
