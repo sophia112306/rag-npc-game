@@ -10,9 +10,9 @@
 - 使用者已決定「死亡即遊戲結束」；C 的危險事件及 A／D 的結束狀態尚未接入，不能把死亡後轉化草案當成現行玩法。
 - 驗證：後端 102 個測試通過（揭露流程測試也可單獨執行），前端 TypeScript 檢查通過。正式真相 A／B／C 事件、NPC 知識授權與外部模型一致性驗證仍待 B／C 整合。
 
-整體里程碑：`█████████▌ 95%`（M0～M2c、M4、A2～A3 完成；M3 真實服務與 A1 實機語音待驗收）
+整體里程碑：`█████████▌ 95%`（M0～M2c、M4、A2～A3 完成；M3 真實服務、A1 實機語音與 A4 3D 資產管線待驗收）
 
-週四動態故事 Demo：`████████▌░ 85%`（D0～D3 完成；D4 圖片 job／polling／fallback 完成，待正式圖片 provider；D5 實機與交接接續）
+週四動態故事 Demo：`█████████▌ 95%`（D0～D3 完成；D4 provider 管線使用靜態 fallback；D5 兩條 live 分支與 3D 實機通過，待週四展示環境人工彩排）
 
 | 階段 | 狀態 | 可驗收成果 |
 | --- | --- | --- |
@@ -27,6 +27,7 @@
 | A1：瀏覽器語音互動 | `█████████░ 90%` | STT transcript 與瀏覽器 TTS 已完成；待實機麥克風中文辨識驗收 |
 | A2：圖片／場景生成 | `██████████ 100%` | 四張版本化生成場景、單一 Registry、合法換場、2D／3D 顯示、保存與重啟承接均已完成 |
 | A3：情境選項介面 | `██████████ 100%` | 後端依 Session 產生最多四個對話／移動選項，前端點選後提交正式回合並隨狀態更新 |
+| A4：Hunyuan3D 資產管線 | `████████░░ 80%` | 私有 shape-only GPU API 與真實 GLB 驗收完成；待後端持久化 asset job、Babylon loader 與材質／畫面驗收 |
 
 ## M1 已完成
 
@@ -108,7 +109,7 @@
 
 ## M3 目前驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：92 passed（目前全套；含 M4、語音、OpenAI 相容 adapter、規則動態、場景切換、權威故事選項與兩條 Demo 分支回歸測試）。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：97 passed（目前全套；含 M4、語音、OpenAI 相容 adapter、規則動態、場景切換、權威故事選項、舊 Session 相容與兩條 Demo 分支回歸測試）。
 - 格式錯誤可有限修正，timeout 達上限後停止，永久設定錯誤不重試。
 - fake Gateway 的動態台詞已通過完整 API 流程，玩家端不再顯示開發替身。
 - 外部模型失敗的 503、Retry-After、狀態不推進均有自動化測試。
@@ -130,11 +131,12 @@
 - 選項只包裝一般 `PlayerAction`，仍使用 `action_id`、`state_version`、resolver 與完整回合交易；自由文字輸入不受限制。
 - 新增有狀態的 Demo Story Director；玩家可由命脈之泉線索解鎖烈燚原，或由符石林辨認風沙路徑後解鎖流塵谷，兩條分支會保存不同公開線索與下一組選項。正式裂隙地圖仍留待 E2-3。
 - `story_choice_id` 只接受當前節點可用的權威選項；竄改文字、目的地或模式會回傳 409，避免只靠前端隱藏選項。
+- 舊 Session 可能已有任務與位置、但尚無 Demo 節點；其舊版對話／旅行選項會先與後端當下發出的完整 action 比對，再走既有規則流程，不會被誤判成過期 Demo 選項。
 - 新增 `advance_story` 白名單操作；推進節點、揭露公開線索、解鎖特殊場景、換場、事件及對話沿用單一交易，後續操作失敗時不留下半個故事節點。
 
 ## M3a 驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：92 passed。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：97 passed。
 - 單元測試涵蓋回合化招呼、記憶承接、秘密隔離、任務去重、承諾及物品持有權提案。
 - API 端到端測試證明規則任務會保存，下一回合承接且不重複新增。
 - Choices API 測試涵蓋初始選項、任務後選項更新及不存在 Session 的 404；前端 TypeScript production build 通過。
@@ -188,18 +190,37 @@
 - 烈燚原名稱與視覺來自使用者參考，但現有 C 規則沒有對應事件或路線；目前以 provisional 場景登記，且不列入任何普通場景出口。
 - 玩家選項建構已從 Orchestrator 抽離；共用前端 API 型別與請求函式，避免在 2D／3D 頁重複定義契約。
 - 3D 頁收到成功回合後會立即套用場景，不再讓後續 choices 更新失敗阻擋已成立的移動結果。
-- Scene Registry 現在同時提供地面、霧、環境光、主／輔光、表面色盤與前景物件群 profile；Babylon 依 API 套用，不在前端另維護一份場景表。
-- 平衡議會、命脈之泉、符石林、流塵谷與烈燚原各有不同 profile；流塵谷使用沙地／沙霧，烈燚原使用黑色地面／熔岩色光與液體，非森林場景會停用樹林物件群。
+- Scene Registry 現在同時提供霧光、色盤、可見物件群，以及議會角色／符石／地面可見性；Babylon 依 API 套用，不在前端另維護一份場景表。
+- 完整場景插畫已包含天空、地面與透視，因此 Babylon 不再疊加另一套水平地板、柱子、泉、符石或議會道路；目前只保留維達利亞 cutout 與故事互動，避免兩套地平線與光源互相衝突。
+- 固定「尋找命脈符石」前端假任務已移除；議會流程改成接近維達利亞後直接顯示後端依 Session 與故事節點提供的選項。
+- Babylon 遠景由四張互相交叉的平面改為單一 screen-space layer，消除側面平面穿入鏡頭所形成的巨大三角遮蔽。
+- 非議會場景直接顯示當前章節、後端提供的規則選項及已成立公開線索，不必返回不存在於當地的維達利亞互動點。
 - 共用 Session 發生 `STATE_VERSION_CONFLICT` 時，3D 頁會自動重新取得最新狀態與選項，再提示玩家重試原行動。
 - Babylon 遠景載入會區分已啟用與載入中的 URL；失敗時保留舊遠景、顯示明確訊息，解除故障後可重試同一張圖。
 
 ## A2 驗收
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：96 passed；涵蓋資產／Registry 完整性、合法換場、特殊路線、Scene Profile、圖片 job 去重、成功、timeout fallback、Session 隔離、migration 與跨 app 重啟承接。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：97 passed；涵蓋資產／Registry 完整性、合法換場、特殊路線、舊 Session 返回路線、Scene Profile、圖片 job 去重、成功、timeout fallback、Session 隔離、migration 與跨 app 重啟承接。
 - `npm run build`：Next.js 16.4.4、TypeScript、`/` 與 `/experiments/babylon` production build 通過。
+- Live Demo：火焰與風沙兩條分支均到達特殊場景；Headless Chrome 以 1600×913 WebGL 載入烈燚原／流塵谷，hard refresh 保持位置，無 JavaScript exception。
+- 3D live 驗收發現動態遠景 Y 軸方向不一致，已修正並重新截圖確認遠景正向。
+- 後續實機畫面發現流塵谷仍載入議會原型及交叉遠景牆；修正後以獨立 Headless Chrome／SwiftShader 對流塵谷與烈燚原重新截圖，兩者皆無遮蔽、無議會角色或假地形，且顯示不同章節與選項。
 - Live HTTP：起始場景回傳平衡議會與四個選項；提交「前往命脈之泉」後建立 `change_scene` 成立事件、版本 1→2，重新 GET 仍為命脈之泉。
 - Chrome headless＋CDP 實際座標點擊「前往命脈之泉」：turn POST 與 choices GET 均為 200，場景標題及遠景更新、對話面板退出；hard refresh 後仍保留相同 Session 與位置。
 - 瀏覽器故障注入驗收：版本衝突 409 後可自動同步並重試成功；choices GET 被封鎖時已成立回合與場景仍會更新；遠景 PNG 被封鎖時顯示錯誤並保留舊景，解除後重新載入成功。
+
+## A4 Hunyuan3D 資產管線
+
+- 新增固定 Hunyuan3D upstream commit 的 CUDA 12.8 Docker image，使用支援 Blackwell 的 PyTorch cu128 wheel。
+- 第一版只載入 Hunyuan3D-2mini shape model，不載入 Paint／texture model，也不啟用需額外編譯 CUDA extension 的 FlashVDM。
+- 私有 FastAPI gateway 提供 `/live`、`/health` 與 `/generate`；模型在背景初始化，健康狀態可區分 loading、ready 與 error。
+- 生成限制為單工，輸入限制為 12 MiB、24 MP 與三種圖片格式；輸出為 GLB，模型未就緒回 503、已有工作回 429。
+- Compose 使用 rootless Docker 可用的 NVIDIA CDI，且只發布到遠端 `127.0.0.1:8081`；前端不直接呼叫校機。
+- 本機 Python compile、Compose YAML 解析與安全配置測試通過；`PYTHONPATH=. ./.venv/bin/pytest -q` 為 100 passed。
+- 校機 RTX 5060 Ti 已完成 image build、持久化 7.2 GB model cache、container recreate 與真實 `/generate` 驗收。
+- 正式 API 以既有維達利亞 cutout 在 6.75 秒產出 687,488-byte GLB；後處理結果為 17,222 vertices／40,000 faces、watertight，0 restart、未 OOM。
+- 原始 256 mesh 在 18.62 秒產生，峰值 4,571 MiB，但 875,034 faces 且非 watertight；因此 API 強制加入官方浮動面／退化面清理及 face reduction，不把 raw mesh 直接送進 Babylon。
+- 本機 SSH tunnel `127.0.0.1:8081` 已取得 `ready`；服務仍只綁遠端 loopback，前端不直接連校機。
 
 ## 已知限制
 
@@ -209,7 +230,10 @@
 - 規則動態可承接狀態但不是 LLM 自由創作；角色語氣、未預寫情境與大範圍故事發展仍需真實 ModelGateway／RAG。
 - 圖片 job／polling／fallback 已可運作，但部署端尚未注入正式 ImageGateway，因此目前介面會誠實標示「版本化場景」，不是每回合即時呼叫圖片模型。
 - 圖片工作目前由 FastAPI background task 執行；Demo 單程序可用，正式多程序部署仍應改為 transactional outbox＋獨立 worker、stale-job recovery 與有限重試。
-- Babylon 已會切換遠景、地面、霧光、色盤與物件群，但尚未為每個地點建立獨立 GLB／碰撞地圖。
+- Babylon 頁目前是使用完整場景圖、角色 cutout 與狀態式故事 UI 的 2.5D 視覺原型；尚未建立正式 GLB、地形、導航網格或碰撞地圖，介面不再宣稱已完成第一人稱 3D 建模。
+- 正式 3D 應使用 Tripo／Meshy 等 image-to-3D 服務產生模組化 GLB，再經 Blender 清理、減面、PBR 與碰撞設定；專案目前沒有 GLB、Blender 或 3D provider API key。
+- 零預算方案改以校內 GPU 部署 Hunyuan3D：現有圖片生成工具繼續製作透視一致的完整背景；Hunyuan3D 只負責獨立遺跡、祭壇、樹木等 mesh，不把單張風景圖直接當作已完成遊戲關卡。
+- A4 已固定 Hunyuan3D-2mini shape-only、CUDA 12.8、單工生成、面數上限與遠端 loopback 綁定；GPU gateway 已實際驗收，但尚未建立遊戲後端 3D asset job、正式材質或 Babylon GLB 載入，不能標示為已串進遊戲。
 - Scene Registry 已登記平衡議會、命脈之泉、符石林、流塵谷與烈燚原；目前只有鳴霖三個場景具普通旅行路線，仍缺完整正式場景清單、在場 NPC、進出條件及 E1／E2／E3 對應。
 - 目前已有維達利亞、安德烈與門梅司文托的公開角色原型與前端互動；私有角色設定、正式來源、初始知識與秘密解鎖條件仍待團隊提供。
 - 目前白名單為 `transfer_item`、`establish_commitment`、`offer_quest`、`change_scene`、`advance_story`；Demo 公開線索與特殊路線由權威選項推進，關係、任務接受／完成、正式固定事件與結局效果仍需依 C 的正式介面加入。
@@ -223,7 +247,9 @@
 
 ## 下一步
 
-1. D5：實際啟動兩個服務，以瀏覽器操作火焰與風沙兩條分支，肉眼確認 Scene Profile 與 hard refresh，再完成交接手冊。
-2. 選定正式圖片 provider／模型／金鑰環境變數，實作 ImageGateway adapter、timeout、有限重試與獨立 worker；目前無 provider 時必須保持 fallback。
-3. C 確認 Demo fallback 與正式 E3-1／烈燚原入口規則的映射；目前不把暫定選項升格為正式作者設定。
-4. B 提供正式文字 provider、URL、模型名稱與認證方式後，完成 M3 live AI 及 RAG 知識邊界驗收。
+1. 由 FastAPI 建立持久化 3D asset job，再加入 Babylon GLB loader、transform metadata、材質策略、fallback 與實際瀏覽器驗收；瀏覽器不直接連校機。
+2. 由團隊提供祭壇、符石、遺跡、枯木等獨立物件參考圖與場景擺放 metadata；避免把整張風景或單張角色正面直接當正式 3D 關卡。
+3. 若 Hunyuan3D 的 mesh 品質或速度不符 Demo，再評估 Tripo／Meshy API；任何付費 provider 必須先取得成本上限與金鑰。
+4. 選定正式圖片 provider／模型／金鑰環境變數，實作 ImageGateway adapter、timeout、有限重試與獨立 worker；目前無 provider 時必須保持 fallback。
+5. C 確認 Demo fallback 與正式 E3-1／烈燚原入口規則的映射；目前不把暫定選項升格為正式作者設定。
+6. B 提供正式文字 provider、URL、模型名稱與認證方式後，完成 M3 live AI 及 RAG 知識邊界驗收。

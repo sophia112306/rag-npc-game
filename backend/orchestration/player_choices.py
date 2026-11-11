@@ -3,7 +3,7 @@
 from backend.content.demo_story import available_demo_story_choices
 from backend.content.scenes import travel_destinations
 from backend.schemas.game_state import GameState
-from backend.schemas.player_action import ActionMode
+from backend.schemas.player_action import ActionMode, PlayerAction
 from backend.schemas.player_choice import PlayerChoice
 from backend.schemas.progression import PlayerQuestView
 
@@ -56,6 +56,20 @@ def build_player_choices(
     travel = _travel_choices(state.current_scene_id)
     dialogue_limit = max(1, 4 - len(travel))
     return [*_dialogue_choices(state, quests)[:dialogue_limit], *travel]
+
+
+def player_choice_action_matches(
+    action: PlayerAction,
+    choice: PlayerChoice,
+) -> bool:
+    """Bind every clickable choice ID to the exact server-issued action."""
+
+    return (
+        action.message == choice.message
+        and action.target_npc_id == choice.target_npc_id
+        and action.action_mode == choice.action_mode
+        and action.destination_scene_id == choice.destination_scene_id
+    )
 
 
 def _dialogue_choices(

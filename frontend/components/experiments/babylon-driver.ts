@@ -4,6 +4,7 @@ import {
   DirectionalLight,
   Engine,
   HemisphericLight,
+  Layer,
   Mesh,
   MeshBuilder,
   PointLight,
@@ -16,7 +17,7 @@ import {
   TransformNode,
 } from "@babylonjs/core";
 import type { SceneVisualProfile } from "../../lib/game-api";
-import { EYE_HEIGHT, NPC, pillars, RELIC, trees, type Pick, type TrialDriver } from "./world";
+import { EYE_HEIGHT, NPC, pillars, trees, type Pick, type TrialDriver } from "./world";
 
 export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   const engine = new Engine(canvas, true, { powerPreference: "high-performance", stencil: false });
@@ -84,28 +85,13 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   const ground = at(MeshBuilder.CreateGround("walkable forest", { width: 80, height: 80, subdivisions: 1 }, scene), 0, 0, 0, groundMat, true);
 
   const backgroundTexture = new Texture("/game/forest-eye-backdrop.png", scene);
-  const backgroundMat = material("painted forest horizon", "#ffffff");
+  const backdropLayer = new Layer("painted scene backdrop", null, scene, true);
   let activeBackgroundTexture = backgroundTexture;
   let activeBackgroundUrl = "/game/forest-eye-backdrop.png";
   let backdropRequest = 0;
   let backdropLoad: { request: number; url: string; promise: Promise<void> } | null = null;
   let disposed = false;
-  backgroundMat.diffuseTexture = activeBackgroundTexture;
-  backgroundMat.emissiveColor = new Color3(0.4, 0.42, 0.4);
-  backgroundMat.disableLighting = true;
-  backgroundMat.fogEnabled = false;
-  backgroundMat.backFaceCulling = false;
-  // A continuous backdrop around the playable area keeps the horizon covered
-  // even when the player turns at a quest point or looks back down the path.
-  const front = at(MeshBuilder.CreatePlane("distant forest front", { width: 72, height: 40 }, scene), 0, 12, -35, backgroundMat);
-  const left = at(MeshBuilder.CreatePlane("distant forest left", { width: 72, height: 40 }, scene), -35, 12, 0, backgroundMat);
-  const right = at(MeshBuilder.CreatePlane("distant forest right", { width: 72, height: 40 }, scene), 35, 12, 0, backgroundMat);
-  const rear = at(MeshBuilder.CreatePlane("distant forest rear", { width: 72, height: 40 }, scene), 0, 12, 35, backgroundMat);
-  left.rotation.y = Math.PI / 2;
-  right.rotation.y = Math.PI / 2;
-  rear.rotation.y = Math.PI;
-  // Slight overlap hides precision gaps at the corners.
-  front.scaling.x = left.scaling.x = right.scaling.x = rear.scaling.x = 1.02;
+  backdropLayer.texture = activeBackgroundTexture;
 
   // Shallow broken paving leads directly to the council ring.
   for (let i = 0; i < 19; i++) {
@@ -239,16 +225,6 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   portraitLight.intensity = 0.58;
   portraitLight.range = 5.5;
 
-  const pedestal = at(MeshBuilder.CreateCylinder("relic pedestal", { diameterTop: 0.9, diameterBottom: 1.2, height: 1.05, tessellation: 8 }, scene), RELIC.x, 0.52, RELIC.z, stoneDark, true);
-  pedestal.rotation.y = 0.25;
-  const relicMaterial = material("teal relic crystal", "#75b4a7", "#1c6962");
-  const relic = at(MeshBuilder.CreatePolyhedron("floating relic", { type: 1, size: 0.43 }, scene), RELIC.x, 1.43, RELIC.z, relicMaterial, true);
-  relic.rotation.z = 0.24;
-  const relicLight = new PointLight("relic glow", new Vector3(RELIC.x, 1.4, RELIC.z), scene);
-  relicLight.diffuse = new Color3(0.24, 0.72, 0.63);
-  relicLight.intensity = 0.8;
-  relicLight.range = 4;
-
   function propGroup(
     meshName: string,
   ): SceneVisualProfile["prop_groups"][number] | null {
@@ -276,7 +252,6 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     moon.intensity = profile.key_light_intensity;
     goldLight.diffuse = Color3.FromHexString(profile.accent_light_color);
     goldLight.intensity = profile.accent_light_intensity;
-    backgroundMat.emissiveColor = Color3.FromHexString(profile.backdrop_emissive_color);
 
     stone.diffuseColor = Color3.FromHexString(profile.surface_color);
     stoneLight.diffuseColor = Color3.FromHexString(profile.surface_light_color);
@@ -293,6 +268,10 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       const group = propGroup(mesh.name);
       if (group) mesh.setEnabled(visibleGroups.has(group));
     }
+    ground.setEnabled(profile.show_ground);
+    npcTalking = false;
+    npcRoot.setEnabled(profile.show_vidalia);
+    portraitLight.setEnabled(profile.show_vidalia);
   }
 
   const started = performance.now();
@@ -320,7 +299,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
           const previousTexture = activeBackgroundTexture;
           activeBackgroundTexture = nextTexture;
           activeBackgroundUrl = url;
-          backgroundMat.diffuseTexture = nextTexture;
+          backdropLayer.texture = nextTexture;
           backdropLoad = null;
           previousTexture.dispose();
           resolve();
@@ -347,10 +326,9 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     pick(clientX, clientY): Pick {
       const bounds = canvas.getBoundingClientRect();
       if (!bounds.width || !bounds.height) return null;
-      const hit = scene.pick(clientX - bounds.left, clientY - bounds.top, (mesh) => mesh === ground || npcMeshes.has(mesh as Mesh) || mesh === relic || mesh === pedestal, false, camera);
+      const hit = scene.pick(clientX - bounds.left, clientY - bounds.top, (mesh) => mesh === ground || npcMeshes.has(mesh as Mesh), false, camera);
       if (!hit?.hit || !hit.pickedMesh) return null;
       if (npcMeshes.has(hit.pickedMesh as Mesh)) return { kind: "npc" };
-      if (hit.pickedMesh === relic || hit.pickedMesh === pedestal) return { kind: "relic" };
       if (hit.pickedMesh === ground && hit.pickedPoint) return { kind: "ground", x: hit.pickedPoint.x, z: hit.pickedPoint.z };
       return null;
     },
@@ -358,8 +336,6 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       const time = (performance.now() - started) / 1000;
       npcRoot.position.y = (npcTalking ? 0.055 : 0.018) * Math.sin(time * (npcTalking ? 3.1 : 1.3));
       npcRoot.rotation.z = (npcTalking ? 0.008 : 0.003) * Math.sin(time * (npcTalking ? 1.8 : 0.8));
-      relic.rotation.y = time * 0.75;
-      relic.position.y = 1.43 + Math.sin(time * 1.7) * 0.08;
       scene.render();
     },
     resize() {

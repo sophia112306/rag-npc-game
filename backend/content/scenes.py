@@ -34,6 +34,8 @@ class SceneVisualProfile(BaseModel):
     liquid_color: str
     liquid_emissive_color: str
     prop_groups: tuple[Literal["forest", "path", "council", "pillars", "spring"], ...]
+    show_ground: bool
+    show_vidalia: bool
 
 
 class SceneDefinition(BaseModel):
@@ -86,7 +88,9 @@ SCENES: dict[str, SceneDefinition] = {
             rune_emissive_color="#183d39",
             liquid_color="#2d9297",
             liquid_emissive_color="#1e626c",
-            prop_groups=("forest", "path", "council", "pillars", "spring"),
+            prop_groups=(),
+            show_ground=False,
+            show_vidalia=True,
         ),
         canon_status="confirmed",
         allowed_destinations=("minglin_life_spring", "minglin_rune_grove"),
@@ -123,7 +127,9 @@ SCENES: dict[str, SceneDefinition] = {
             rune_emissive_color="#17695f",
             liquid_color="#25b4bd",
             liquid_emissive_color="#147b8b",
-            prop_groups=("forest", "path", "spring"),
+            prop_groups=("forest", "spring"),
+            show_ground=False,
+            show_vidalia=False,
         ),
         canon_status="confirmed",
         allowed_destinations=("minglin",),
@@ -160,7 +166,9 @@ SCENES: dict[str, SceneDefinition] = {
             rune_emissive_color="#4a267c",
             liquid_color="#415f83",
             liquid_emissive_color="#263a63",
-            prop_groups=("forest", "path", "council", "pillars"),
+            prop_groups=("forest", "pillars"),
+            show_ground=False,
+            show_vidalia=False,
         ),
         canon_status="provisional",
         allowed_destinations=("minglin",),
@@ -197,7 +205,9 @@ SCENES: dict[str, SceneDefinition] = {
             rune_emissive_color="#44301e",
             liquid_color="#70604d",
             liquid_emissive_color="#37291f",
-            prop_groups=("path", "pillars"),
+            prop_groups=(),
+            show_ground=False,
+            show_vidalia=False,
         ),
         canon_status="confirmed",
         allowed_destinations=(),
@@ -234,7 +244,9 @@ SCENES: dict[str, SceneDefinition] = {
             rune_emissive_color="#a8370c",
             liquid_color="#ff681c",
             liquid_emissive_color="#c92f08",
-            prop_groups=("path", "council", "pillars", "spring"),
+            prop_groups=(),
+            show_ground=False,
+            show_vidalia=False,
         ),
         canon_status="provisional",
         allowed_destinations=(),

@@ -49,6 +49,9 @@
 .inspectActions button { padding: 9px 12px; border: 1px solid #e4c57c; color: #fff0c6; background: #5b4828; cursor: pointer; white-space: nowrap; font-size: 12px; }
 .inspectActions button:hover { background: #806736; }
 .cool .inspectActions button { border-color: #8cdcd0; background: #1d5860; color: #ebfffc; }
+.storyInspect { min-height: 190px; }
+.storyInspect .inspectBody { padding-right: 24px; }
+.inspectBody .clues { display: block; margin: 5px 0; color: #d7e9c6; }
 .footer { position: absolute; z-index: 2; left: 30px; right: 30px; bottom: 18px; display: flex; justify-content: space-between; gap: 20px; color: #e7debb; font-size: 11px; letter-spacing: .08em; text-shadow: 0 2px 4px #000; }
 .footer button { border: 0; color: inherit; background: transparent; cursor: pointer; font-size: 11px; text-decoration: underline; text-underline-offset: 4px; }
 .footer button:hover { color: #fff; }
