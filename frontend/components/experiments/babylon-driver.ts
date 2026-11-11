@@ -496,6 +496,31 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   }
 
   return {
+    pickGround(clientX, clientY) {
+      if (!world) return null;
+      const bounds = canvas.getBoundingClientRect();
+      const hit = scene.pick(
+        clientX - bounds.left,
+        clientY - bounds.top,
+        (mesh) =>
+          mesh === terrain ||
+          mesh.name === "npc" ||
+          mesh.name === "landmark paving",
+        false,
+        camera,
+      );
+      if (!hit?.hit || !hit.pickedPoint) return null;
+      if (
+        hit.pickedMesh?.name === "npc" ||
+        hit.pickedMesh?.name === "landmark paving"
+      )
+        return {
+          x: world.interaction_x,
+          z: world.interaction_z,
+          interaction: true,
+        };
+      return { x: hit.pickedPoint.x, z: hit.pickedPoint.z };
+    },
     async setWorld(next) {
       if (disposed) return;
       world = next;

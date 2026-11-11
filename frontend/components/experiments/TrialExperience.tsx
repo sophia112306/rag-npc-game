@@ -14,7 +14,7 @@ import {
 } from "../../lib/game-api";
 import { getSceneMusic } from "../../lib/scene-music";
 import { useSceneMusic } from "../../lib/use-scene-music";
-import { createFirstPerson } from "./first-person";
+import { createFirstPerson, type MoveDirection } from "./first-person";
 import type { TrialDriver } from "./world";
 import styles from "./TrialExperience.module.css";
 
@@ -47,7 +47,7 @@ export default function TrialExperience() {
   const [sceneReady, setSceneReady] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(
-    "WASD 自由移動，拖曳滑鼠環視；走近人物或地標後按 E。",
+    "點擊石板路移動，或用 WASD；拖曳環視，走近人物後按 E。",
   );
   const [choices, setChoices] = useState<PlayerChoice[]>([]);
   const [panel, setPanel] = useState(false);
@@ -148,6 +148,7 @@ export default function TrialExperience() {
           loaded,
           () => interactionRef.current(),
           () => journalRef.current(),
+          setNotice,
         );
         controlsRef.current = controls;
         const current = stateRef.current?.world_scene;
@@ -407,7 +408,7 @@ export default function TrialExperience() {
         ref={canvasRef}
         tabIndex={0}
         className={styles.canvas}
-        aria-label="第一人稱探索場景，WASD 移動，拖曳環視，E 互動"
+        aria-label="第一人稱探索場景，點地面或 WASD 移動，拖曳環視，E 互動"
       />
       <div className={styles.vignette} />
       <header className={styles.header}>
@@ -452,6 +453,36 @@ export default function TrialExperience() {
       <div className={styles.coordinates} aria-label="玩家位置">
         ⌖ {poseLabel}
       </div>
+      {!panel && !journal && ready && (
+        <div className={styles.movePad} aria-label="按住方向鍵移動">
+          {(
+            [
+              ["forward", "▲", "向前移動"],
+              ["left", "◀", "向左移動"],
+              ["backward", "▼", "向後移動"],
+              ["right", "▶", "向右移動"],
+            ] as [MoveDirection, string, string][]
+          ).map(([direction, label, aria]) => (
+            <button
+              key={direction}
+              type="button"
+              data-direction={direction}
+              aria-label={aria}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                controlsRef.current?.setMove(direction, true);
+              }}
+              onPointerUp={() => controlsRef.current?.setMove(direction, false)}
+              onPointerCancel={() =>
+                controlsRef.current?.setMove(direction, false)
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {ready && sceneReady && !panel && !journal && (
         <div className={styles.interaction}>
           <button disabled={!near} onClick={() => interactionRef.current()}>
@@ -464,7 +495,7 @@ export default function TrialExperience() {
       )}
       <footer className={styles.footer}>
         <span>
-          <kbd>W A S D</kbd> 移動 <kbd>Shift</kbd> 奔跑 · 滑鼠拖曳環視{" "}
+          點地面移動 · <kbd>W A S D</kbd> 移動 <kbd>Shift</kbd> 奔跑 · 拖曳環視{" "}
           <button
             onClick={async () => {
               try {

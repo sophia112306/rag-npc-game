@@ -2,7 +2,9 @@ import type { AssetKind, WorldScene } from "../../lib/game-api";
 
 export const EYE_HEIGHT = 1.68;
 export type PlayerPose = { x: number; z: number; yaw: number; pitch: number };
+export type GroundTarget = { x: number; z: number; interaction?: boolean };
 export type TrialDriver = {
+  pickGround: (clientX: number, clientY: number) => GroundTarget | null;
   setWorld: (world: WorldScene) => Promise<void>;
   setAsset: (kind: AssetKind, url: string) => Promise<void>;
   setView: (pose: PlayerPose, eyeBob: number) => void;
