@@ -10,7 +10,7 @@
   "tileheight": 64,
   "infinite": false,
   "nextlayerid": 4,
-  "nextobjectid": 4,
+  "nextobjectid": 5,
   "layers": [
     {
       "id": 1,
@@ -62,7 +62,8 @@
       "visible": true,
       "objects": [
         {"id": 2, "name": "player_spawn", "type": "spawn", "point": true, "x": 835, "y": 535, "width": 0, "height": 0, "rotation": 0, "visible": true},
-        {"id": 3, "name": "vidalia", "type": "npc", "point": true, "x": 1055, "y": 375, "width": 0, "height": 0, "rotation": 0, "visible": true}
+        {"id": 3, "name": "vidalia", "type": "npc", "point": true, "x": 1055, "y": 375, "width": 0, "height": 0, "rotation": 0, "visible": true},
+        {"id": 4, "name": "andre", "type": "npc", "point": true, "x": 1245, "y": 525, "width": 0, "height": 0, "rotation": 0, "visible": true}
       ]
     }
   ],

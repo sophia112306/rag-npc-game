@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from backend.content.reveal_policy import is_demo_first_stage, public_chapter_title, public_clue_ids
 from backend.content.scenes import SceneVisualProfile, require_scene
 
 from .game_state import GameState
@@ -98,9 +99,12 @@ def project_player_view(state: GameState) -> PlayerViewState:
         story_progress=PlayerStoryProgressView(
             arc_id=state.story_progress.arc_id,
             node_id=state.story_progress.node_id,
-            chapter_title=state.story_progress.chapter_title,
+            chapter_title=public_chapter_title(state.story_progress.chapter_title),
             mode=state.story_progress.mode,
-            public_clue_ids=list(state.story_progress.public_clue_ids),
+            public_clue_ids=public_clue_ids(
+                state.story_progress.public_clue_ids,
+                demo_act1=is_demo_first_stage(state),
+            ),
         ),
         player=PlayerIdentityView(
             player_id=state.player.player_id,

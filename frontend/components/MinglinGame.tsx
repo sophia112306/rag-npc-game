@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type Phaser from "phaser";
 
 export type GameCommand = { dx: number; dy: number };
+export type NpcId = "vidalia" | "andre" | "menmesvento";
 export const MIN_MAP_ZOOM = 1;
 export const MAX_MAP_ZOOM = 2.2;
 export const MAP_ZOOM_STEP = 0.2;
@@ -27,13 +28,15 @@ export function interactWithNpc() {
 
 type Props = {
   backgroundUrl: string;
+  sceneId: string;
+  sceneName: string;
   paused: boolean;
-  onNearChange: (near: boolean) => void;
-  onInteract: () => void;
+  onNearChange: (npcId: NpcId | null) => void;
+  onInteract: (npcId: NpcId) => void;
   onZoomChange: (zoom: number) => void;
 };
 
-type Destination = { x: number; y: number; talkAfterArrival: boolean };
+type Destination = { x: number; y: number; targetNpcId: NpcId | null };
 type PolygonObject = { x: number; y: number; polygon?: { x: number; y: number }[] };
 const directions = [
   { texture: "traveler-back", flipX: false },
@@ -46,7 +49,7 @@ const directions = [
   { texture: "traveler", flipX: true },
 ] as const;
 
-export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInteract, onZoomChange }: Props) {
+export default function MinglinGame({ backgroundUrl, sceneId, sceneName, paused, onNearChange, onInteract, onZoomChange }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused);
   const nearRef = useRef(onNearChange);
@@ -68,14 +71,15 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
       class MinglinScene extends PhaserEngine.Scene {
         private player?: Phaser.GameObjects.Image;
         private playerShadow?: Phaser.GameObjects.Ellipse;
-        private npc?: Phaser.GameObjects.Image;
+        private npcs: Partial<Record<NpcId, Phaser.GameObjects.Image>> = {};
+        private visibleNpcIds: NpcId[] = sceneId === "liuchen_valley" ? ["menmesvento"] : sceneId === "minglin" ? ["vidalia", "andre"] : [];
         private walkable?: Phaser.Geom.Polygon;
         private destination?: Destination;
         private cursorKeys?: Phaser.Types.Input.Keyboard.CursorKeys;
         private movementKeys?: Record<string, Phaser.Input.Keyboard.Key>;
         private turnKeys?: Record<string, Phaser.Input.Keyboard.Key>;
         private facing = 1;
-        private wasNear = false;
+        private wasNear: NpcId | null = null;
         private pinchStart?: { distance: number; zoom: number };
         private touchStarts = new Map<number, { x: number; y: number }>();
         private suppressTouchTap = false;
@@ -83,7 +87,7 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
         constructor() { super("minglin"); }
 
         preload() {
-          this.load.tilemapTiledJSON("minglin-map", "/game/minglin.tmj");
+          this.load.tilemapTiledJSON("scene-map", sceneId === "liuchen_valley" ? "/game/liuchen.tmj" : "/game/minglin.tmj");
           this.load.image("minglin-forest", backgroundUrl);
           this.load.image("traveler", "/game/traveler.png");
           this.load.image("traveler-back", "/game/traveler-back.png");
@@ -91,6 +95,8 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
           this.load.image("traveler-front-quarter", "/game/traveler-front-quarter.png");
           this.load.image("traveler-side", "/game/traveler-side.png");
           this.load.image("vidalia", "/game/vidalia-cutout.png");
+          this.load.image("andre", "/game/andre-cutout.png");
+          this.load.image("menmesvento", "/game/menmesvento-cutout.png");
         }
 
         create() {
@@ -98,40 +104,41 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
           zoomRef.current(MIN_MAP_ZOOM);
           this.add.image(0, 0, "minglin-forest").setOrigin(0).setDisplaySize(1672, 941).setDepth(0);
 
-          const map = this.make.tilemap({ key: "minglin-map" });
+          const map = this.make.tilemap({ key: "scene-map" });
           const path = map.getObjectLayer("Walkable")?.objects[0] as PolygonObject | undefined;
           if (path?.polygon) {
-            this.walkable = new PhaserEngine.Geom.Polygon(
-              path.polygon.map((point) => ({ x: path.x + point.x, y: path.y + point.y }))
-            );
+            this.walkable = new PhaserEngine.Geom.Polygon(path.polygon.map((point) => ({ x: path.x + point.x, y: path.y + point.y })));
           }
 
           const actors = map.getObjectLayer("Actors")?.objects;
           const spawn = actors?.find((item) => item.name === "player_spawn");
-          const vidalia = actors?.find((item) => item.name === "vidalia");
           const playerX = spawn?.x ?? 835;
           const playerY = spawn?.y ?? 535;
-          const npcX = vidalia?.x ?? 1055;
-          const npcY = vidalia?.y ?? 375;
 
           this.playerShadow = this.add.ellipse(playerX, playerY + 3, 38, 13, 0x151a10, 0.42).setDepth(playerY - 1);
           this.player = this.add.image(playerX, playerY, "traveler").setOrigin(0.5, 1).setDisplaySize(56, 100).setDepth(playerY);
-          this.add.ellipse(npcX, npcY + 4, 40, 12, 0x232119, 0.35).setDepth(npcY - 1);
-          this.npc = this.add.image(npcX, npcY, "vidalia").setOrigin(0.5, 1).setDisplaySize(52, 132).setDepth(npcY);
-
-          const marker = this.add.text(npcX, npcY - 149, "◇", {
-            color: "#ffe496", fontSize: "31px", fontFamily: "Georgia, serif",
-            stroke: "#3f3519", strokeThickness: 4,
-          }).setOrigin(0.5).setDepth(npcY + 1);
-          this.tweens.add({ targets: marker, y: npcY - 155, duration: 1150, yoyo: true, repeat: -1, ease: "Sine.InOut" });
-
+          for (const npcId of this.visibleNpcIds) {
+            const actor = actors?.find((item) => item.name === npcId);
+            if (!actor) continue;
+            const npcX = actor.x ?? 0;
+            const npcY = actor.y ?? 0;
+            this.add.ellipse(npcX, npcY + 4, 40, 12, 0x232119, 0.35).setDepth(npcY - 1);
+            this.npcs[npcId] = this.add.image(npcX, npcY, npcId).setOrigin(0.5, 1)
+              .setDisplaySize(npcId === "vidalia" ? 52 : 70, npcId === "vidalia" ? 132 : 137).setDepth(npcY);
+            const marker = this.add.text(npcX, npcY - 149, "◇", {
+              color: "#ffe496", fontSize: "31px", fontFamily: "Georgia, serif",
+              stroke: "#3f3519", strokeThickness: 4,
+            }).setOrigin(0.5).setDepth(npcY + 1);
+            this.tweens.add({ targets: marker, y: npcY - 155, duration: 1150, yoyo: true, repeat: -1, ease: "Sine.InOut" });
+          }
           this.cursorKeys = this.input.keyboard?.createCursorKeys();
           this.movementKeys = this.input.keyboard?.addKeys("W,A,S,D") as Record<string, Phaser.Input.Keyboard.Key> | undefined;
           this.turnKeys = this.input.keyboard?.addKeys("Q,R") as Record<string, Phaser.Input.Keyboard.Key> | undefined;
           this.input.mouse?.disableContextMenu();
 
           const talk = () => {
-            if (!pausedRef.current && this.isNearNpc()) interactRef.current();
+            const nearbyNpc = this.nearbyNpc();
+            if (!pausedRef.current && nearbyNpc) interactRef.current(nearbyNpc);
           };
           const touchMove = (event: Event) => {
             if (pausedRef.current) return;
@@ -177,7 +184,7 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
             }
           };
           const handleMapPointer = (pointer: Phaser.Input.Pointer) => {
-            if (pausedRef.current || !this.npc || !this.player) return;
+            if (pausedRef.current || !this.player) return;
             const world = this.worldAt(pointer.x, pointer.y);
             const x = world.x;
             const y = world.y;
@@ -186,17 +193,21 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
               this.faceToward(x - this.player.x, y - this.player.y);
               return;
             }
-            const clickedNpc = Math.abs(x - this.npc.x) < 64 && y > this.npc.y - 150 && y < this.npc.y + 23;
-            if (clickedNpc) {
-              if (this.isNearNpc()) {
-                this.faceToward(this.npc.x - this.player.x, this.npc.y - this.player.y);
-                interactRef.current();
+            const clickedNpcId = this.visibleNpcIds.find((npcId) => {
+              const npc = this.npcs[npcId];
+              return npc && Math.abs(x - npc.x) < 64 && y > npc.y - 150 && y < npc.y + 23;
+            });
+            if (clickedNpcId) {
+              const npc = this.npcs[clickedNpcId]!;
+              if (this.isNearNpc(clickedNpcId)) {
+                this.faceToward(npc.x - this.player.x, npc.y - this.player.y);
+                interactRef.current(clickedNpcId);
               } else {
-                this.destination = { x: this.npc.x - 78, y: this.npc.y + 61, talkAfterArrival: true };
+                this.destination = { x: npc.x - 78, y: npc.y + 61, targetNpcId: clickedNpcId };
                 this.faceToward(this.destination.x - this.player.x, this.destination.y - this.player.y);
               }
             } else if (this.canWalk(x, y)) {
-              this.destination = { x, y, talkAfterArrival: false };
+              this.destination = { x, y, targetNpcId: null };
               this.faceToward(x - this.player.x, y - this.player.y);
             }
           };
@@ -306,13 +317,24 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
           this.setFacing(Math.round(angle / (Math.PI / 4)));
         }
 
-        private isNearNpc() {
-          return !!this.player && !!this.npc &&
-            PhaserEngine.Math.Distance.Between(this.player.x, this.player.y, this.npc.x, this.npc.y) < 125;
+        private isNearNpc(npcId: NpcId) {
+          const npc = this.npcs[npcId];
+          return !!this.player && !!npc &&
+            PhaserEngine.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 125;
+        }
+
+        private nearbyNpc(): NpcId | null {
+          if (!this.player) return null;
+          return this.visibleNpcIds.filter((npcId) => this.isNearNpc(npcId)).sort((left, right) => {
+            const a = this.npcs[left]!;
+            const b = this.npcs[right]!;
+            return PhaserEngine.Math.Distance.Between(this.player!.x, this.player!.y, a.x, a.y) -
+              PhaserEngine.Math.Distance.Between(this.player!.x, this.player!.y, b.x, b.y);
+          })[0] ?? null;
         }
 
         private refreshNearState() {
-          const near = this.isNearNpc();
+          const near = this.nearbyNpc();
           if (near !== this.wasNear) {
             this.wasNear = near;
             nearRef.current(near);
@@ -320,12 +342,15 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
         }
 
         private tryMove(dx: number, dy: number) {
-          if (!this.player || !this.playerShadow || !this.npc || pausedRef.current) return false;
+          if (!this.player || !this.playerShadow || pausedRef.current) return false;
           this.faceToward(dx, dy);
           const nextX = this.player.x + dx;
           const nextY = this.player.y + dy;
           if (!this.canWalk(nextX, nextY)) return false;
-          if (PhaserEngine.Math.Distance.Between(nextX, nextY, this.npc.x, this.npc.y) < 31) return false;
+          if (this.visibleNpcIds.some((npcId) => {
+            const npc = this.npcs[npcId];
+            return npc && PhaserEngine.Math.Distance.Between(nextX, nextY, npc.x, npc.y) < 31;
+          })) return false;
           this.player.setPosition(nextX, nextY).setDepth(nextY);
           this.playerShadow.setPosition(nextX, nextY + 3).setDepth(nextY - 1);
           this.keepPlayerVisible();
@@ -334,7 +359,8 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
         }
 
         update(_time: number, delta: number) {
-          if (pausedRef.current || !this.player) return;
+          if (!this.player) return;
+          if (pausedRef.current) return;
           if (this.turnKeys && PhaserEngine.Input.Keyboard.JustDown(this.turnKeys.Q)) {
             this.destination = undefined;
             this.setFacing(this.facing - 1);
@@ -359,9 +385,10 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
           if (!this.destination) return;
           const distance = PhaserEngine.Math.Distance.Between(this.player.x, this.player.y, this.destination.x, this.destination.y);
           if (distance <= 5) {
-            const shouldTalk = this.destination.talkAfterArrival && this.isNearNpc();
+            const targetNpcId = this.destination.targetNpcId;
+            const shouldTalk = targetNpcId && this.isNearNpc(targetNpcId);
             this.destination = undefined;
-            if (shouldTalk) interactRef.current();
+            if (shouldTalk && targetNpcId) interactRef.current(targetNpcId);
             return;
           }
 
@@ -371,9 +398,10 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
             (this.destination.y - this.player.y) / distance * step
           );
           if (!moved) this.destination = undefined;
-          else if (this.destination?.talkAfterArrival && this.isNearNpc()) {
+          else if (this.destination?.targetNpcId && this.isNearNpc(this.destination.targetNpcId)) {
+            const targetNpcId = this.destination.targetNpcId;
             this.destination = undefined;
-            interactRef.current();
+            interactRef.current(targetNpcId);
           }
         }
       }
@@ -395,7 +423,7 @@ export default function MinglinGame({ backgroundUrl, paused, onNearChange, onInt
       cancelled = true;
       game?.destroy(true);
     };
-  }, [backgroundUrl]);
+  }, [backgroundUrl, sceneId]);
 
-  return <div className="game-canvas" ref={mountRef} aria-label="鳴霖森林遊戲地圖，點擊地面可移動，滾輪或雙指可縮放" />;
+  return <div className="game-canvas" ref={mountRef} aria-label={`${sceneName}遊戲地圖，點擊地面可移動，滾輪或雙指可縮放`} />;
 }

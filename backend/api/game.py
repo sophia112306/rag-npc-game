@@ -1,5 +1,7 @@
 """Game endpoints exposed to the frontend."""
 
+from typing import Literal
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -128,12 +130,13 @@ async def submit_player_action(
 )
 async def get_player_choices(
     session_id: str,
+    npc_id: Literal["vidalia", "andre", "menmesvento"] = "vidalia",
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> list[PlayerChoice]:
     """Return clickable choices derived from the current public session state."""
 
     try:
-        return await orchestrator.get_player_choices(session_id)
+        return await orchestrator.get_player_choices(session_id, npc_id)
     except SessionNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

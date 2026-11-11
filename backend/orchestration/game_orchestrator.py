@@ -171,6 +171,10 @@ class GameOrchestrator:
             )
         self._validate_proposal_envelope(proposal, state)
         resolution = self._proposal_resolver.resolve(state, proposal)
+        if action.target_npc_id in resolution.updated_state.npc_states and any(
+            line.speaker_id == action.target_npc_id for line in proposal.proposed_dialogue
+        ):
+            resolution.updated_state.npc_states[action.target_npc_id].met = True
         updated_state = self._advance_turn(resolution.updated_state)
         story = self._render_resolved_story(proposal, resolution)
         response = GameTurnResponse(
@@ -211,7 +215,7 @@ class GameOrchestrator:
         except PersistentSessionNotFoundError as exc:
             raise SessionNotFoundError(str(exc)) from exc
 
-    async def get_player_choices(self, session_id: str) -> list[PlayerChoice]:
+    async def get_player_choices(self, session_id: str, npc_id: str = "vidalia") -> list[PlayerChoice]:
         """Return state-aware shortcuts without exposing hidden rules or memories."""
 
         state = await self.get_state(session_id)
@@ -220,7 +224,7 @@ class GameOrchestrator:
         except PersistentSessionNotFoundError as exc:
             raise SessionNotFoundError(str(exc)) from exc
 
-        return build_player_choices(state, quests)
+        return build_player_choices(state, quests, npc_id)
 
     @staticmethod
     def _parse_action(action: PlayerAction) -> ParsedAction:

@@ -11,10 +11,11 @@
 .compass { display: grid; place-items: center; width: 55px; height: 55px; border: 1px solid #e8d49b; border-radius: 50%; color: #ecd18c; font: 39px Georgia, serif; }
 .cool .compass, .cool .brand { border-color: #8bdacfa8; }
 .toplinks { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; align-items: center; pointer-events: auto; }
-.toplinks span, .toplinks a { padding: 9px 14px; border: 1px solid #c8ab73a6; background: #0a170de0; color: #f7e9c6; font: 11px Georgia, serif; text-decoration: none; letter-spacing: .08em; }
-.toplinks a:hover, .toplinks a:focus-visible { background: #5a4a27; color: #fff; }
-.cool .toplinks span, .cool .toplinks a { border-color: #68b8bea6; background: #081d24e0; color: #d5f8f1; }
-.cool .toplinks a:hover { background: #205663; }
+.toplinks span, .toplinks a, .toplinks button { padding: 9px 14px; border: 1px solid #c8ab73a6; background: #0a170de0; color: #f7e9c6; font: 11px Georgia, serif; text-decoration: none; letter-spacing: .08em; }
+.toplinks button { cursor: pointer; }
+.toplinks a:hover, .toplinks a:focus-visible, .toplinks button:hover, .toplinks button:focus-visible { background: #5a4a27; color: #fff; }
+.cool .toplinks span, .cool .toplinks a, .cool .toplinks button { border-color: #68b8bea6; background: #081d24e0; color: #d5f8f1; }
+.cool .toplinks a:hover, .cool .toplinks button:hover { background: #205663; }
 .reticle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; color: #f6e9bb; font-size: 25px; text-shadow: 0 0 8px #000, 0 0 18px #fff; opacity: .72; }
 .mission { position: absolute; z-index: 2; top: 112px; right: 30px; width: min(285px, 32vw); padding: 15px 19px; border: 1px solid #cbb478ad; background: #0d1a13d9; box-shadow: inset 0 0 0 3px #203025a8, 0 8px 18px #0008; display: flex; flex-direction: column; gap: 5px; text-shadow: 0 1px 3px #000; }
 .mission small { color: #d6bd82; font-size: 10px; letter-spacing: .2em; }
@@ -59,7 +60,7 @@
   .compass { width: 37px; height: 37px; font-size: 26px; }
   .toplinks { gap: 4px; max-width: 48%; }
   .toplinks span { display: none; }
-  .toplinks a { padding: 6px 8px; font-size: 9px; }
+  .toplinks a, .toplinks button { padding: 6px 8px; font-size: 9px; }
   .mission { top: 83px; right: 12px; width: 178px; padding: 9px; }
   .mission strong { font-size: 13px; }
   .mission span { font-size: 9px; }

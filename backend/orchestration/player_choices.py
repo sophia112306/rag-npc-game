@@ -11,8 +11,41 @@ from backend.schemas.progression import PlayerQuestView
 def build_player_choices(
     state: GameState,
     quests: list[PlayerQuestView],
+    npc_id: str = "vidalia",
 ) -> list[PlayerChoice]:
     """Return a small contextual set; movement comes from the scene graph."""
+
+    if npc_id == "andre":
+        return [
+            PlayerChoice(
+                choice_id="andre_ask_anomaly",
+                label="詢問林地異象",
+                message="你在林地邊緣觀察到什麼異象？",
+                target_npc_id="andre",
+            ),
+            PlayerChoice(
+                choice_id="andre_ask_trail",
+                label="詢問調查路線",
+                message="我可以從哪裡開始調查？",
+                target_npc_id="andre",
+            ),
+        ]
+
+    if npc_id == "menmesvento":
+        return [
+            PlayerChoice(
+                choice_id="menmesvento_ask_names",
+                label="詢問流塵谷的名字",
+                message="為什麼這裡的人如此重視名字？",
+                target_npc_id="menmesvento",
+            ),
+            PlayerChoice(
+                choice_id="menmesvento_ask_record",
+                label="詢問手中的古卷",
+                message="你在古卷裡記錄什麼？",
+                target_npc_id="menmesvento",
+            ),
+        ]
 
     story_choices = available_demo_story_choices(state)
     if story_choices and not (

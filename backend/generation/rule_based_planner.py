@@ -117,6 +117,20 @@ class RuleBasedStoryPlanner:
             else:
                 text = f"我記得。{memory.content}"
                 emotion = "thoughtful"
+        elif npc_id == "menmesvento" and self._contains_any(normalized, ("名字", "記錄", "古卷", "流塵谷")):
+            intent_summary = "依門梅司文托的公開記錄職責回應流塵谷見聞。"
+            if self._contains_any(normalized, ("古卷", "記錄")):
+                text = "我記下願意留下的名字與親眼可證的往事。書頁上還有許多未釐清的痕跡，現在不能把猜測當成答案。"
+            else:
+                text = "這裡的風很快就會抹去足跡。有些人只盼自己的名字仍有人願意聽見；先聽他們說吧。"
+            emotion = "measured"
+        elif npc_id == "andre" and self._contains_any(normalized, ("異象", "林地", "邊緣", "調查")):
+            intent_summary = "依安德烈的公開調查職責回應鳴霖異象。"
+            if self._contains_any(normalized, ("哪裡", "路線", "開始")):
+                text = "先去命脈之泉與符石林看看。把你親眼確認的變化記下來，回來再與我比對。"
+            else:
+                text = "林地邊緣的地脈最近有幾次不尋常的震顫，泉水也久未向外延伸。我正在核對兩者是否相關。"
+            emotion = "focused"
         elif parsed_action.action_type == ActionType.INSPECT or self._contains_any(
             normalized,
             ("查看", "觀察", "調查", "這裡", "哪裡"),

@@ -12,6 +12,14 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from backend.content.demo_story import DEMO_STORY_CHOICES
+from backend.content.reveal_policy import (
+    REVISED_DEMO_CHOICE_IDS,
+    normalize_legacy_demo_state,
+    public_chapter_title,
+    public_clue_ids,
+    public_story_text,
+)
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import PlayerAction
@@ -101,7 +109,7 @@ class SqlAlchemyGameRepository:
         async with self._session_factory() as database:
             existing = await database.get(GameSessionRecord, initial_state.session_id)
             if existing is not None:
-                return GameState.model_validate(existing.state_json)
+                return normalize_legacy_demo_state(GameState.model_validate(existing.state_json))
             database.add(self._session_record(initial_state))
             try:
                 await database.commit()
@@ -113,12 +121,12 @@ class SqlAlchemyGameRepository:
             existing = await database.get(GameSessionRecord, initial_state.session_id)
             if existing is None:
                 raise PersistentSessionNotFoundError(initial_state.session_id)
-            return GameState.model_validate(existing.state_json)
+            return normalize_legacy_demo_state(GameState.model_validate(existing.state_json))
 
     async def get_state(self, session_id: str) -> GameState | None:
         async with self._session_factory() as database:
             record = await database.get(GameSessionRecord, session_id)
-            return GameState.model_validate(record.state_json) if record else None
+            return normalize_legacy_demo_state(GameState.model_validate(record.state_json)) if record else None
 
     async def get_completed_action(
         self,
@@ -394,7 +402,38 @@ class SqlAlchemyGameRepository:
             raise ActionIdConflictError(action_id)
         if record.status != "completed" or record.response_json is None:
             return None
-        return GameTurnResponse.model_validate(record.response_json)
+        response = GameTurnResponse.model_validate(record.response_json)
+        response.state.story_progress.public_clue_ids = public_clue_ids(
+            response.state.story_progress.public_clue_ids,
+            demo_act1=response.state.story_progress.mode == "demo_fallback",
+        )
+        response.state.story_progress.chapter_title = public_chapter_title(
+            response.state.story_progress.chapter_title
+        )
+
+        # A saved action remains idempotent, while an older demo replay must not
+        # repeat dialogue that revealed a later-stage truth prematurely.
+        choice_id = record.request_json.get("story_choice_id")
+        if choice_id in REVISED_DEMO_CHOICE_IDS and response.story.dialogue:
+            current = next(
+                choice for choice in DEMO_STORY_CHOICES if choice.choice_id == choice_id
+            )
+            response.story.dialogue[0].text = current.response_text
+        for line in response.story.dialogue:
+            line.text = public_story_text(line.text)
+        for event in response.story.established_events:
+            event.description = public_story_text(event.description)
+            operations = event.effect.get("operations")
+            if isinstance(operations, list):
+                for operation in operations:
+                    if isinstance(operation, dict):
+                        clue_ids = operation.get("revealed_clue_ids")
+                        if isinstance(clue_ids, list):
+                            operation["revealed_clue_ids"] = public_clue_ids(
+                                clue_ids,
+                                demo_act1=response.state.story_progress.mode == "demo_fallback",
+                            )
+        return response
 
     @staticmethod
     def _session_record(state: GameState) -> GameSessionRecord:
