@@ -53,6 +53,7 @@ class SceneDefinition(BaseModel):
     visual_profile: SceneVisualProfile
     canon_status: Literal["confirmed", "provisional"]
     allowed_destinations: tuple[str, ...]
+    map_position: tuple[int, int]
 
 
 SCENES: dict[str, SceneDefinition] = {
@@ -94,6 +95,7 @@ SCENES: dict[str, SceneDefinition] = {
         ),
         canon_status="confirmed",
         allowed_destinations=("minglin_life_spring", "minglin_rune_grove"),
+        map_position=(644, 433),
     ),
     "minglin_life_spring": SceneDefinition(
         scene_id="minglin_life_spring",
@@ -136,6 +138,7 @@ SCENES: dict[str, SceneDefinition] = {
         ),
         canon_status="confirmed",
         allowed_destinations=("minglin",),
+        map_position=(276, 188),
     ),
     "minglin_rune_grove": SceneDefinition(
         scene_id="minglin_rune_grove",
@@ -177,6 +180,7 @@ SCENES: dict[str, SceneDefinition] = {
         ),
         canon_status="provisional",
         allowed_destinations=("minglin",),
+        map_position=(287, 663),
     ),
     "liuchen_valley": SceneDefinition(
         scene_id="liuchen_valley",
@@ -216,6 +220,7 @@ SCENES: dict[str, SceneDefinition] = {
         ),
         canon_status="confirmed",
         allowed_destinations=(),
+        map_position=(1360, 307),
     ),
     "lieyi_plains": SceneDefinition(
         scene_id="lieyi_plains",
@@ -255,6 +260,7 @@ SCENES: dict[str, SceneDefinition] = {
         ),
         canon_status="provisional",
         allowed_destinations=(),
+        map_position=(1418, 584),
     ),
 }
 

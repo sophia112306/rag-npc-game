@@ -388,6 +388,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         action_mode=ActionMode.DIALOGUE,
         target_npc_id="vidalia",
     ),
+    *_minglin_travel_choices("demo_complete"),
 )
 
 

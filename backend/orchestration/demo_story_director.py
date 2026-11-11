@@ -1,6 +1,6 @@
 """Turn validated fallback choices into ordinary story proposals."""
 
-from backend.content.demo_story import DemoStoryChoiceDefinition
+from backend.content.demo_story import DemoStoryChoiceDefinition, available_demo_story_choices
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import PlayerAction
 from backend.schemas.story import (
@@ -11,6 +11,21 @@ from backend.schemas.story import (
     SpeakerType,
     StoryProposal,
 )
+
+
+def match_typed_story_dialogue(action: PlayerAction, state: GameState) -> DemoStoryChoiceDefinition | None:
+    """An exact typed dialogue choice has the same effect as its button.
+
+    No fuzzy intent inference or automatic travel: arbitrary chat still goes
+    through the configured planner and cannot unlock an unavailable choice.
+    """
+    if action.action_mode != "dialogue" or action.destination_scene_id:
+        return None
+    text = action.message.strip(" \t\n。？！!?")
+    return next((choice for choice in available_demo_story_choices(state)
+                 if choice.action_mode == "dialogue"
+                 and choice.target_npc_id == action.target_npc_id
+                 and text in {choice.label.strip("。？！!?"), choice.message.strip("。？！!?")}), None)
 
 
 def story_choice_action_matches(

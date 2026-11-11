@@ -21,6 +21,7 @@ from backend.orchestration.player_choices import (
 )
 from backend.orchestration.demo_story_director import (
     build_demo_story_proposal,
+    match_typed_story_dialogue,
     story_choice_action_matches,
 )
 from backend.schemas.api_response import GameTurnResponse
@@ -191,10 +192,12 @@ class GameOrchestrator:
                     state.model_copy(deep=True),
                 )
         else:
-            proposal = await self._story_planner.propose(
-                action,
-                parsed_action,
-                state.model_copy(deep=True),
+            typed_choice = match_typed_story_dialogue(action, state)
+            proposal = (
+                build_demo_story_proposal(action, state, typed_choice)
+                if typed_choice else await self._story_planner.propose(
+                    action, parsed_action, state.model_copy(deep=True)
+                )
             )
         self._validate_proposal_envelope(proposal, state)
         resolution = self._proposal_resolver.resolve(state, proposal, allow_scene_configuration=action.action_mode == ActionMode.SCENE_COMMAND)

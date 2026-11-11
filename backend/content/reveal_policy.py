@@ -66,6 +66,16 @@ def public_clue_ids(clue_ids: Iterable[str], *, demo_act1: bool = False) -> list
 def normalize_legacy_demo_state(state: GameState) -> GameState:
     """Remove a map granted by an old first-stage demo route, not by E2-3."""
 
+    # Older quest travel changed location without advancing the story node.
+    # Repair only arrival alignment; do not grant clues, flags or extra turns.
+    arrival = {
+        "minglin_life_spring": ("life_spring_arrival", "沉默的泉眼"),
+        "minglin_rune_grove": ("rune_grove_arrival", "失序的符石"),
+    }.get(state.current_scene_id)
+    if arrival and state.story_progress.node_id in {
+        "minglin_arrival", "minglin_orientation", "minglin_briefed"
+    }:
+        state.story_progress.node_id, state.story_progress.chapter_title = arrival
     if (
         is_demo_first_stage(state)
         and "fissure_map" in state.story_progress.public_clue_ids

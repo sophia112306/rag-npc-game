@@ -48,9 +48,12 @@ def build_player_choices(
         ]
 
     story_choices = available_demo_story_choices(state)
-    if story_choices and not (
-        quests and state.story_progress.node_id == "minglin_arrival"
-    ):
+    if story_choices:
+        if quests and state.story_progress.node_id == "minglin_arrival":
+            # Keep existing quest dialogue, but travel must also advance the
+            # story node. A plain scene change stranded legacy quest sessions.
+            travel = [choice.to_player_choice() for choice in story_choices if choice.destination_scene_id]
+            return [*_dialogue_choices(state, quests)[:2], *travel[:2]]
         return [choice.to_player_choice() for choice in story_choices]
 
     travel = _travel_choices(state.current_scene_id)

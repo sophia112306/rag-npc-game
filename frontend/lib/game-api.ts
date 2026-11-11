@@ -76,6 +76,7 @@ export type GameStateSummary = {
   updated_at: string;
   current_scene_id: string;
   current_scene: PlayerScene;
+  navigation?: PlayerNavigation | null;
   story_progress: {
     arc_id: string;
     node_id: string;
@@ -99,6 +100,23 @@ export type PlayerChoice = {
   target_npc_id: string | null;
   action_mode: "dialogue" | "interaction" | "movement";
   destination_scene_id: string | null;
+};
+
+export type PlayerMapScene = {
+  scene_id: string;
+  display_name: string;
+  region_name: string;
+  map_x: number;
+  map_y: number;
+  background_url: string;
+  current: boolean;
+  unlocked: boolean;
+  travel_choice: PlayerChoice | null;
+  hint: string;
+};
+export type PlayerNavigation = {
+  objective: string;
+  scenes: PlayerMapScene[];
 };
 
 export type Capabilities = {

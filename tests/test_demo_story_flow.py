@@ -110,8 +110,11 @@ def test_fire_branch_reaches_lieyi_and_resumes_after_restart(tmp_path) -> None:
         assert resumed["current_scene_id"] == "minglin"
         assert resumed["story_progress"] == completed["state"]["story_progress"]
         assert [choice["choice_id"] for choice in choices] == [
-            "review_demo_findings"
+            "review_demo_findings", "travel_to_minglin_life_spring", "travel_to_minglin_rune_grove"
         ]
+        alternate = _submit_choice(restarted, session_id, resumed["state_version"], "travel_to_minglin_rune_grove")
+        assert alternate["state"]["story_progress"]["node_id"] == "rune_grove_arrival"
+        assert set(resumed["story_progress"]["public_clue_ids"]) <= set(alternate["state"]["story_progress"]["public_clue_ids"])
 
 
 def test_dust_branch_reaches_liuchen_with_different_clues(tmp_path) -> None:
@@ -377,17 +380,65 @@ def test_legacy_quest_choices_remain_clickable_in_resumed_story_state(tmp_path) 
             quest["state"]["state_version"],
             "travel_to_minglin_rune_grove",
         )
+        assert _choice(client, session_id, "trace_dust_runes")["story_choice_id"] == "trace_dust_runes"
         returned = _submit_choice(
             client,
             session_id,
             grove["state"]["state_version"],
-            "travel_to_minglin",
+            "return_to_council",
         )
-
         assert grove["state"]["current_scene_id"] == "minglin_rune_grove"
-        assert grove["state"]["story_progress"]["node_id"] == "minglin_arrival"
+        assert grove["state"]["story_progress"]["node_id"] == "rune_grove_arrival"
+        assert _choice(client, session_id, "travel_to_minglin_life_spring")["story_choice_id"]
         assert returned["state"]["current_scene_id"] == "minglin"
-        assert (
-            returned["story"]["established_events"][0]["event_type"]
-            == "scene_change_requested"
-        )
+        assert returned["story"]["established_events"][0]["event_type"] == "demo_story_progressed"
+
+
+def test_old_quest_save_realigns_arrival_without_adding_facts_or_turns():
+    from backend.content.demo_story import available_demo_story_choices
+
+    for scene_id, node_id in (("minglin_life_spring", "life_spring_arrival"), ("minglin_rune_grove", "rune_grove_arrival")):
+        state = GameState(session_id="stranded-save", current_scene_id=scene_id, turn_count=9, state_version=10)
+        before_flags = state.flags.copy()
+        repaired = normalize_legacy_demo_state(state)
+        assert repaired.story_progress.node_id == node_id
+        assert available_demo_story_choices(repaired)
+        assert repaired.turn_count == 9 and repaired.state_version == 10
+        assert repaired.flags == before_flags
+        assert repaired.story_progress.public_clue_ids == []
+
+
+def test_map_routes_are_server_choices_and_unlock_after_investigation(tmp_path):
+    with TestClient(create_app(f"sqlite+aiosqlite:///{tmp_path / 'map.db'}")) as client:
+        state = _start(client, "map-routes")
+        scenes = {scene["scene_id"]: scene for scene in state["navigation"]["scenes"]}
+        assert len(scenes) == 5 and scenes["minglin"]["current"]
+        assert not scenes["liuchen_valley"]["unlocked"]
+        assert scenes["liuchen_valley"]["travel_choice"] is None
+        choices = client.get("/api/game/map-routes/choices").json()
+        assert scenes["minglin_rune_grove"]["travel_choice"] in choices
+        assert "記憶" not in str(scenes) and "truth_level" not in str(scenes)
+        grove = _submit_choice(client, "map-routes", 1, "travel_to_minglin_rune_grove")
+        route = _submit_choice(client, "map-routes", grove["state"]["state_version"], "trace_dust_runes")
+        valley = next(s for s in route["state"]["navigation"]["scenes"] if s["scene_id"] == "liuchen_valley")
+        assert valley["unlocked"] and valley["travel_choice"]["story_choice_id"] == "enter_liuchen_valley"
+        choice = valley["travel_choice"]
+        result = client.post("/api/game/turn", json={
+            **{k:v for k,v in choice.items() if k not in {"choice_id", "label"}},
+            "session_id":"map-routes", "action_id":str(uuid4()), "input_type":"text",
+            "expected_state_version":route["state"]["state_version"],
+        })
+        assert result.status_code == 200 and result.json()["state"]["current_scene_id"] == "liuchen_valley"
+
+
+def test_typed_dialogue_choice_advances_once_without_automatic_travel(tmp_path):
+    with TestClient(create_app(f"sqlite+aiosqlite:///{tmp_path / 'typed.db'}")) as client:
+        _start(client, "typed")
+        payload = {"session_id":"typed", "action_id":str(uuid4()), "expected_state_version":1,
+                   "message":"詢問能幫什麼忙", "input_type":"text", "action_mode":"dialogue", "target_npc_id":"vidalia"}
+        first = client.post("/api/game/turn", json=payload)
+        replay = client.post("/api/game/turn", json=payload)
+        assert first.status_code == replay.status_code == 200
+        assert first.json() == replay.json()
+        assert first.json()["state"]["story_progress"]["node_id"] == "minglin_briefed"
+        assert first.json()["state"]["current_scene_id"] == "minglin"
