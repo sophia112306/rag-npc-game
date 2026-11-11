@@ -1,35 +1,43 @@
-import type { SceneVisualProfile } from "../../lib/game-api";
+import type { AssetKind, WorldScene } from "../../lib/game-api";
 
-export const START = { x: 0, z: 8 };
-export const NPC = { x: 0, z: -8 };
-export const NPC_STOP = { x: 0, z: -3.8 };
-export const EYE_HEIGHT = 1.65;
-
-export const trees = [
-  [-8, 8, 1.2], [-5.7, 4, 1.0], [-8.4, -1, 1.3], [-6.4, -7, 1.2],
-  [7, 7, 1.2], [5.7, 3, 1.0], [8.2, -2, 1.4], [6.7, -9, 1.1],
-] as const;
-
-export const pillars = [
-  [-4.3, -7.2, 2.9], [4.3, -7.2, 2.9], [-5.1, -3.8, 1.8], [5.1, -3.8, 1.8],
-] as const;
-
-export type Pick = { kind: "ground"; x: number; z: number } | { kind: "npc" } | null;
+export const EYE_HEIGHT = 1.68;
+export type PlayerPose = { x: number; z: number; yaw: number; pitch: number };
 export type TrialDriver = {
-  setView: (x: number, z: number, yaw: number, pitch: number, eyeBob?: number) => void;
-  setBackdrop?: (url: string) => Promise<void>;
-  setSceneProfile?: (profile: SceneVisualProfile) => void;
-  setTalking?: (talking: boolean) => void;
-  pick: (clientX: number, clientY: number) => Pick;
+  setWorld: (world: WorldScene) => Promise<void>;
+  setAsset: (kind: AssetKind, url: string) => Promise<void>;
+  setView: (pose: PlayerPose, eyeBob: number) => void;
+  move: (
+    x: number,
+    z: number,
+    dx: number,
+    dz: number,
+  ) => { x: number; z: number };
   render: () => void;
   resize: () => void;
   dispose: () => void;
 };
 
-export function clampDestination(x: number, z: number) {
-  return { x: Math.max(-3.25, Math.min(3.25, x)), z: Math.max(-6.1, Math.min(8.5, z)) };
-}
-
-export function distance(a: { x: number; z: number }, b: { x: number; z: number }) {
-  return Math.hypot(a.x - b.x, a.z - b.z);
+/** Shared by terrain vertices, model placement, water and camera feet. */
+export function terrainHeight(x: number, z: number, world: WorldScene): number {
+  const seed = (world.config.seed % 500) / 31;
+  const corridor = Math.min(1, Math.max(0, (Math.abs(x) - 3) / 8));
+  const waves =
+    Math.sin(x * 0.15 + seed) * Math.cos(z * 0.12 - seed) +
+    Math.sin(z * 0.21 + x * 0.08) * 0.35;
+  const amplitude =
+    world.config.terrain === "dunes"
+      ? 2.9
+      : world.config.terrain === "rocky"
+        ? 3.8
+        : 1.8;
+  const rim = Math.min(1, Math.max(0, (Math.hypot(x, z + 7) - 42) / 32));
+  const canyon =
+    world.scene_id === "liuchen_valley"
+      ? Math.exp(-Math.pow((x + 20 + Math.sin(z * 0.055) * 4) / 4, 4)) * 8
+      : 0;
+  return (
+    waves * amplitude * corridor +
+    rim * rim * (world.config.terrain === "rocky" ? 5 : 1.7) -
+    canyon
+  );
 }

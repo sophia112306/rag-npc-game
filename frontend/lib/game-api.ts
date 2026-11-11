@@ -69,6 +69,8 @@ export type PlayerScene = {
 };
 
 export type GameStateSummary = {
+  session_id: string;
+  world_scene: WorldScene;
   turn_count: number;
   state_version: number;
   updated_at: string;
@@ -118,7 +120,10 @@ export type SceneImageJob = {
   error_code: string | null;
 };
 
-export function enqueueSceneImage(sessionId: string, expectedStateVersion: number) {
+export function enqueueSceneImage(
+  sessionId: string,
+  expectedStateVersion: number,
+) {
   return requestJson<SceneImageJob>(`/api/game/${sessionId}/scene-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -127,7 +132,9 @@ export function enqueueSceneImage(sessionId: string, expectedStateVersion: numbe
 }
 
 export function getSceneImageJob(sessionId: string, jobId: string) {
-  return requestJson<SceneImageJob>(`/api/game/${sessionId}/scene-image/${jobId}`);
+  return requestJson<SceneImageJob>(
+    `/api/game/${sessionId}/scene-image/${jobId}`,
+  );
 }
 
 export async function resolveSceneImage(
@@ -152,7 +159,11 @@ export type PlayerQuest = {
 };
 
 export class ApiRequestError extends Error {
-  constructor(message: string, readonly status: number, readonly code?: string) {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
     super(message);
   }
 }
@@ -160,7 +171,57 @@ export class ApiRequestError extends Error {
 export const GAME_SESSION_STORAGE_KEY = "vidalia-game-session";
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8300";
 
-export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+export function resolveApiAsset(url: string): string {
+  return url.startsWith("/api/") ? `${apiBase}${url}` : url;
+}
+
+export type AssetKind = "tree" | "runestone" | "altar";
+export type WorldScene = {
+  scene_id: string;
+  config: {
+    revision: number;
+    seed: number;
+    weather: "clear" | "mist" | "rain" | "dust";
+    time_of_day: "day" | "dusk" | "night";
+    terrain: "rolling" | "dunes" | "rocky";
+    tree_count: number;
+    runestone_count: number;
+    altar_count: number;
+  };
+  objects: Array<{
+    kind: AssetKind;
+    object_id: string;
+    x: number;
+    z: number;
+    scale: number;
+    yaw: number;
+  }>;
+  spawn_x: number;
+  spawn_z: number;
+  interaction_x: number;
+  interaction_z: number;
+  interaction_label: string;
+  npc_id: string | null;
+  water: boolean;
+  fire: boolean;
+};
+
+export type SceneAssetJob = {
+  job_id: string;
+  scene_id: string;
+  kind: AssetKind;
+  seed: number;
+  status: "queued" | "processing" | "succeeded" | "fallback";
+  model_url: string | null;
+  fallback_url: string;
+  error_code: string | null;
+  attempt_count: number;
+};
+
+export async function requestJson<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${apiBase}${path}`, init);

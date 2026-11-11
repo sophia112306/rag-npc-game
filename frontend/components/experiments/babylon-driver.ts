@@ -1,341 +1,594 @@
 import {
+  AssetContainer,
   Color3,
   Color4,
   DirectionalLight,
+  DynamicTexture,
   Engine,
   HemisphericLight,
-  Layer,
+  LoadAssetContainerAsync,
   Mesh,
   MeshBuilder,
+  ParticleSystem,
   PointLight,
   Scene,
+  ShaderMaterial,
+  ShadowGenerator,
   StandardMaterial,
   Texture,
+  TransformNode,
   UniversalCamera,
   Vector3,
   VertexData,
-  TransformNode,
 } from "@babylonjs/core";
-import type { SceneVisualProfile } from "../../lib/game-api";
-import { EYE_HEIGHT, NPC, pillars, trees, type Pick, type TrialDriver } from "./world";
+import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
+import type { AssetKind, WorldScene } from "../../lib/game-api";
+import {
+  EYE_HEIGHT,
+  terrainHeight,
+  type PlayerPose,
+  type TrialDriver,
+} from "./world";
+
+registerBuiltInLoaders();
 
 export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
-  const engine = new Engine(canvas, true, { powerPreference: "high-performance", stencil: false });
-  engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 1.5));
+  const engine = new Engine(canvas, true, {
+    stencil: false,
+    powerPreference: "high-performance",
+  });
+  engine.setHardwareScalingLevel(
+    1 / Math.min(window.devicePixelRatio || 1, 1.25),
+  );
   const scene = new Scene(engine);
-  scene.clearColor = new Color4(0.08, 0.18, 0.22, 1);
   scene.fogMode = Scene.FOGMODE_EXP2;
-  scene.fogColor = new Color3(0.16, 0.32, 0.36);
-  scene.fogDensity = 0.011;
-  scene.ambientColor = new Color3(0.18, 0.23, 0.27);
-
-  const camera = new UniversalCamera("eye", new Vector3(0, EYE_HEIGHT, 8), scene);
-  camera.fov = 68 * Math.PI / 180;
+  const camera = new UniversalCamera(
+    "player eyes",
+    new Vector3(0, EYE_HEIGHT, 8),
+    scene,
+  );
+  camera.fov = (72 * Math.PI) / 180;
   camera.minZ = 0.08;
-  camera.maxZ = 100;
-  camera.setTarget(new Vector3(0, EYE_HEIGHT, 7));
+  camera.maxZ = 210;
+  camera.inputs.clear();
   scene.activeCamera = camera;
-
-  const sky = new HemisphericLight("sky fill", new Vector3(0, 1, 0), scene);
-  sky.intensity = 0.72;
-  sky.diffuse = new Color3(0.82, 0.9, 0.89);
-  sky.groundColor = new Color3(0.18, 0.25, 0.22);
-  const moon = new DirectionalLight("cool daylight", new Vector3(0.35, -1, -0.5), scene);
-  moon.intensity = 0.85;
-  moon.diffuse = new Color3(0.78, 0.89, 0.88);
-  const goldLight = new DirectionalLight("filtered sunlight", new Vector3(-0.7, -1, 0.35), scene);
-  goldLight.intensity = 0.26;
-  goldLight.diffuse = new Color3(1, 0.88, 0.69);
-
-  function material(name: string, color: string, emissive?: string) {
-    const value = new StandardMaterial(name, scene);
-    value.diffuseColor = Color3.FromHexString(color);
-    value.specularColor = new Color3(0.08, 0.12, 0.12);
-    if (emissive) value.emissiveColor = Color3.FromHexString(emissive);
-    return value;
-  }
-  const stoneTexture = new Texture("/game/forest-stone.png", scene);
-  const stone = material("textured carved stone", "#92958a");
-  const stoneLight = material("textured weathered stone", "#aaafa0");
-  const stoneDark = material("textured mossy stone", "#657970");
-  for (const surface of [stone, stoneLight, stoneDark]) surface.diffuseTexture = stoneTexture;
-  const moss = material("deep moss", "#537e65");
-  const gold = material("aged runes", "#978767", "#0b1614");
-  const rune = material("luminous runes", "#668f88", "#183d39");
-  const bark = material("wet bark", "#4b4336");
-  const canopyTexture = new Texture("/game/forest-canopy.png", scene);
-  canopyTexture.hasAlpha = true;
-  const canopyMaterial = material("painted leaf canopy", "#d2d6ba");
-  canopyMaterial.diffuseTexture = canopyTexture;
-  canopyMaterial.useAlphaFromDiffuseTexture = true;
-  canopyMaterial.backFaceCulling = false;
-
-  function at(mesh: Mesh, x: number, y: number, z: number, surface: StandardMaterial, pickable = false) {
-    mesh.position.set(x, y, z);
-    mesh.material = surface;
-    mesh.isPickable = pickable;
-    return mesh;
-  }
-
-  const groundTexture = new Texture("/game/forest-floor.png", scene);
-  groundTexture.uScale = 4.5;
-  groundTexture.vScale = 4.5;
-  const groundMat = material("textured forest floor", "#b5c2b6");
-  groundMat.diffuseTexture = groundTexture;
-  const ground = at(MeshBuilder.CreateGround("walkable forest", { width: 80, height: 80, subdivisions: 1 }, scene), 0, 0, 0, groundMat, true);
-
-  const backgroundTexture = new Texture("/game/forest-eye-backdrop.png", scene);
-  const backdropLayer = new Layer("painted scene backdrop", null, scene, true);
-  let activeBackgroundTexture = backgroundTexture;
-  let activeBackgroundUrl = "/game/forest-eye-backdrop.png";
-  let backdropRequest = 0;
-  let backdropLoad: { request: number; url: string; promise: Promise<void> } | null = null;
+  const fill = new HemisphericLight("sky ambient", new Vector3(0, 1, 0), scene);
+  const sun = new DirectionalLight(
+    "sunlight",
+    new Vector3(-0.45, -0.8, 0.3),
+    scene,
+  );
+  sun.position = new Vector3(25, 40, -20);
+  const shadows = new ShadowGenerator(1024, sun);
+  shadows.usePercentageCloserFiltering = true;
+  shadows.filteringQuality = ShadowGenerator.QUALITY_LOW;
+  sun.shadowMinZ = 1;
+  sun.shadowMaxZ = 95;
+  const accent = new PointLight("landmark light", new Vector3(0, 3, -6), scene);
+  accent.range = 16;
+  let world: WorldScene | null = null;
+  let terrain: Mesh | null = null;
+  let landmark: TransformNode | null = null;
+  let particles: ParticleSystem | null = null;
+  let waterSurface: Mesh | null = null;
+  let waterShader: ShaderMaterial | null = null;
+  let fireShader: ShaderMaterial | null = null;
+  let lavaShader: ShaderMaterial | null = null;
+  let flameRoot: TransformNode | null = null;
   let disposed = false;
-  backdropLayer.texture = activeBackgroundTexture;
+  let sceneGeneration = 0;
+  const modelGroups = new Map<AssetKind, TransformNode>();
+  const modelVersions = new Map<AssetKind, number>();
+  const modelUrls = new Map<AssetKind, string>();
+  const containers = new Map<string, Promise<AssetContainer>>();
+  const createdMaterials: StandardMaterial[] = [];
+  const portraits = new Map<string, Texture>();
+  const floorTexture = new Texture("/game/forest-floor.png", scene);
+  floorTexture.uScale = floorTexture.vScale = 22;
+  const stoneTexture = new Texture("/game/forest-stone.png", scene);
+  stoneTexture.uScale = stoneTexture.vScale = 18;
+  const sandTexture = new Texture("/game/materials/sand-v1.png", scene);
+  const basaltTexture = new Texture("/game/materials/basalt-v1.png", scene);
+  for (const texture of [sandTexture, basaltTexture])
+    texture.uScale = texture.vScale = 24;
 
-  // Shallow broken paving leads directly to the council ring.
-  for (let i = 0; i < 19; i++) {
-    const z = 8 - i * 0.72;
-    const x = Math.sin(i * 2.1) * 0.29;
-    const slab = at(MeshBuilder.CreateBox(`path slab ${i}`, { width: 2.45 + i % 3 * 0.18, height: 0.09, depth: 0.61 }, scene), x, 0.045, z, i % 3 ? stoneLight : stone);
-    slab.rotation.y = Math.sin(i * 1.41) * 0.09;
-    if (i % 3 === 0) {
-      at(MeshBuilder.CreateBox(`moss between slabs ${i}`, { width: 0.38, height: 0.025, depth: 0.28 }, scene), x + 1.04, 0.104, z, moss);
+  const sky = MeshBuilder.CreateSphere(
+    "continuous sky dome",
+    { diameter: 360, segments: 32, sideOrientation: Mesh.BACKSIDE },
+    scene,
+  );
+  sky.isPickable = false;
+  sky.infiniteDistance = true;
+  const skyMaterial = new ShaderMaterial(
+    "atmosphere",
+    scene,
+    {
+      vertexSource: `precision highp float; attribute vec3 position; uniform mat4 worldViewProjection; varying vec3 p; void main(){p=position;gl_Position=worldViewProjection*vec4(position,1.);}`,
+      fragmentSource: `precision highp float; varying vec3 p; uniform vec3 zenith; uniform vec3 horizon; uniform float clock; uniform float night; void main(){vec3 d=normalize(p);float h=pow(max(d.y,0.),.45);vec3 c=mix(horizon,zenith,h);float s=pow(max(dot(d,normalize(vec3(-.4,.4,-.7))),0.),160.);c+=vec3(1.,.8,.46)*s*(1.-night*.8);float cloud=sin(d.x*17.+clock*.025)*sin(d.z*22.+d.y*13.)*.5+.5; c=mix(c,c+vec3(.08),smoothstep(.65,.95,cloud)*(1.-h)*.3);float stars=step(.997,fract(sin(dot(floor(d.xz*750.),vec2(12.9898,78.233)))*43758.5453)); c+=vec3(stars*night*h*.6); gl_FragColor=vec4(c,1.);}`,
+    },
+    {
+      attributes: ["position"],
+      uniforms: ["worldViewProjection", "zenith", "horizon", "clock", "night"],
+    },
+  );
+  sky.material = skyMaterial;
+  skyMaterial.backFaceCulling = false;
+  skyMaterial.disableDepthWrite = true;
+
+  function mat(name: string, color: string, emissive?: string) {
+    const m = new StandardMaterial(name, scene);
+    m.diffuseColor = Color3.FromHexString(color);
+    m.specularColor = new Color3(0.025, 0.025, 0.025);
+    if (emissive) m.emissiveColor = Color3.FromHexString(emissive);
+    createdMaterials.push(m);
+    return m;
+  }
+  function disposeGroup(group: TransformNode) {
+    for (const mesh of group.getChildMeshes()) shadows.removeShadowCaster(mesh);
+    group.dispose(false);
+  }
+  const particleTexture = new DynamicTexture("soft particle", 32, scene, false);
+  const ctx = particleTexture.getContext();
+  const glow = ctx.createRadialGradient(16, 16, 0, 16, 16, 15);
+  glow.addColorStop(0, "rgba(255,255,255,1)");
+  glow.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, 32, 32);
+  particleTexture.update();
+
+  function buildTerrain(current: WorldScene) {
+    terrain?.dispose();
+    const desert = current.scene_id === "liuchen_valley";
+    const lava = current.scene_id === "lieyi_plains";
+    terrain = MeshBuilder.CreateGround(
+      "continuous walkable terrain",
+      { width: 180, height: 180, subdivisions: 150, updatable: true },
+      scene,
+    );
+    const positions = terrain.getVerticesData("position")!;
+    const indices = terrain.getIndices()!;
+    const colours: number[] = [];
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i],
+        z = positions[i + 2];
+      positions[i + 1] = terrainHeight(x, z, current);
+      const path = Math.exp(-Math.pow(x / (2.3 + Math.sin(z * 0.08) * 0.4), 2));
+      const variation =
+        0.88 + Math.sin(x * 1.9 + z * 2.7) * Math.sin(z * 1.1) * 0.07;
+      const base = desert
+        ? new Color3(0.76, 0.59, 0.36)
+        : lava
+          ? new Color3(0.24, 0.19, 0.19)
+          : new Color3(0.35, 0.47, 0.25);
+      const trail = desert
+        ? new Color3(0.85, 0.68, 0.44)
+        : lava
+          ? new Color3(0.37, 0.28, 0.25)
+          : new Color3(0.67, 0.59, 0.4);
+      const c = Color3.Lerp(base, trail, path * 0.8).scale(variation);
+      colours.push(c.r, c.g, c.b, 1);
     }
+    const normals: number[] = [];
+    VertexData.ComputeNormals(positions, indices, normals);
+    terrain.updateVerticesData("position", positions);
+    terrain.updateVerticesData("normal", normals);
+    terrain.setVerticesData("color", colours);
+    const groundMaterial = mat("terrain surface", "#ffffff");
+    groundMaterial.diffuseTexture = desert
+      ? sandTexture
+      : lava
+        ? basaltTexture
+        : floorTexture;
+    terrain.material = groundMaterial;
+    terrain.receiveShadows = true;
   }
 
-  // Small worn stones continue the walk from Vidalia's stopping point toward the relic.
-  for (const [i, [x, z, angle]] of [
-    [0.46, -5.08, -0.13], [0.76, -4.91, -0.27], [1.08, -4.69, -0.4],
-    [1.39, -4.39, -0.53], [1.67, -4.04, -0.67], [1.91, -3.69, -0.75],
-  ].entries()) {
-    const slab = at(MeshBuilder.CreateBox(`relic branch stone ${i}`, {
-      width: 0.92, height: 0.055, depth: 0.48,
-    }, scene), x, Math.hypot(x, z + 8) < 4.4 ? 0.292 : 0.035, z, i % 2 ? stoneLight : stone);
-    slab.rotation.y = angle;
-  }
-
-  at(MeshBuilder.CreateCylinder("council dais", { diameterTop: 8.8, diameterBottom: 9.2, height: 0.32, tessellation: 64 }, scene), 0, 0.09, -8, stone);
-  for (const [i, radius] of [2.1, 3.2, 4.15].entries()) {
-    at(MeshBuilder.CreateTorus(`etched ring ${i}`, { diameter: radius * 2, thickness: 0.065, tessellation: 96 }, scene), 0, 0.265, -8, i === 1 ? rune : gold);
-  }
-  for (let i = 0; i < 24; i++) {
-    const a = i / 24 * Math.PI * 2;
-    const mark = at(MeshBuilder.CreateBox(`radial inscription ${i}`, { width: 0.43, height: 0.026, depth: 0.075 }, scene), Math.sin(a) * 3.65, 0.27, -8 + Math.cos(a) * 3.65, i % 3 ? gold : rune);
-    mark.rotation.y = a;
-  }
-  for (const [i, [x, z, size]] of [
-    [-3.55, -3.82, 0.23], [-3.27, -4.13, 0.14], [3.62, -4.4, 0.19],
-  ].entries()) {
-    const rock = at(MeshBuilder.CreateIcoSphere(`council edge rock ${i}`, {
-      radius: size, subdivisions: 0,
-    }, scene), x, size * 0.48, z, i === 1 ? stoneDark : stoneLight);
-    rock.scaling.y = 0.67;
-    rock.rotation.y = i * 1.4;
-  }
-
-  for (const [i, [x, z, h]] of pillars.entries()) {
-    at(MeshBuilder.CreateCylinder(`pillar foot ${i}`, { diameterTop: 0.95, diameterBottom: 1.1, height: 0.26, tessellation: 8 }, scene), x, 0.13, z, stoneLight);
-    at(MeshBuilder.CreateCylinder(`pillar ${i}`, { diameterTop: 0.59, diameterBottom: 0.78, height: h, tessellation: 8 }, scene), x, h / 2 + 0.23, z, i % 2 ? stoneDark : stone);
-    at(MeshBuilder.CreateCylinder(`pillar cap ${i}`, { diameterTop: 0.97, diameterBottom: 0.8, height: 0.25, tessellation: 8 }, scene), x, h + 0.27, z, stoneLight);
-    at(MeshBuilder.CreateCylinder(`pillar rune ${i}`, { diameter: 0.62, height: 0.045, tessellation: 8 }, scene), x, h + 0.42, z, rune);
-  }
-
-  for (const [i, [x, z, scale]] of trees.entries()) {
-    const trunk = at(MeshBuilder.CreateCylinder(`tree trunk ${i}`, { diameterTop: 0.6 * scale, diameterBottom: 1.24 * scale, height: 5.3 * scale, tessellation: 9 }, scene), x, 2.65 * scale, z, bark);
-    trunk.rotation.z = (i % 2 ? -1 : 1) * 0.065;
-    for (let j = 0; j < 3; j++) {
-      const canopy = at(MeshBuilder.CreatePlane(`leaf canopy ${i}-${j}`, { width: 6.9 * scale, height: 5.2 * scale }, scene),
-        x, 5.15 * scale, z, canopyMaterial);
-      canopy.rotation.y = j * Math.PI / 3 + i * 0.17;
+  function buildLandmark(current: WorldScene) {
+    fireShader?.dispose();
+    fireShader = null;
+    lavaShader?.dispose();
+    lavaShader = null;
+    flameRoot = null;
+    waterShader?.dispose();
+    waterShader = null;
+    waterSurface = null;
+    if (landmark) disposeGroup(landmark);
+    particles?.dispose(false);
+    particles = null;
+    landmark = new TransformNode("interaction landmark", scene);
+    const x = current.interaction_x,
+      z = current.interaction_z,
+      y = terrainHeight(x, z, current);
+    landmark.position.set(x, y, z);
+    const stone = mat("landmark stone", current.fire ? "#372622" : "#7f8977");
+    stone.diffuseTexture = stoneTexture;
+    const dais = MeshBuilder.CreateCylinder(
+      "landmark paving",
+      { diameter: 8, height: 0.12, tessellation: 64 },
+      scene,
+    );
+    dais.parent = landmark;
+    dais.position.y = 0.015;
+    dais.material = stone;
+    dais.receiveShadows = true;
+    const ringMaterial = mat(
+      "etched glowing circle",
+      current.fire ? "#dc6d1f" : "#77b3a0",
+      current.fire ? "#6b2609" : "#19493b",
+    );
+    const ring = MeshBuilder.CreateTorus(
+      "landmark etched ring",
+      { diameter: 6.8, thickness: 0.025, tessellation: 64 },
+      scene,
+    );
+    ring.parent = landmark;
+    ring.position.y = 0.09;
+    ring.material = ringMaterial;
+    if (current.npc_id) {
+      const portrait = MeshBuilder.CreatePlane(
+        "npc",
+        { width: 1.26, height: 2.55 },
+        scene,
+      );
+      portrait.parent = landmark;
+      portrait.position.y = 1.35;
+      portrait.billboardMode = Mesh.BILLBOARDMODE_Y;
+      const portraitMat = mat("npc artwork", "#ffffff");
+      if (!portraits.has(current.npc_id))
+        portraits.set(
+          current.npc_id,
+          new Texture(`/game/${current.npc_id}-cutout.png`, scene),
+        );
+      portraitMat.diffuseTexture = portraits.get(current.npc_id)!;
+      portraitMat.diffuseTexture.hasAlpha = true;
+      portraitMat.useAlphaFromDiffuseTexture = true;
+      portraitMat.backFaceCulling = false;
+      portraitMat.emissiveColor = new Color3(0.12, 0.12, 0.1);
+      portrait.material = portraitMat;
+      shadows.addShadowCaster(portrait);
+    } else if (current.water) {
+      const water = MeshBuilder.CreateDisc(
+        "spring surface",
+        { radius: 2.15, tessellation: 80 },
+        scene,
+      );
+      water.parent = landmark;
+      water.rotation.x = Math.PI / 2;
+      water.position.y = 0.13;
+      waterShader = new ShaderMaterial(
+        "rippling spring",
+        scene,
+        {
+          vertexSource: `precision highp float; attribute vec3 position;attribute vec2 uv;uniform mat4 worldViewProjection;varying vec2 v;void main(){v=uv;gl_Position=worldViewProjection*vec4(position,1.);}`,
+          fragmentSource: `precision highp float;varying vec2 v;uniform float clock;void main(){vec2 p=v-.5;float r=length(p);float wave=sin(r*90.-clock*2.+sin(p.x*21.+clock)*.4)*.5+.5;float caustic=pow(wave,10.)*.18;vec3 c=mix(vec3(.025,.18,.21),vec3(.08,.43,.44),1.-r);c+=vec3(.25,.5,.42)*caustic;gl_FragColor=vec4(c,1.);}`,
+        },
+        {
+          attributes: ["position", "uv"],
+          uniforms: ["worldViewProjection", "clock"],
+        },
+      );
+      waterShader.backFaceCulling = false;
+      water.material = waterShader;
+      waterSurface = water;
     }
-    for (let j = 0; j < 2; j++) {
-      const lowerLeaves = at(MeshBuilder.CreatePlane(`lower leaves ${i}-${j}`, { width: 4.7 * scale, height: 3.5 * scale }, scene),
-        x, 3.9 * scale, z, canopyMaterial);
-      lowerLeaves.rotation.y = j * Math.PI / 2 + i * 0.17;
-    }
-  }
-
-  const water = material("spring water", "#2d9297", "#1e626c");
-  water.alpha = 0.86;
-  at(MeshBuilder.CreateCylinder("forest spring", { diameter: 5.6, height: 0.07, tessellation: 48 }, scene), -6.1, 0.045, -8.7, water);
-  for (let i = 0; i < 16; i++) {
-    const a = i * Math.PI * 2 / 16;
-    const rock = at(MeshBuilder.CreateIcoSphere(`spring rock ${i}`, { radius: 0.34 + i % 3 * 0.08, subdivisions: 0 }, scene), -6.1 + Math.cos(a) * 2.8, 0.23, -8.7 + Math.sin(a) * 2.8, i % 3 ? stone : stoneLight);
-    rock.rotation.y = i;
-  }
-
-  // Keep Vidalia's illustrated facial features and gown instead of constructing
-  // an unrelated person from primitive shapes. The curved surface adds a small
-  // amount of volume while a proper textured GLB is being prepared.
-  const npcRoot = new TransformNode("Vidalia animated root", scene);
-  npcRoot.position.set(NPC.x, 0, NPC.z);
-  const npcTexture = new Texture("/game/vidalia-cutout.png", scene);
-  npcTexture.hasAlpha = true;
-  const npcMaterial = material("Vidalia original artwork", "#ffffff");
-  npcMaterial.diffuseTexture = npcTexture;
-  npcMaterial.useAlphaFromDiffuseTexture = true;
-  npcMaterial.backFaceCulling = false;
-  npcMaterial.emissiveColor = new Color3(0.38, 0.37, 0.33);
-  npcMaterial.specularColor = Color3.Black();
-  const npcMeshes = new Set<Mesh>();
-  // A gently convex portrait surface avoids the edge-on collapse of a flat
-  // plane while keeping every detail from the supplied character painting.
-  const portraitWidth = 1.4;
-  const portraitHeight = 3.42;
-  const columns = 28;
-  const rows = 68;
-  const positions: number[] = [];
-  const indices: number[] = [];
-  const uvs: number[] = [];
-  for (let row = 0; row <= rows; row++) {
-    const v = row / rows;
-    for (let column = 0; column <= columns; column++) {
-      const u = column / columns;
-      const x = (u - 0.5) * portraitWidth;
-      const bodyCurve = Math.sin(v * Math.PI) * 0.12;
-      const z = (1 - (2 * u - 1) ** 2) * (0.075 + bodyCurve);
-      positions.push(x, (v - 0.5) * portraitHeight, z);
-      uvs.push(u, v);
-      if (row < rows && column < columns) {
-        const a = row * (columns + 1) + column;
-        indices.push(a, a + 1, a + columns + 1, a + 1, a + columns + 2, a + columns + 1);
+    accent.position.set(x, y + 2, z);
+    accent.diffuse = Color3.FromHexString(current.fire ? "#ff8028" : "#86e2cc");
+    accent.intensity = current.fire ? 2.5 : 0.65;
+    if (current.fire) {
+      fireShader = new ShaderMaterial(
+        "living sacred fire",
+        scene,
+        {
+          vertexSource: `precision highp float;attribute vec3 position;attribute vec2 uv;uniform mat4 worldViewProjection;varying vec2 v;void main(){v=uv;gl_Position=worldViewProjection*vec4(position,1.);}`,
+          fragmentSource: `precision highp float;varying vec2 v;uniform float clock;float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}void main(){float y=v.y;float n=noise(vec2(v.x*7.,y*9.-clock*2.4))*.65+noise(vec2(v.x*17.,y*19.-clock*4.))*.35;float x=(v.x-.5)*2.+sin(y*11.-clock*2.)*.1*y;float width=(1.-y)*.72+n*.22;float edge=1.-smoothstep(width-.22,width,abs(x));float a=edge*smoothstep(0.,.07,y)*(1.-smoothstep(.62+n*.25,1.,y));if(a<.02)discard;float core=clamp(1.-abs(x)*1.5-y*.65,0.,1.);vec3 c=mix(vec3(.72,.10,.008),vec3(1.,.72,.16),core);gl_FragColor=vec4(c,a*.7);}`,
+        },
+        {
+          attributes: ["position", "uv"],
+          uniforms: ["worldViewProjection", "clock"],
+          needAlphaBlending: true,
+        },
+      );
+      fireShader.backFaceCulling = false;
+      fireShader.disableDepthWrite = true;
+      fireShader.alphaMode = Engine.ALPHA_ADD;
+      flameRoot = new TransformNode("fire volume", scene);
+      flameRoot.parent = landmark;
+      for (let i = 0; i < 3; i++) {
+        const flame = MeshBuilder.CreatePlane(
+          `flame sheet ${i}`,
+          { width: 3.2, height: 5.8 },
+          scene,
+        );
+        flame.parent = flameRoot;
+        flame.position.y = 2.9;
+        flame.rotation.y = (i * Math.PI) / 3;
+        flame.material = fireShader;
       }
-    }
-  }
-  const normals: number[] = [];
-  VertexData.ComputeNormals(positions, indices, normals);
-  const portraitData = new VertexData();
-  portraitData.positions = positions;
-  portraitData.indices = indices;
-  portraitData.uvs = uvs;
-  portraitData.normals = normals;
-  const npcAvatar = new Mesh("Vidalia curved reference portrait", scene);
-  portraitData.applyToMesh(npcAvatar);
-  npcAvatar.parent = npcRoot;
-  npcAvatar.position.y = 1.98;
-  npcAvatar.billboardMode = Mesh.BILLBOARDMODE_Y;
-  npcAvatar.material = npcMaterial;
-  npcAvatar.isPickable = true;
-  npcMeshes.add(npcAvatar);
-  let npcTalking = false;
-
-  const portraitLight = new PointLight("warm light on Vidalia", new Vector3(NPC.x - 1.5, 3.1, NPC.z + 2.2), scene);
-  portraitLight.diffuse = new Color3(1, 0.79, 0.56);
-  portraitLight.intensity = 0.58;
-  portraitLight.range = 5.5;
-
-  function propGroup(
-    meshName: string,
-  ): SceneVisualProfile["prop_groups"][number] | null {
-    if (/^(tree trunk|leaf canopy|lower leaves)/.test(meshName)) return "forest";
-    if (/^(path slab|moss between slabs|relic branch stone)/.test(meshName)) return "path";
-    if (/^(council dais|etched ring|radial inscription|council edge rock)/.test(meshName)) return "council";
-    if (/^pillar/.test(meshName)) return "pillars";
-    if (/^(forest spring|spring rock)/.test(meshName)) return "spring";
-    return null;
-  }
-
-  function setSceneProfile(profile: SceneVisualProfile) {
-    const clear = Color3.FromHexString(profile.clear_color);
-    scene.clearColor = new Color4(clear.r, clear.g, clear.b, 1);
-    scene.fogColor = Color3.FromHexString(profile.fog_color);
-    scene.fogDensity = profile.fog_density;
-    scene.ambientColor = Color3.FromHexString(profile.ambient_color);
-
-    groundMat.diffuseColor = Color3.FromHexString(profile.ground_color);
-    groundMat.diffuseTexture = profile.use_ground_texture ? groundTexture : null;
-    sky.diffuse = Color3.FromHexString(profile.sky_color);
-    sky.groundColor = Color3.FromHexString(profile.sky_ground_color);
-    sky.intensity = profile.sky_intensity;
-    moon.diffuse = Color3.FromHexString(profile.key_light_color);
-    moon.intensity = profile.key_light_intensity;
-    goldLight.diffuse = Color3.FromHexString(profile.accent_light_color);
-    goldLight.intensity = profile.accent_light_intensity;
-
-    stone.diffuseColor = Color3.FromHexString(profile.surface_color);
-    stoneLight.diffuseColor = Color3.FromHexString(profile.surface_light_color);
-    stoneDark.diffuseColor = Color3.FromHexString(profile.surface_dark_color);
-    moss.diffuseColor = Color3.FromHexString(profile.organic_color);
-    bark.diffuseColor = Color3.FromHexString(profile.organic_color);
-    rune.diffuseColor = Color3.FromHexString(profile.rune_color);
-    rune.emissiveColor = Color3.FromHexString(profile.rune_emissive_color);
-    water.diffuseColor = Color3.FromHexString(profile.liquid_color);
-    water.emissiveColor = Color3.FromHexString(profile.liquid_emissive_color);
-
-    const visibleGroups = new Set(profile.prop_groups);
-    for (const mesh of scene.meshes) {
-      const group = propGroup(mesh.name);
-      if (group) mesh.setEnabled(visibleGroups.has(group));
-    }
-    ground.setEnabled(profile.show_ground);
-    npcTalking = false;
-    npcRoot.setEnabled(profile.show_vidalia);
-    portraitLight.setEnabled(profile.show_vidalia);
-  }
-
-  const started = performance.now();
-  return {
-    setSceneProfile,
-    setBackdrop(url) {
-      if (activeBackgroundUrl === url) {
-        if (backdropLoad && backdropLoad.url !== url) {
-          backdropRequest += 1;
-          backdropLoad = null;
+      lavaShader = new ShaderMaterial(
+        "flowing molten rock",
+        scene,
+        {
+          vertexSource: `precision highp float;attribute vec3 position;attribute vec2 uv;uniform mat4 worldViewProjection;varying vec2 v;varying float depth;void main(){v=uv;gl_Position=worldViewProjection*vec4(position,1.);depth=gl_Position.w;}`,
+          fragmentSource: `precision highp float;varying vec2 v;varying float depth;uniform float clock;uniform vec3 fog;void main(){float n=sin(v.x*140.-clock*.8+sin(v.y*17.))*sin(v.y*24.+clock*.5);float crust=smoothstep(-.3,.8,n);vec3 c=mix(vec3(.85,.16,.015),vec3(.16,.035,.018),crust);gl_FragColor=vec4(mix(c,fog,clamp(depth*.009,0.,.75)),1.);}`,
+        },
+        {
+          attributes: ["position", "uv"],
+          uniforms: ["worldViewProjection", "clock", "fog"],
+        },
+      );
+      lavaShader.backFaceCulling = false;
+      lavaShader.setColor3("fog", scene.fogColor);
+      for (const side of [-1, 1]) {
+        const edges = [[], []] as Vector3[][];
+        for (let i = 0; i <= 70; i++) {
+          const pz = 22 - i * 1.05;
+          const center = side * (9 + Math.sin(pz * 0.16) * 2.5);
+          for (let edge = 0; edge < 2; edge++) {
+            const px = center + (edge - 0.5) * 1.25;
+            edges[edge].push(
+              new Vector3(
+                px - x,
+                terrainHeight(px, pz, current) - y + 0.055,
+                pz - z,
+              ),
+            );
+          }
         }
-        return Promise.resolve();
+        const channel = MeshBuilder.CreateRibbon(
+          `lava stream ${side}`,
+          { pathArray: edges, sideOrientation: Mesh.DOUBLESIDE },
+          scene,
+        );
+        channel.parent = landmark;
+        channel.material = lavaShader;
       }
-      if (backdropLoad?.url === url) return backdropLoad.promise;
+    }
+    if (current.fire || current.config.weather !== "clear") {
+      const rain = current.config.weather === "rain" && !current.fire;
+      particles = new ParticleSystem(
+        "weather and fire",
+        rain ? 900 : 450,
+        scene,
+      );
+      particles.particleTexture = particleTexture;
+      particles.emitter = new Vector3(
+        current.fire ? x : 0,
+        current.fire ? y + 0.5 : 5,
+        current.fire ? z : 0,
+      );
+      particles.minEmitBox = new Vector3(
+        current.fire ? -1.2 : -35,
+        0,
+        current.fire ? -1.2 : -35,
+      );
+      particles.maxEmitBox = new Vector3(
+        current.fire ? 1.2 : 35,
+        current.fire ? 0.3 : 9,
+        current.fire ? 1.2 : 35,
+      );
+      particles.color1 = new Color4(
+        current.fire ? 1 : 0.72,
+        current.fire ? 0.4 : 0.82,
+        current.fire ? 0.06 : 0.83,
+        current.fire ? 0.9 : 0.3,
+      );
+      particles.color2 = new Color4(
+        1,
+        current.fire ? 0.7 : 0.87,
+        current.fire ? 0.15 : 0.75,
+        0.15,
+      );
+      particles.colorDead = new Color4(0.1, 0.1, 0.1, 0);
+      particles.minSize = rain ? 0.025 : current.fire ? 0.02 : 0.2;
+      particles.maxSize = current.fire ? 0.06 : rain ? 0.08 : 0.8;
+      particles.minLifeTime = current.fire ? 0.6 : rain ? 1 : 4;
+      particles.maxLifeTime = current.fire ? 2 : rain ? 2 : 9;
+      particles.emitRate = current.fire ? 24 : rain ? 200 : 45;
+      particles.direction1 = new Vector3(
+        -0.3,
+        rain ? -12 : current.fire ? 2 : -0.08,
+        -0.2,
+      );
+      particles.direction2 = new Vector3(
+        0.5,
+        rain ? -10 : current.fire ? 5 : 0.04,
+        0.3,
+      );
+      particles.gravity = new Vector3(
+        0,
+        current.fire ? 0.25 : rain ? -5 : 0,
+        0,
+      );
+      particles.start();
+    }
+  }
 
-      const request = ++backdropRequest;
-      let nextTexture: Texture;
-      const promise = new Promise<void>((resolve, reject) => {
-        nextTexture = new Texture(url, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE, () => {
-          if (disposed || request !== backdropRequest) {
-            nextTexture.dispose();
-            resolve();
-            return;
-          }
-          const previousTexture = activeBackgroundTexture;
-          activeBackgroundTexture = nextTexture;
-          activeBackgroundUrl = url;
-          backdropLayer.texture = nextTexture;
-          backdropLoad = null;
-          previousTexture.dispose();
-          resolve();
-        }, (message, exception) => {
-          nextTexture.dispose();
-          if (disposed || request !== backdropRequest) {
-            resolve();
-            return;
-          }
-          backdropLoad = null;
-          reject(exception instanceof Error ? exception : new Error(message || `Unable to load backdrop: ${url}`));
-        });
-      });
-      backdropLoad = { request, url, promise };
-      return promise;
+  async function setAsset(kind: AssetKind, url: string) {
+    if (!world || disposed) return;
+    const token = (modelVersions.get(kind) || 0) + 1;
+    modelVersions.set(kind, token);
+    const generation = sceneGeneration;
+    const current = world;
+    if (!containers.has(url))
+      containers.set(
+        url,
+        LoadAssetContainerAsync(url, scene, { pluginExtension: ".glb" }).catch(
+          (error) => {
+            containers.delete(url);
+            throw error;
+          },
+        ),
+      );
+    const container = await containers.get(url)!;
+    if (
+      disposed ||
+      generation !== sceneGeneration ||
+      token !== modelVersions.get(kind)
+    )
+      return;
+    const group = new TransformNode(`generated ${kind} props`, scene);
+    for (const object of current.objects.filter((o) => o.kind === kind)) {
+      const pivot = new TransformNode(object.object_id, scene);
+      pivot.parent = group;
+      const instance = container.instantiateModelsToScene(
+        (name) => `${object.object_id}:${name}`,
+        false,
+        { doNotInstantiate: false },
+      );
+      for (const root of instance.rootNodes) root.parent = pivot;
+      const bounds = pivot.getHierarchyBoundingVectors(true);
+      const size = bounds.max.subtract(bounds.min);
+      const scale =
+        object.scale / Math.max(size.y, kind === "altar" ? size.x : 0, 0.001);
+      const vertical =
+        kind === "altar" && current.water && object.x === 0 && object.z === -6
+          ? 0.42
+          : 1;
+      const center = bounds.min.add(size.scale(0.5));
+      if (
+        kind === "altar" &&
+        object.x === current.interaction_x &&
+        object.z === current.interaction_z
+      ) {
+        const top = size.y * scale * vertical;
+        if (waterSurface) waterSurface.position.y = top * 0.99;
+        if (current.fire && flameRoot) flameRoot.position.y = top + 0.05;
+        if (current.fire && particles)
+          particles.emitter = new Vector3(
+            object.x,
+            terrainHeight(object.x, object.z, current) + top + 0.15,
+            object.z,
+          );
+      }
+      const normalizer = new TransformNode(
+        `${object.object_id}:normalizer`,
+        scene,
+      );
+      normalizer.parent = pivot;
+      for (const root of instance.rootNodes) root.parent = normalizer;
+      normalizer.position.set(-center.x, -bounds.min.y, -center.z);
+      pivot.scaling.set(scale, scale * vertical, scale);
+      pivot.rotation.y = object.yaw;
+      pivot.position.set(
+        object.x,
+        terrainHeight(object.x, object.z, current) - 0.03,
+        object.z,
+      );
+      for (const mesh of pivot.getChildMeshes()) {
+        mesh.receiveShadows = true;
+        mesh.isPickable = false;
+        shadows.addShadowCaster(mesh);
+      }
+    }
+    const previousGroup = modelGroups.get(kind);
+    if (previousGroup) disposeGroup(previousGroup);
+    modelGroups.set(kind, group);
+    modelUrls.set(kind, url);
+    if (containers.size > 9) {
+      for (const [key, promise] of containers) {
+        if (![...modelUrls.values()].includes(key)) {
+          containers.delete(key);
+          void promise.then((c) => c.dispose()).catch(() => {});
+          if (containers.size <= 6) break;
+        }
+      }
+    }
+  }
+
+  return {
+    async setWorld(next) {
+      if (disposed) return;
+      world = next;
+      sceneGeneration++;
+      for (const group of modelGroups.values()) disposeGroup(group);
+      modelGroups.clear();
+      for (const material of createdMaterials) material.dispose(false, false);
+      createdMaterials.length = 0;
+      const night = next.config.time_of_day === "night";
+      const dusk = next.config.time_of_day === "dusk";
+      const desert = next.scene_id === "liuchen_valley";
+      const fire = next.scene_id === "lieyi_plains";
+      const horizon = Color3.FromHexString(
+        night
+          ? "#142c3e"
+          : desert
+            ? "#bba37c"
+            : fire
+              ? "#bd7350"
+              : dusk
+                ? "#c7b5a0"
+                : "#b6cbb9",
+      );
+      const zenith = Color3.FromHexString(
+        night ? "#050d22" : fire ? "#4d353e" : dusk ? "#4b6279" : "#6c9cb9",
+      );
+      scene.clearColor = new Color4(horizon.r, horizon.g, horizon.b, 1);
+      scene.fogColor = horizon;
+      scene.fogDensity =
+        next.config.weather === "mist"
+          ? 0.023
+          : next.config.weather === "dust"
+            ? 0.019
+            : next.config.weather === "rain"
+              ? 0.012
+              : 0.005;
+      skyMaterial.setColor3("zenith", zenith);
+      skyMaterial.setColor3("horizon", horizon);
+      skyMaterial.setFloat("night", night ? 1 : 0);
+      fill.diffuse = Color3.FromHexString(night ? "#7095c2" : "#d4e5d6");
+      fill.groundColor = Color3.FromHexString(desert ? "#76553b" : "#344229");
+      fill.intensity = night ? 0.5 : 0.85;
+      sun.diffuse = Color3.FromHexString(dusk || fire ? "#ffd19b" : "#fff4db");
+      sun.intensity = night ? 0.16 : dusk ? 0.9 : 1.15;
+      buildTerrain(next);
+      buildLandmark(next);
+      await Promise.all(
+        (["tree", "runestone", "altar"] as AssetKind[]).map((kind) =>
+          setAsset(kind, `/game/models/${kind}-v1.glb`),
+        ),
+      );
     },
-    setTalking(talking) {
-      npcTalking = talking;
+    setAsset,
+    setView(pose: PlayerPose, eyeBob: number) {
+      if (!world) return;
+      const y = terrainHeight(pose.x, pose.z, world) + EYE_HEIGHT + eyeBob;
+      camera.position.set(pose.x, y, pose.z);
+      camera.setTarget(
+        new Vector3(
+          pose.x + Math.sin(pose.yaw) * Math.cos(pose.pitch),
+          y + Math.sin(pose.pitch),
+          pose.z - Math.cos(pose.yaw) * Math.cos(pose.pitch),
+        ),
+      );
     },
-    setView(x, z, yaw, pitch, eyeBob = 0) {
-      camera.position.set(x, EYE_HEIGHT + eyeBob, z);
-      camera.setTarget(new Vector3(x + Math.sin(yaw) * Math.cos(pitch), EYE_HEIGHT + eyeBob + Math.sin(pitch), z - Math.cos(yaw) * Math.cos(pitch)));
-    },
-    pick(clientX, clientY): Pick {
-      const bounds = canvas.getBoundingClientRect();
-      if (!bounds.width || !bounds.height) return null;
-      const hit = scene.pick(clientX - bounds.left, clientY - bounds.top, (mesh) => mesh === ground || npcMeshes.has(mesh as Mesh), false, camera);
-      if (!hit?.hit || !hit.pickedMesh) return null;
-      if (npcMeshes.has(hit.pickedMesh as Mesh)) return { kind: "npc" };
-      if (hit.pickedMesh === ground && hit.pickedPoint) return { kind: "ground", x: hit.pickedPoint.x, z: hit.pickedPoint.z };
-      return null;
+    move(x, z, dx, dz) {
+      const blocked = (px: number, pz: number) =>
+        !world ||
+        Math.abs(px) > 64 ||
+        Math.abs(pz) > 64 ||
+        (!!world.npc_id &&
+          Math.hypot(px - world.interaction_x, pz - world.interaction_z) <
+            0.8) ||
+        Math.abs(terrainHeight(px, pz, world) - terrainHeight(x, z, world)) >
+          0.45 ||
+        world.objects.some(
+          (o) =>
+            Math.hypot(px - o.x, pz - o.z) <
+            (o.kind === "tree"
+              ? 0.7
+              : o.kind === "altar"
+                ? o.scale * 0.43
+                : 1.05),
+        );
+      const nx = Math.max(-64, Math.min(64, x + dx)),
+        nz = Math.max(-64, Math.min(64, z + dz));
+      return { x: blocked(nx, z) ? x : nx, z: blocked(x, nz) ? z : nz };
     },
     render() {
-      const time = (performance.now() - started) / 1000;
-      npcRoot.position.y = (npcTalking ? 0.055 : 0.018) * Math.sin(time * (npcTalking ? 3.1 : 1.3));
-      npcRoot.rotation.z = (npcTalking ? 0.008 : 0.003) * Math.sin(time * (npcTalking ? 1.8 : 0.8));
+      skyMaterial.setFloat("clock", performance.now() / 1000);
+      waterShader?.setFloat("clock", performance.now() / 1000);
+      fireShader?.setFloat("clock", performance.now() / 1000);
+      lavaShader?.setFloat("clock", performance.now() / 1000);
       scene.render();
     },
     resize() {
@@ -343,8 +596,10 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     },
     dispose() {
       disposed = true;
-      backdropRequest += 1;
-      backdropLoad = null;
+      sceneGeneration++;
+      particles?.dispose();
+      for (const pending of containers.values())
+        void pending.then((c) => c.dispose()).catch(() => {});
       scene.dispose();
       engine.dispose();
     },

@@ -16,7 +16,7 @@ import httpx
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
-from backend.content.world_scenes import build_world_scene
+from backend.content.world_scenes import build_world_scene, default_config
 from backend.database.models import SceneAssetJobRecord
 from backend.schemas.game_state import GameState
 from backend.schemas.world_scene import AssetKind, SceneAssetJobView
@@ -118,6 +118,15 @@ class SceneAssetCoordinator:
                 .values(status="queued")
             )
             await db.commit()
+            await db.execute(
+                update(SceneAssetJobRecord)
+                .where(
+                    SceneAssetJobRecord.status == "queued",
+                    SceneAssetJobRecord.attempt_count >= 2,
+                )
+                .values(status="fallback", error_code="ATTEMPTS_EXHAUSTED")
+            )
+            await db.commit()
         if self.gateway:
             self.task = asyncio.create_task(self._worker())
         else:
@@ -142,6 +151,10 @@ class SceneAssetCoordinator:
             state.current_scene_id, state.world_scenes.get(state.current_scene_id)
         )
         kinds = sorted({obj.kind for obj in world.objects})
+        needs_new_geometry = (
+            world.config.seed != default_config(state.current_scene_id).seed
+        )
+        generate = self.gateway is not None and needs_new_geometry
         jobs = []
         for kind in kinds:
             reference = REFERENCE_ROOT / f"{kind}-v1.png"
@@ -168,11 +181,13 @@ class SceneAssetCoordinator:
                         kind=kind,
                         seed=world.config.seed,
                         fingerprint=fingerprint,
-                        status="queued" if self.gateway else "fallback",
+                        status="queued" if generate else "fallback",
                         fallback_url=fallback_url,
-                        model_url=None if self.gateway else fallback_url,
+                        model_url=None if generate else fallback_url,
                         attempt_count=0,
-                        error_code=None if self.gateway else "HUNYUAN_UNCONFIGURED",
+                        error_code="HUNYUAN_UNCONFIGURED"
+                        if needs_new_geometry and not self.gateway
+                        else None,
                     )
                     db.add(row)
                     try:
@@ -181,7 +196,7 @@ class SceneAssetCoordinator:
                         await db.rollback()
                         row = (await db.execute(query)).scalar_one()
                 elif (
-                    self.gateway
+                    generate
                     and row.status == "fallback"
                     and row.error_code == "HUNYUAN_UNCONFIGURED"
                 ):

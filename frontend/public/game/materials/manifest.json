@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "assets": [
+    {"file": "sand-v1.png", "sha256": "5813df82b0bf3d7ca049b3badc3a5744e0f98a3d70826e7c5d55732d4c18cdcc", "usage": "liuchen_valley terrain albedo", "source": "built-in image generation", "prompt_document": "docs/3D_ASSET_PROMPTS.md"},
+    {"file": "basalt-v1.png", "sha256": "8b3f3ed52202988685a292d9029941fc9af044e2724bdbb17dab3a7ffcbf4813", "usage": "lieyi_plains terrain albedo", "source": "built-in image generation", "prompt_document": "docs/3D_ASSET_PROMPTS.md"}
+  ]
+}

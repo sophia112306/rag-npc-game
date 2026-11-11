@@ -176,8 +176,9 @@ def test_live_worker_saves_glb_and_does_not_spend_a_turn(tmp_path):
         client.app.state.scene_asset_coordinator.output_dir = tmp_path / "models"
         client.app.state.scene_asset_coordinator.output_dir.mkdir()
         client.post("/api/game/start", json={"session_id": "worker"})
+        assert _command(client, "worker", 1, "重新生成").status_code == 200
         jobs = client.post(
-            "/api/game/worker/scene-assets", json={"expected_state_version": 1}
+            "/api/game/worker/scene-assets", json={"expected_state_version": 2}
         ).json()
         deadline = time.monotonic() + 3
         while time.monotonic() < deadline:
@@ -195,7 +196,7 @@ def test_live_worker_saves_glb_and_does_not_spend_a_turn(tmp_path):
             assert model.content[:4] == b"glTF"
             assert job["attempt_count"] == 1
         assert gateway.calls == 3
-        assert client.get("/api/game/worker/state").json()["turn_count"] == 0
+        assert client.get("/api/game/worker/state").json()["turn_count"] == 1
 
 
 def test_interrupted_model_job_is_recovered_on_restart(tmp_path):
@@ -207,8 +208,9 @@ def test_interrupted_model_job_is_recovered_on_restart(tmp_path):
     url = f"sqlite+aiosqlite:///{tmp_path / 'recover.db'}"
     with TestClient(create_app(url)) as client:
         client.post("/api/game/start", json={"session_id": "recovery"})
+        assert _command(client, "recovery", 1, "重新生成").status_code == 200
         jobs = client.post(
-            "/api/game/recovery/scene-assets", json={"expected_state_version": 1}
+            "/api/game/recovery/scene-assets", json={"expected_state_version": 2}
         ).json()
         coordinator = client.app.state.scene_asset_coordinator
 

@@ -1,5 +1,22 @@
 # 3D 環境資產來源
 
+## 3D 地表貼圖
+
+以下兩張貼圖由內建圖片工具生成，只用作 Babylon 材質，不含人物或故事設定。
+
+### sand (`frontend/public/game/materials/sand-v1.png`)
+
+```text
+Use case: stylized-concept. Asset type: seamless tiling ground albedo texture for a first-person fantasy desert canyon game. Primary request: warm pale ochre sandy soil with subtle wind ripples, sparse small weathered rock grains and natural irregular dry cracks, fine surface detail readable at human scale. True orthographic straight-down flat scan, uniformly lit diffuse albedo, no perspective, no horizon, no cast shadows, no vignette, no large landmarks, no vegetation, no symbols, no letters, no carved pattern, no roads, no UI. The four edges must tile seamlessly. Fill the square image edge to edge; realistic sandstone desert surface, restrained warm tan palette.
+```
+
+### basalt (`frontend/public/game/materials/basalt-v1.png`)
+
+```text
+Use case: stylized-concept. Asset type: seamless tiling ground albedo texture for a first-person volcanic fantasy game. Primary request: dark charcoal volcanic basalt with fine rough porous stone grain and irregular small cool black fissures, subtle ash and dark reddish mineral variation. True orthographic straight-down flat scan, uniformly lit diffuse albedo, no perspective, no horizon, no cast shadows, no vignette, no text or ornamental carving, no large boulders or landmarks, no lava glow (the engine adds molten streams separately), no UI. The four edges tile seamlessly. Fill the square image edge to edge with a believable volcanic rock surface.
+```
+
+
 參考圖使用內建 imagegen 工具生成，保存於 `frontend/public/game/models/references/`。底層圖片模型名稱未由工具提供。GLB 使用校內 Hunyuan3D-2mini-turbo，採用 shape generation、20,000 面限制、參考圖投影貼圖與平滑法線；未載入 Hunyuan Paint。資產暫定，沒有新增核心世界觀。
 
 重建指令：`PYTHONPATH=. ./.venv/bin/python scripts/generate_scene_models.py`。需要既有的 SSH tunnel 到本機 8081；產出版本、大小與 SHA-256 見 `frontend/public/game/models/manifest.json`。
