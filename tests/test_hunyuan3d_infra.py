@@ -33,6 +33,8 @@ def test_gateway_is_shape_only_and_has_bounded_generation() -> None:
     assert "Hunyuan3DPaintPipeline" not in server
     assert "enable_flashvdm(" not in server
     assert "GENERATION_LOCK = asyncio.Lock()" in server
+    assert "max_faces: int = Field(default=40_000" in server
+    assert "RUNTIME.face_reducer(mesh, max_facenum=request.max_faces)" in server
     assert '@app.get("/health")' in server
     assert '@app.post("/generate"' in server
     assert "CORSMiddleware" not in server

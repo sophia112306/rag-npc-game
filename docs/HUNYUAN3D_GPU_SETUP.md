@@ -81,11 +81,12 @@ docker compose -f infra/hunyuan3d/compose.yaml down
   "seed": 1234,
   "octree_resolution": 256,
   "num_inference_steps": 5,
-  "guidance_scale": 5.0
+  "guidance_scale": 5.0,
+  "max_faces": 40000
 }
 ```
 
-成功時直接回傳 `model/gltf-binary`。輸入限制為 12 MiB、24 MP、PNG／JPEG／WebP；模型尚未完成載入時回 503，已有工作執行時回 429。
+成功時直接回傳 `model/gltf-binary`。輸入限制為 12 MiB、24 MP、PNG／JPEG／WebP；輸出會依官方 FloaterRemover、DegenerateFaceRemover 與 FaceReducer 清理，`max_faces` 限制為 5,000～100,000。模型尚未完成載入時回 503，已有工作執行時回 429。
 
 macOS 測試指令：
 

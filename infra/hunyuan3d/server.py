@@ -42,6 +42,7 @@ class GenerateRequest(BaseModel):
     octree_resolution: Literal[128, 256] = 256
     num_inference_steps: int = Field(default=5, ge=1, le=30)
     guidance_scale: float = Field(default=5.0, ge=0.0, le=20.0)
+    max_faces: int = Field(default=40_000, ge=5_000, le=100_000)
 
 
 class RuntimeState:
@@ -51,6 +52,9 @@ class RuntimeState:
     torch_version: str | None = None
     pipeline: Any = None
     background_remover: Any = None
+    floater_remover: Any = None
+    degenerate_face_remover: Any = None
+    face_reducer: Any = None
     load_task: asyncio.Task[None] | None = None
 
 
@@ -61,7 +65,12 @@ GENERATION_LOCK = asyncio.Lock()
 def _load_runtime() -> None:
     import torch
     from hy3dgen.rembg import BackgroundRemover
-    from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+    from hy3dgen.shapegen import (
+        DegenerateFaceRemover,
+        FaceReducer,
+        FloaterRemover,
+        Hunyuan3DDiTFlowMatchingPipeline,
+    )
 
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is not available inside the container")
@@ -76,6 +85,9 @@ def _load_runtime() -> None:
         use_safetensors=True,
         device="cuda",
     )
+    RUNTIME.floater_remover = FloaterRemover()
+    RUNTIME.degenerate_face_remover = DegenerateFaceRemover()
+    RUNTIME.face_reducer = FaceReducer()
     # Do not call enable_flashvdm here. The upstream optimization compiles
     # extra CUDA code and is not required for the first Blackwell-safe demo.
 
@@ -148,6 +160,9 @@ def _generate_mesh(request: GenerateRequest, image: Image.Image, output_path: Pa
         guidance_scale=request.guidance_scale,
         mc_algo="mc",
     )[0]
+    mesh = RUNTIME.floater_remover(mesh)
+    mesh = RUNTIME.degenerate_face_remover(mesh)
+    mesh = RUNTIME.face_reducer(mesh, max_facenum=request.max_faces)
     mesh.export(output_path)
     torch.cuda.empty_cache()
 
