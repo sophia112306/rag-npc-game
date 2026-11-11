@@ -17,7 +17,7 @@
 | A1：瀏覽器語音互動 | `█████████░ 90%` | STT transcript 與瀏覽器 TTS 已完成；待實機麥克風中文辨識驗收 |
 | A2：圖片／場景生成 | `██████████ 100%` | 四張版本化生成場景、單一 Registry、合法換場、2D／3D 顯示、保存與重啟承接均已完成 |
 | A3：情境選項介面 | `██████████ 100%` | 後端依 Session 產生最多四個對話／移動選項，前端點選後提交正式回合並隨狀態更新 |
-| A4：Hunyuan3D 資產管線 | `██████░░░░ 60%` | 私有 shape-only Docker API 與 Blackwell/CUDA 12.8 配置完成；待校機 build、首個 GLB、後端 job 與 Babylon loader |
+| A4：Hunyuan3D 資產管線 | `████████░░ 80%` | 私有 shape-only GPU API 與真實 GLB 驗收完成；待後端持久化 asset job、Babylon loader 與材質／畫面驗收 |
 
 ## M1 已完成
 
@@ -207,7 +207,10 @@
 - 生成限制為單工，輸入限制為 12 MiB、24 MP 與三種圖片格式；輸出為 GLB，模型未就緒回 503、已有工作回 429。
 - Compose 使用 rootless Docker 可用的 NVIDIA CDI，且只發布到遠端 `127.0.0.1:8081`；前端不直接呼叫校機。
 - 本機 Python compile、Compose YAML 解析與安全配置測試通過；`PYTHONPATH=. ./.venv/bin/pytest -q` 為 100 passed。
-- 校機已先驗證 RTX 5060 Ti 可由 rootless CUDA container 讀取，但本次 SSH 在 banner 前逾時，尚未進行 Hunyuan image build 或真實 GLB 生成。
+- 校機 RTX 5060 Ti 已完成 image build、持久化 7.2 GB model cache、container recreate 與真實 `/generate` 驗收。
+- 正式 API 以既有維達利亞 cutout 在 6.75 秒產出 687,488-byte GLB；後處理結果為 17,222 vertices／40,000 faces、watertight，0 restart、未 OOM。
+- 原始 256 mesh 在 18.62 秒產生，峰值 4,571 MiB，但 875,034 faces 且非 watertight；因此 API 強制加入官方浮動面／退化面清理及 face reduction，不把 raw mesh 直接送進 Babylon。
+- 本機 SSH tunnel `127.0.0.1:8081` 已取得 `ready`；服務仍只綁遠端 loopback，前端不直接連校機。
 
 ## 已知限制
 
@@ -220,7 +223,7 @@
 - Babylon 頁目前是使用完整場景圖、角色 cutout 與狀態式故事 UI 的 2.5D 視覺原型；尚未建立正式 GLB、地形、導航網格或碰撞地圖，介面不再宣稱已完成第一人稱 3D 建模。
 - 正式 3D 應使用 Tripo／Meshy 等 image-to-3D 服務產生模組化 GLB，再經 Blender 清理、減面、PBR 與碰撞設定；專案目前沒有 GLB、Blender 或 3D provider API key。
 - 零預算方案改以校內 GPU 部署 Hunyuan3D：現有圖片生成工具繼續製作透視一致的完整背景；Hunyuan3D 只負責獨立遺跡、祭壇、樹木等 mesh，不把單張風景圖直接當作已完成遊戲關卡。
-- A4 已固定 Hunyuan3D-2mini shape-only、CUDA 12.8、單工生成與遠端 loopback 綁定；校機 SSH 目前在 server banner 前逾時，尚未完成 image build 與實際 GLB 驗收，不能標示為已串進 Babylon。
+- A4 已固定 Hunyuan3D-2mini shape-only、CUDA 12.8、單工生成、面數上限與遠端 loopback 綁定；GPU gateway 已實際驗收，但尚未建立遊戲後端 3D asset job、正式材質或 Babylon GLB 載入，不能標示為已串進遊戲。
 - Scene Registry 已登記平衡議會、命脈之泉、符石林、流塵谷與烈燚原；目前只有鳴霖三個場景具普通旅行路線，仍缺完整正式場景清單、在場 NPC、進出條件及 E1／E2／E3 對應。
 - 目前只有維達利亞的前端公開原型資料；私有角色設定、正式來源、初始知識與秘密解鎖條件仍待團隊提供。
 - 目前白名單為 `transfer_item`、`establish_commitment`、`offer_quest`、`change_scene`、`advance_story`；Demo 公開線索與特殊路線由權威選項推進，關係、任務接受／完成、正式固定事件與結局效果仍需依 C 的正式介面加入。
@@ -234,8 +237,8 @@
 
 ## 下一步
 
-1. 恢復校內 VPN 的 `utun` 路由，依 `docs/HUNYUAN3D_GPU_SETUP.md` 在 GPU 主機 build shape-only container，產出第一個模組化 GLB 並量測 VRAM／時間。
-2. 由 FastAPI 建立持久化 3D asset job，再加入 Babylon GLB loader、transform metadata、fallback 與實際瀏覽器驗收；瀏覽器不直接連校機。
+1. 由 FastAPI 建立持久化 3D asset job，再加入 Babylon GLB loader、transform metadata、材質策略、fallback 與實際瀏覽器驗收；瀏覽器不直接連校機。
+2. 由團隊提供祭壇、符石、遺跡、枯木等獨立物件參考圖與場景擺放 metadata；避免把整張風景或單張角色正面直接當正式 3D 關卡。
 3. 若 Hunyuan3D 的 mesh 品質或速度不符 Demo，再評估 Tripo／Meshy API；任何付費 provider 必須先取得成本上限與金鑰。
 4. 選定正式圖片 provider／模型／金鑰環境變數，實作 ImageGateway adapter、timeout、有限重試與獨立 worker；目前無 provider 時必須保持 fallback。
 5. C 確認 Demo fallback 與正式 E3-1／烈燚原入口規則的映射；目前不把暫定選項升格為正式作者設定。

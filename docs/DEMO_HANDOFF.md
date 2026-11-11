@@ -1,18 +1,21 @@
 # 動態故事 Demo 交接
 
-交接日期：2026-11-10
+交接日期：2026-11-11
 
 目標 Demo：2026-11-12（週四）
 
-工作分支：`feature/demo-dynamic-story`
-GitHub compare：<https://github.com/sophia112306/rag-npc-game/compare/main...feature/demo-dynamic-story>
+工作分支：`feature/hunyuan3d-gpu-gateway`
+GitHub compare：<https://github.com/sophia112306/rag-npc-game/compare/main...feature/hunyuan3d-gpu-gateway>
+
+GitHub 現況：`origin/main` 的 PR #7 只合到 `087e82e`；後續四筆故事／視覺修正及三筆 Hunyuan3D commits 都在本交接分支。下一位不要直接從舊 `feature/demo-dynamic-story` 或本機過期的 `main` 開始。
 
 ## 目前狀態
 
 | 範圍 | 進度 | 狀態 |
 | --- | --- | --- |
 | 可保存動態故事 | `██████████ 100%` | 兩條狀態式 fallback 分支、選項防偽、事件與位置同交易 |
-| Babylon 場景呈現 | `██████░░░░ 60%` | 透視衝突與錯誤幾何已移除；目前為 2.5D 視覺原型，正式 GLB／碰撞待 Hunyuan3D 產出 |
+| Babylon 場景呈現 | `██████░░░░ 60%` | 透視衝突與錯誤幾何已移除；目前為 2.5D 視覺原型，正式材質 GLB／碰撞與 loader 待完成 |
+| Hunyuan3D GPU gateway | `██████████ 100%` | 校機 shape-only API、SSH tunnel、持久化 cache、減面與真實 GLB 均已驗收 |
 | 滾動圖片管線 | `████████░░ 80%` | Job／polling／快取／fallback 完成；正式 provider 尚未接入 |
 | Demo 驗收與交接 | `█████████░ 90%` | 自動測試、build、兩條 live API 與 3D 載入通過；待正式彩排 |
 
@@ -22,8 +25,8 @@ GitHub compare：<https://github.com/sophia112306/rag-npc-game/compare/main...fe
 
 ```bash
 cd /Users/qiao/rag-npc-game
-git switch feature/demo-dynamic-story
-git pull --ff-only origin feature/demo-dynamic-story
+git switch feature/hunyuan3d-gpu-gateway
+git pull --ff-only origin feature/hunyuan3d-gpu-gateway
 ```
 
 終端一（後端）：
@@ -102,9 +105,28 @@ npm run dev
 
 不要把 Codex／ChatGPT 內建圖片工具當成部署端可直接呼叫的 API。正式串接前要先確認 provider、模型、金鑰環境變數、成本上限與輸出 URL 保存策略。
 
+## Hunyuan3D GPU gateway
+
+已完成：
+
+- 校機 RTX 5060 Ti／16 GB，以 rootless Docker＋NVIDIA CDI 執行。
+- Hunyuan3D-2mini shape-only，固定 CUDA 12.8、PyTorch 2.7.1+cu128 與 upstream commit。
+- 遠端只綁 `127.0.0.1:8081`，本機透過 `ssh -N -L 8081:127.0.0.1:8081 nccu-gpu` 使用。
+- Hunyuan、Hugging Face 與 U2Net cache 都在 named volume；強制重建 container 後 42 秒恢復 `ready`，不重抓 7.2 GB 權重。
+- `/generate` 限制單工、圖片大小／格式、octree、steps 與 `max_faces`；輸出經官方 FloaterRemover、DegenerateFaceRemover、FaceReducer 後回傳 GLB。
+- 正式 API 驗收：6.75 秒、687,488 bytes、17,222 vertices／40,000 faces、watertight。
+
+本機健康檢查：
+
+```bash
+curl http://127.0.0.1:8081/health
+```
+
+校機管理與完整量測見 `docs/HUNYUAN3D_GPU_SETUP.md`。原始測試 GLB 沒有提交 Git：視覺檢查顯示人形輪廓成立，但無材質且晶體感明顯，不應直接取代維達利亞。下一位應先建立 FastAPI 持久化 3D asset job，再讓 Babylon 讀取已核准、已減面且附 transform／材質 metadata 的 GLB；瀏覽器不要直接呼叫 GPU gateway。
+
 ## 驗收紀錄
 
-- `PYTHONPATH=. ./.venv/bin/pytest -q`：97 passed，1 個既有 Starlette deprecation warning。
+- `PYTHONPATH=. ./.venv/bin/pytest -q`：100 passed，1 個既有 Starlette deprecation warning。
 - `npm run build`：Next.js 16.4.4 production build passed。
 - Live 火焰分支：平衡議會 → 命脈之泉 → 烈燚原，重啟後 `state_version=4` 且仍在烈燚原。
 - Live 風沙分支：平衡議會 → 符石林 → 流塵谷，公開線索含 `fissure_map`，profile 為 `liuchen_dust_valley`。
@@ -113,10 +135,18 @@ npm run dev
 - 實機後續發現交叉遠景平面形成巨大棕色三角遮蔽；已改為單一 screen-space layer，並隱藏非議會場景的角色、符石、假地面與錯誤物件群。獨立 WebGL 截圖確認流塵谷／烈燚原皆無遮蔽，且顯示不同故事選項。
 - 議會後續截圖發現完整背景圖與 Babylon 水平地面使用不同地平線；已停用第二套地面及所有 primitive 場景物件，並移除固定符石任務。入口與接近維達利亞兩張 WebGL 截圖均無接縫或巨大幾何，四個後端故事選項可見。
 - 舊 Session＋既有任務曾使 `travel_to_minglin` 被誤判成過期 Demo choice；已補 action 完整比對與 live 返回路線驗收。
+- Hunyuan3D：容器內 GPU capability 12.0、PyTorch cu128、API health、cache recreate、128／256 GLB 與 40k-face 後處理均已實機驗收；container 0 restart、未 OOM。
 
 ## 穩定 commits
 
 ```text
+4bc6ba8 feat(3d): bound generated mesh complexity
+30efc21 fix(3d): persist Hunyuan model caches
+1c2ac18 feat(3d): add private Hunyuan GPU gateway
+f6a6e21 fix(visuals): unify council scene perspective
+92dd67d fix(3d): separate story scenes from council prototype
+da16300 fix(story): preserve legacy clickable choices
+5438104 docs(handoff): document dynamic demo operation
 087e82e fix(scenes): orient Babylon backdrops correctly
 95dbbed feat(images): add persistent scene image jobs
 353f499 feat(scenes): apply distinct Babylon visual profiles
@@ -128,16 +158,17 @@ b6efdbc docs(demo): plan dynamic story delivery
 ## 下一位接手優先順序
 
 1. 週四前先做一次人工完整彩排，確認投影環境、Chrome WebGL、Session 重新開始及兩條路線的按鈕操作。
-2. 若必須展示「即時生圖」，先取得 provider／model／key／預算，再實作一個 `ImageGateway` adapter；沒有金鑰時保留現有 fallback，不阻擋 Demo。
-3. 將圖片 job 改為 turn transaction 的 outbox row，lifespan／外部 worker 只在 commit 後處理，並補 stale running recovery、timeout 與有限重試。
-4. 取得 Tripo 或 Meshy API key，以現有參考圖產生模組化 GLB；經 Blender 清理、減面、PBR 與碰撞設定後，再為 Babylon 加入場景資產載入。正式資產完成前不恢復基本幾何拼貼。
-5. B 的模型可用後，依 `docs/MODEL_GATEWAY_CONTRACT.md` 接 live endpoint，驗證角色一致性、RAG 權限與多回合品質。
-6. C 確認 Demo choice 與正式事件 ID、烈燚原入口、E3-1、任務完成與結局門檻的映射，再移除 provisional 標記。
+2. 建立 3D asset job／migration／provider adapter，讓 FastAPI 經 tunnel 呼叫 Hunyuan；保存 job 狀態、fingerprint、GLB metadata 與失敗 fallback，瀏覽器不直接連 8081。
+3. 取得獨立物件參考圖，先做祭壇或符石；加入 Babylon GLB loader、transform／材質／碰撞 metadata，實際檢查遮擋與相機穿模。正式資產完成前不恢復基本幾何拼貼。
+4. 若必須展示「即時生圖」，先取得 provider／model／key／預算，再實作一個 `ImageGateway` adapter；沒有金鑰時保留現有 fallback，不阻擋 Demo。
+5. 將圖片 job 改為 turn transaction 的 outbox row，lifespan／外部 worker 只在 commit 後處理，並補 stale running recovery、timeout 與有限重試。
+6. B 的模型可用後，依 `docs/MODEL_GATEWAY_CONTRACT.md` 接 live endpoint，驗證角色一致性、RAG 權限與多回合品質。
+7. C 確認 Demo choice 與正式事件 ID、烈燚原入口、E3-1、任務完成與結局門檻的映射，再移除 provisional 標記。
 
 ## 仍需團隊提供
 
 - B：文字模型 provider、base URL、model、認證方式、timeout／錯誤格式、RAG metadata/filter。
 - C：正式事件／分支 ID、烈燚原入口與出口、E3-1 場景轉移、任務與結局操作契約。
 - 圖片：provider、model、key 環境變數名稱、每 Session 預算、輸出保存與內容審核策略。
-- 3D：Tripo 或 Meshy provider、API key、單場景成本上限，以及可執行 Blender 清理的環境；若由美術提供成品，則直接需要 GLB、碰撞區與授權資訊。
+- 3D：祭壇、符石、遺跡、枯木等獨立物件參考圖，以及每個資產的場景、位置、尺寸、旋轉、材質與碰撞需求；若 Hunyuan 品質不足，再決定是否使用 Tripo／Meshy 預算。
 - 美術／故事：各場景正式在場 NPC、地圖配置、碰撞區、音效及尚未確認的世界觀資料。

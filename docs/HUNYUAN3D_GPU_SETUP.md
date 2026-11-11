@@ -1,6 +1,8 @@
 # Hunyuan3D 校內 GPU 部署與交接
 
-進度：`██████░░░░ 60%`（容器與私有 API 已完成；待校機 build、首個 GLB 與 Babylon 載入）
+GPU gateway 階段：`██████████ 100%`（校機 build、私有 API、持久化 cache 與真實 GLB 均已驗收）
+
+完整 A4 串接：`████████░░ 80%`（待 FastAPI 3D asset job、Babylon loader、材質與實際畫面驗收）
 
 ## 這一階段的範圍
 
@@ -111,15 +113,32 @@ file ./generated.glb
 
 使用 Hunyuan3D 須遵守 Tencent Hunyuan Non-Commercial License；目前用途限課程、研究與非商業 Demo，若要公開或商業部署需重新審查授權。
 
-## 完成定義與下一步
+## 2026-11-11 實機驗收
 
-這個階段要到以下條件全部成立才可標成 100%：
+| 驗收項目 | 結果 |
+| --- | --- |
+| 校機 container | `ready`，RTX 5060 Ti，PyTorch 2.7.1+cu128，0 restart，未 OOM |
+| 常駐 VRAM | 3,994 MiB |
+| 128 raw generation | 4.73 秒，3,598,012 bytes，201,292 faces，watertight |
+| 256 raw generation | 18.62 秒，15,713,432 bytes，875,034 faces，峰值 4,571 MiB |
+| 正式 API＋後處理 | 6.75 秒，687,488 bytes，17,222 vertices／40,000 faces，watertight |
+| 正式 API GLB SHA-256 | `0da27f0a5b4b2fe8217a27e8347d0070011f29cd1c10fe69fe49fb359b2b7fe4` |
+| cache 重啟 | 強制重建 container 後 42 秒回到 `ready`，未重新下載 7.2 GB 模型 |
+| SSH tunnel | 本機 `127.0.0.1:8081/health` 回傳 `ready` |
+
+驗收輸入使用既有 `frontend/public/game/vidalia-cutout.png`。原始 128／256 GLB 只保存於校機 named volume 與本機 `/tmp/rag-npc-hunyuan3d-validation`，沒有提交 Git：視覺預覽顯示人形輪廓成立，但無材質且晶體感明顯，不符合正式維達利亞品質。正式 API 已加入官方後處理與面數限制，仍應把輸出視為待材質化的原始資產。
+
+## 下一步
+
+GPU gateway 的完成條件已達成：
 
 1. 校機 image build 完成，container health 為 `ready`。
 2. 用專案參考圖實際產出一個可由檢視器開啟的 GLB。
 3. 記錄生成時間、VRAM 峰值、GLB 大小與失敗日誌。
-4. FastAPI 新增可持久化的 3D asset job，不讓瀏覽器直接呼叫 GPU。
-5. Babylon.js 加入 GLB loader、尺寸／旋轉／位置 metadata、載入失敗 fallback。
-6. 瀏覽器實際檢查 mesh 不遮住 UI、相機不穿模，production build 與回歸測試通過。
 
-目前阻礙：2026-11-11 最後一次連線時，TCP 22 可建立，但 SSH 在 server banner 前逾時；本機路由顯示走一般 `en0` gateway，而不是先前成功時的 VPN `utun`。這是 VPN／校網路由問題，不是 public key 或 Docker 設定錯誤。恢復 VPN 路由後從本節部署命令接續。
+完整 A4 尚需：
+
+1. FastAPI 新增可持久化的 3D asset job，不讓瀏覽器直接呼叫 GPU。
+2. 由團隊提供獨立物件參考圖；不要使用整張風景圖或把角色單張正面結果直接當正式模型。
+3. Babylon.js 加入 GLB loader、尺寸／旋轉／位置 metadata、材質策略與載入失敗 fallback。
+4. 瀏覽器實際檢查 mesh 面數、材質、遮擋、相機穿模，production build 與回歸測試通過。
