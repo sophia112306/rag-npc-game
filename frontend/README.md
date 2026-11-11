@@ -1,39 +1,59 @@
-# 鳴霖森林遊戲場景
+# 前端導覽｜Phaser 2D 與 Babylon 3D
 
-在專案根目錄先啟動後端：
+更新：2026-11-12。整個專案的世界設定、故事線、架構、API 與缺口以 [根目錄 README](../README.md) 為準；本文件只補前端入口與編輯位置。
 
-```bash
-python3.12 -m venv .venv
-./.venv/bin/pip install -r requirements.txt
-./.venv/bin/uvicorn backend.main:app --reload --port 8300
-```
+## 啟動
 
-另開終端機啟動前端：
+先依根目錄 README 啟動 FastAPI（8300），再於本目錄執行：
 
 ```bash
-cd frontend
 npm ci
 npm run dev
 ```
 
-開啟 http://localhost:3200 。前端會呼叫 http://localhost:8300 的角色資料和遊戲 API。若後端使用其他位置，可複製 `.env.example` 為 `.env.local` 並修改 `NEXT_PUBLIC_API_URL`。
+展示可用 `npm run build` 後執行 `npm run start`，皆在 3200；不要同時占用該埠。API 預設 `http://localhost:8300`，可將 `.env.example` 複製為 `.env.local` 設定 `NEXT_PUBLIC_API_URL`。
 
-Phaser 會載入 [`public/game/minglin.tmj`](public/game/minglin.tmj) 內的 `Actors` 與 `Walkable` 物件圖層，並顯示 [`public/game/forest-council.png`](public/game/forest-council.png) 作為場景。可用 Tiled 編輯 NPC 出生點及多邊形可行走區；背景圖與 Tiled 的 `Background` 影像圖層使用同一張圖。調整背景構圖時，請一併校正地圖中的角色座標和可行走區。
+## 頁面與目前功能
 
-操作：左鍵點擊可行走的地面，角色會轉向並走向點擊位置；右鍵點擊可讓角色原地面向該方向，Q／R 可逐步轉身。WASD 或方向鍵依畫面方向移動，角色會跟著轉向。滑鼠滾輪、畫面右側 ＋／－ 或手機雙指可縮放地圖，倍率範圍為 100%～220%；點倍率可回到全景。放大後鏡頭會在地圖範圍內隨角色移動，視角方向保持固定。點擊維達利亞，角色會走近並開始對話；靠近她後也可按 E。按 Esc 關閉對話。小螢幕另有移動及轉身按鈕。玩家與 NPC 是獨立的透明圖片，可以在背景上移動或替換。
+| 路徑 | 入口／功能 |
+| --- | --- |
+| `/` | `app/page.tsx`＋`components/MinglinGame.tsx`：Phaser 2D、人物、對話、後端回合、瀏覽器 STT／TTS。 |
+| `/experiments/babylon` | `app/experiments/babylon/page.tsx` 掛載 `components/experiments/TrialExperience.tsx`：自由第一人稱、後端故事、M 地圖、J 手記、Tab 世界指令與 GLB 工作輪詢。 |
+| `/experiments` | 轉向 Babylon 頁。 |
+| `/preview/veta` | 維塔獨立預覽，尚非主遊戲章節。 |
 
-PoC 介面提供操作說明、重新開始確認、初次載入及斷線重試畫面。對話文字會暫存在目前瀏覽器；只有當後端 Session 的回合與更新時間相符時才恢復，避免服務重啟後顯示不屬於新進度的舊紀錄。遊戲回合、事件與 NPC 記憶由後端 SQLite 保存。
+3D 使用 WASD／方向鍵移動、Shift 奔跑、點地面步行、拖曳環視、近距離 E 互動。它已接入 FastAPI／SQLite，舊版固定路線與「WASD 無效、未接後端」的描述已失效。人物目前仍是肖像 billboard，非完整骨架人物模型。
 
-目前未設定外部模型時，由後端「規則動態」依輸入、回合、記憶、承諾、任務與背包產生不同回覆及事件提案；設定 ModelGateway 後，標示會切換為「AI 動態」。Session 與完整回合已保存於 SQLite，後端重新啟動後可接續。前端在不確定請求是否成功時會保留原 `action_id` 重送；後端會回傳原結果，並拒絕同 ID 不同內容或過期狀態。
+2D 可左鍵點地面／人物、WASD／方向鍵移動、右鍵或 Q／R 轉身、滾輪／按鈕縮放，靠近人物按 E。語音依瀏覽器能力、權限與 localhost／HTTPS 支援；3D 尚未加入同等語音 UI。
 
-開啟對話後會顯示三個由後端依目前 Session 產生的行動選項。點擊後直接提交正式回合；任務建立後選項也會更新。自由文字與語音輸入仍保留。
+## 編輯位置
 
-## 第一人稱 3D 試玩
+| 範圍 | 位置 |
+| --- | --- |
+| 3D UI、Session 同步、正式回合送出與模型輪詢 | `components/experiments/TrialExperience.tsx` |
+| 共用第一人稱控制 | `components/experiments/first-person.ts` |
+| Babylon 模型、材質、光照、地形與碰撞 | `components/experiments/babylon-driver.ts` |
+| 地形高度與 driver 介面 | `components/experiments/world.ts` |
+| 原版森林主景、樹葉與水池 | `forest-sanctuary.ts`、`sanctuary-layout.ts`、`water-material.ts`，均位於 `components/experiments/` |
+| 生成模型尺寸檢查、調查手記 | 同目錄 `asset-layout.ts`、`InvestigationJournal.tsx` |
+| 共用地圖 | `components/WorldMap.tsx`；合法路線由後端提供，3D 可追蹤／確認旅行，2D 目前沒有傳入旅行 callback |
+| 2D UI／語音與 Phaser 移動／碰撞 | `app/page.tsx`、`components/MinglinGame.tsx` |
+| 共用 API 型別、請求、Session key | `lib/game-api.ts` |
+| 場景音樂與播放 | `lib/scene-music.ts`、`lib/use-scene-music.ts` |
+| 全域／2D、3D 樣式 | `app/globals.css`、`components/experiments/TrialExperience.module.css` |
 
-開啟 `http://localhost:3200/experiments/babylon` 進入 Babylon.js 幽藍遺跡版。`/experiments` 會直接轉到此頁；原本的 Phaser 場景仍在 `/`。
+`public/game/minglin.tmj` 與 `liuchen.tmj` 的 Actors／Walkable 圖層定義 2D 角色點與可走區。泉眼、符石林、烈燚原尚未有各自的 Tiled 地圖。背景構圖變更時需一起校正角色點和可走區。
 
-點擊石板路或目標，角色會沿預設路線前進；點地面可走到該路段，點畫面按鈕可走到下一個任務點。行走時從角色眼睛看出去，腳步帶動視角輕微上下起伏，路線轉彎時鏡頭自動轉向。抵達維達利亞或符石後自動觸發定點觀察，這時才可拖曳環顧四周、點擊符石記錄線索；Esc 結束觀察。WASD／方向鍵不控制這個版本的移動。
+`public/game/scenes/` 保存版本化插畫，`models/` 保存預設 GLB／參考圖／manifest，`materials/` 是地表材質；`public/images/` 是肖像，`public/audio/` 是配樂。動態 GLB 由 FastAPI 下載，不把本機生成檔寫進前端原始碼。
 
-維達利亞使用 [`public/game/vidalia-cutout.png`](public/game/vidalia-cutout.png) 原圖材質，貼在輕微彎曲、會面向鏡頭的表面上；對話時角色會輕微上下晃動。這能保留正面的原圖細節，但仍屬 2.5D 呈現，無法提供完整的角色背面模型。
+故事內容與事件合法性由後端負責：不要在前端另寫分支判定、直接增加物品或硬切場景。兩頁共用 Session 與 API 契約，但語音、手記、世界指令仍有功能差異。重整保留場景／故事，步行座標暫回入口。
 
-3D 版本目前是前端互動原型，NPC 對白與符石線索為固定示範內容，尚未接入後端劇情 API。只在進入此頁時載入 Babylon.js，渲染解析度也設上限。
+## 驗證
+
+從專案根目錄執行：
+
+```bash
+node --experimental-strip-types --test tests/frontend/*.test.ts
+```
+
+需使用支援該旗標的 Node。production build 在本目錄執行 `npm run build`；最新瀏覽器操作證據見 [故事與場景 QA](../docs/qa/story-consequences/README.md)。

@@ -1,51 +1,249 @@
-# RAG NPC Game
+# RAG NPC Game｜夢龍世界探索原型
 
-第一人稱版本已恢復原版森林的圓形祭壇、石板路與水池：開啟 `http://localhost:3200/experiments/babylon`，WASD 或點地面移動、拖曳環視，走近人物／地標按 E；也可點人物自動走近。Tab 的「世界指令」可輸入「生成 6 個符石，變成夜晚並起霧」；場景配置經後端驗證保存，校內 Hunyuan 新 GLB 會逐一載入。操作、混合式美術的限制與交接見 [`docs/DEMO_HANDOFF.md`](docs/DEMO_HANDOFF.md)。
+更新：2026-11-12（Asia/Taipei）。目前可玩的是 **第一人稱探索＋規則式調查分支＋持久化回合＋受限 3D 場景生成**。正式敘事 LLM／RAG、第二幕與五結局尚未完成整合。
 
-**M 開啟旅途地圖**：可查看五個場景預覽、目前位置與合法路線。對話後依「下一步」調查，取得線索後地圖會開放對應地區；遠處追蹤路線先步行靠近人物／地標。舊任務造成的故事節點卡住已修正。正式第二幕尚未接入，完成一條 Demo 調查後可繼續探索另一條路線。
+這份 README 說明目前程式；原始設定見 [世界設計](docs/GENERATIVE_WORLD_DESIGN.md)，操作與交接見 [Demo 交接](docs/DEMO_HANDOFF.md)，歷史進度見 [PROGRESS](docs/PROGRESS.md)。舊進度百分比只代表當時驗收範圍，不代表整個遊戲完成。
 
-**J 開啟調查手記**：不同選擇保留不同的來源與結果，回議會可向維達利亞回報，她會承接實際紀錄。Tab 重生裝飾時，泉眼／中央符石／聖火底座固定保留；新 GLB 尺寸或載入失敗會保留既有模型。兩條分支與真實 GPU 載入的驗收畫面見 [`docs/qa/story-consequences`](docs/qa/story-consequences)。
+## 1. 遊戲情境與目標
 
-生成式 NPC 遊戲的 A／D 整合專案。現階段已串接既有 Next.js＋Phaser 前端、FastAPI 與 SQLite：可以建立持久化 Session、送出文字，並依設定使用後端規則動態或外部 ModelGateway 產生 NPC 台詞與事件提案；玩家 API、NPC 私有生成背景及事件核准流程已分開。
+玩家暫從鳴霖的平衡議會進入遊戲，遇見維達利亞。命脈之泉長久沒有向外延伸，林地與符石出現異象。玩家走近人物交談、到現場調查，根據線索選擇前往烈燚原或流塵谷，再帶著實際結果回報。開場不直接告知玩家所有世界真相。
 
-> 預設的「規則動態」不需要模型，能依玩家輸入、回合、背包、NPC 記憶、承諾與任務產生不同回覆。B 的真實模型／RAG 與外部 STT／TTS 服務仍尚未接入；前端會誠實區分「規則動態」與「AI 動態」。
+目標玩法是維持世界觀、角色核心人格與能力限制，讓反應、事件、任務及通往結局的過程隨玩家選擇發展：**生成器提出可能發生的事，程式判定哪些成立，資料庫保存結果，下一回合承接。** 目前主要調查節點仍預先定義，尚未達到完整自由生成故事的目標。
 
-瀏覽器版語音互動已提供：支援 Web Speech API 時可用麥克風把中文語音轉成可確認的文字，並用瀏覽器 TTS 播放 NPC 最近回覆。這不是外部 STT／TTS 服務；實際可用性取決於瀏覽器、localhost／HTTPS 與麥克風權限，文字輸入永遠保留。
-
-## 相較前次 GitHub `main` 的變更
-
-比較基準：2026-11-11 讀取的 `origin/main`，commit `cf31218`（Demo 動態故事 PR #7）。以下是本分支新增或修正的內容；舊版里程碑紀錄見 [`docs/PROGRESS.md`](docs/PROGRESS.md)。
-
-| 範圍 | 本次變更 |
+| 角色 | 設定方向與目前出場情況 |
 | --- | --- |
-| 角色與對話 | 鳴霖加入安德烈，流塵谷加入門梅司文托；兩人有公開角色 API、肖像、Phaser 場景互動、角色專屬詢問選項和規則動態回覆。選項帶 `story_choice_id`，以同一回合契約送到後端。角色私有設定仍未填完。 |
-| 開場劇情與舊存檔 | 第一階段台詞、線索 ID 和場景圖片 prompt 改為只公開當時可觀察的資訊；符石路徑先給風沙方向，不提早發放正式裂隙地圖。舊 Demo 存檔、舊回合重送及瀏覽器對話紀錄會轉成新版公開用語。 |
-| 場景與旅途地圖 | 流塵谷新增 Tiled 可走區域與 NPC 位置。首頁加入俯視旅途地圖縮圖，可展開查看鳴霖、命脈之泉、符石林、流塵谷、烈燚原；青色光點會依目前場景移動，地圖本身不觸發旅行。 |
-| 音樂與預覽 | 五個遊戲場景各有一首配樂；首頁與 Babylon 試玩頁會隨場景換曲。另有獨立的維塔預覽頁 `/preview/veta`，可切換觀察視角並播放專用配樂。曲目、來源及檔案記錄見 [`docs/AUDIO_ASSETS.md`](docs/AUDIO_ASSETS.md)。 |
-| 3D 與世界指令 | WASD 第一人稱、近距離互動、五場景連續地形、受限世界指令、持久化 Hunyuan asset jobs 與 GLB 即時載入。 |
-| 驗證 | 最新後端 `123 passed`、前端 `11 passed`、Next.js production build 通過；Chrome 實際完成兩條分支回報、重整承接、固定地標保護、新 GLB 載入與下載失敗回復。 |
+| 維達利亞 | 鳴霖精靈領袖與議會調解人，守護泉眼、引導調查並接收回報。2D、3D 均可互動。 |
+| 安德烈 | 鳴霖邊界調查官的公開原型設定；2D 有人物及異象／路線選項，3D 尚未加入獨立互動角色。 |
+| 門梅司文托 | 流塵谷的名字／記憶記錄者，2D、3D 均有出場。深層動機與真相需按條件揭露。 |
+| 維塔、火焰長老及其他勢力 | 已有世界設定或規則草案；維塔另有獨立預覽。尚未形成完整可玩的角色、任務與結局流程。 |
 
-### 目前還缺什麼
+三位已登記 NPC 的初始 `private_profile` 目前都是空的，完整人格、語氣、能力及秘密權限卡尚未匯入。公開職稱與幾句回覆不能代替正式角色設定。
 
-| 優先 | 待完成事項 | 主要分工 |
+<details>
+<summary>作者層世界設定與五種預定結局（含劇透，並非開場玩家已知資訊）</summary>
+
+這是真實存在的封閉空間，由維塔的意識維持，不是醒來便消失的虛幻世界。設定包含精靈不死、人族輪迴、木乃伊復活，以及人與木乃伊透過埋葬／聖火轉化的關係。主角來自外部組織，身分與用途需逐步揭露。世界發生的事，不等於每位 NPC 都知道。
+
+| 預定結局 | 設定結果 |
+| --- | --- |
+| 長眠 | 維塔繼續沉睡，既有規則與輪迴延續。 |
+| 醒來 | 結界破裂，世界仍存在，居民只剩一條命。 |
+| 篡夢 | 長老或外部組織奪走維塔力量。 |
+| 新夢 | 主角協助維塔重新創造，世界持續擴展。 |
+| 塵歸 | 主角抹除自己，入侵停止，世界恢復平靜。 |
+
+五種結局已有設計與 C 的規則模組，尚未接成目前 API 的完整遊戲流程。使用者已確認「主角死亡即遊戲結束」；舊 C 模組仍有死後轉化邏輯，需協調修正後再整合。正式開場、完整知識卡與部分數值門檻仍待確認。
+
+</details>
+
+## 2. 現在怎麼玩
+
+| 入口 | 用途 |
+| --- | --- |
+| <http://localhost:3200/experiments/babylon> | 主要驗收入口：Babylon.js 第一人稱 3D 探索、手記與世界指令。 |
+| <http://localhost:3200> | 沿用朋友的 Phaser 2D 版本，有 NPC 對話、文字／瀏覽器語音輸入及背景切換。 |
+| <http://localhost:3200/preview/veta> | 維塔獨立美術與配樂預覽，未接成主遊戲章節。 |
+| <http://localhost:8300/docs> | FastAPI 實際 API 與 Schema。 |
+
+| 3D 操作 | 功能 |
+| --- | --- |
+| WASD／方向鍵、Shift | 自由步行、奔跑；右下方向按鈕也可移動。 |
+| 點地面／人物／地標 | 走向點選位置；人物與地標在靠近後互動。 |
+| 拖曳／鎖定滑鼠 | 環視；Esc 釋放或關閉面板。 |
+| E | 距離人物／地標 3.6 公尺內開啟對話或調查。 |
+| M／旅途地圖 | 查看五個地點、預覽、目前位置、解鎖狀態與合法路線；遠處追蹤先走近出發點，再確認旅行。 |
+| J／調查紀錄 | 查看有來源的交談記錄與現場調查；回議會可先走近維達利亞再回報。 |
+| Tab／世界指令 | 調整當前場景日夜、天氣、地形及物件數量。這是原型場景編輯功能，尚未設定為主角的世界觀能力。 |
+| 新旅程 | 建立新 Session；原存檔仍保留於資料庫。 |
+
+一般聊天不保證推進調查；需完成當前調查，選後端發出的合法旅行選項。輸入與當前「對話型」故事選項相同的文字，也可走相同驗證流程；現場調查與旅行請點對應選項，以送出正確行動模式。
+
+場景位置、配置、回合、事件、記憶與調查進度由 SQLite 保存，重整或後端重啟可承接。**連續步行座標／朝向尚未保存**，重載會回到目前場景入口。兩個前端共用瀏覽器 Session 識別與後端契約，但功能尚未完全一致：語音在 2D 頁，J 手記與世界指令在 3D 頁。
+
+## 3. 已完成的場景與故事線
+
+### 場景現況
+
+| 地點／ID | 目前 3D 呈現 | 故事用途與限制 |
 | --- | --- | --- |
-| 1 | 把「死亡即遊戲結束」落實為後端結束狀態與前端結束畫面，接入 C 的危險事件；正式 E1／E2／E3、真相揭露條件與結局流程仍待規則整合。現在只有第一階段的防劇透修正與可玩的 Demo 分支。 | C／D／A |
-| 2 | 命脈之泉、符石林、烈燚原仍沿用鳴霖的 Phaser 可走區域；需各自建立 Tiled 地圖、出生點與在場角色，再逐場檢查互動位置。旅途地圖圖片是示意路線，尚未與後端解鎖條件同步，也不能點地點旅行。 | A／D |
-| 3 | 接入 B 的正式 LLM／RAG 端點與知識權限資料，驗收角色語氣、未預寫情境、世界觀一致性及 NPC 私有資訊的揭露時機。目前可直接遊玩的預設模式仍是規則動態；安德烈與門梅司文托的私有設定也是空白。 | B／D |
-| 4 | 圖片 job、輪詢和 fallback 已有，但尚未接正式 ImageGateway provider；若要正式部署，還需獨立 worker、逾時回復與有限重試。 | D／B |
-| 5 | 在目標瀏覽器與手機實機驗收地圖、NPC 點擊、場景音樂與中文語音辨識；目前語音使用瀏覽器能力，尚未串接外部 STT／TTS。Babylon 場景也尚無各地獨立的完整 3D NPC 模型與碰撞地圖。 | A／D／B |
+| 平衡議會 `minglin` | 原版森林配色、圓形祭壇、刻紋、石板路、石柱、水池；手繪樹葉配立體樹幹。 | 維達利亞接見、出發調查與回報。 |
+| 命脈之泉 `minglin_life_spring` | 泉池、反射水面、薄霧、林地與環境 GLB。 | 灰燼／裂響兩種方向；主要泉池固定保留。地點已登記，完整細節仍待確認。 |
+| 符石林 `minglin_rune_grove` | 黃昏林地、中央符石、周圍符石與樹木。 | 灼熱符痕／風沙方向；中央符石固定保留。具體內容標記為暫定。 |
+| 流塵谷 `liuchen_valley` | 沙土、裂谷、沙塵、門梅司文托與環境物件。 | 記名／埋葬調查；不是參考圖中所有建築與生物的完整立體重建。 |
+| 烈燚原 `lieyi_plains` | 岩地、玄武岩材質、動畫聖火、熔流及祭壇。 | 聖火／長老行蹤調查；聖火底座固定保留。具體內容標記為暫定。 |
 
-目前分支適合展示 POC。公開角色設定、場景細節及路線仍有 provisional 部分，正式世界觀與玩法應由團隊確認後再定版。
+五地都有版本化背景與配樂。2D 切換完整插畫，3D 使用可行走地形、天空及物件。3D NPC 仍是肖像 billboard，尚無完整人物背面、骨架與行走動畫。Phaser 只有鳴霖、流塵谷兩份 Tiled 地圖，其餘三地仍沿用鳴霖的可走區域。
 
-## 環境
+### 可玩的調查分支
 
-- Python 3.12
-- Node.js 20.9 以上
-- npm（依 `frontend/package-lock.json` 安裝）
+```mermaid
+flowchart TD
+    A[平衡議會：遇見維達利亞] --> B[命脈之泉]
+    A --> C[符石林]
+    B -->|追查水面的灰燼| D[解鎖烈燚原]
+    C -->|解讀灼熱符痕| D
+    B -->|聆聽泉底裂響| E[解鎖流塵谷]
+    C -->|辨認風沙路徑| E
+    D --> F[觀察聖火輪迴 或 調查長老的行蹤]
+    E --> G[記下被遺忘者的名字 或 追查埋葬與復生]
+    F --> H[返回議會：手記與實際回報]
+    G --> H
+    H --> I[本條 Demo 完成：可探索另一條路線]
+```
 
-## 啟動
+不同選擇會保存不同線索、開放不同路線、顯示不同調查標記。回報時維達利亞只整理實際建立的公開紀錄；私下調查不直接變成她的記憶，需透過回報事件得知。「下一章待續」是目前內容邊界，未連到正式第二幕或五結局。
 
-後端：
+### 哪些部分現在真的會生成
+
+| 部分 | 實際方式 |
+| --- | --- |
+| 主要調查故事 | `demo_story.py` 預先定義分支、條件與回覆，依狀態選擇；不是 LLM 即興創作。 |
+| 一般 NPC 互動 | 預設 `RuleBasedStoryPlanner` 按關鍵字、回合、記憶、承諾與任務組合回覆／提案；可處理觀察任務、承諾、實際持有物品的交付等。 |
+| 外部敘事模型 | 自訂 HTTP／OpenAI 相容 adapter 已有；B 的 URL、模型及正式 RAG 未就緒，執行模式為 `rule_based`。即使設定模型，既有 Demo 選項仍走導演流程，不會自動變成全程自由創作。 |
+| 3D 配置 | 後端由保存的 seed、日夜、天氣、地形與數量組合配置，合法修改後才保存。 |
+| 3D 新幾何 | 校內 GPU 的 Hunyuan3D-2mini turbo 由三種固定參考圖產出樹木／符石／祭壇 GLB，逐件載入；不是任意文字生成完整世界。 |
+| 2D 場景插畫 | 使用四張已生成的地點插畫與既有森林圖。ImageGateway 與工作保存已有，但未接正式即時圖片 provider，不會每回合重新生圖。 |
+
+世界指令如 `生成 6 個符石，變成夜晚並起霧`。上限為 48 棵樹、12 個符石、3 座祭壇；支援白天／黃昏／夜晚、晴朗／薄霧／雨／沙塵、丘陵／沙丘／岩地。超量或不支援的內容不消耗回合；單純日夜／天氣不重生幾何。核心地標保留版本化模型，新 GLB 尺寸或載入失敗時保留既有模型，套用成功才計為已載入。
+
+Hunyuan 目前生成形狀並使用參考圖投影貼圖，尚未載入 Hunyuan Paint，側面、背面與美術品質仍有限。來源、prompts 與版本見 [場景插畫](docs/SCENE_ASSET_PROMPTS.md)、[3D 資產](docs/3D_ASSET_PROMPTS.md)、[場景 manifest](frontend/public/game/scenes/manifest.json)、[模型 manifest](frontend/public/game/models/manifest.json)。
+
+## 4. 整體程式架構
+
+### 資料夾地圖
+
+```text
+rag-npc-game/
+├── backend/                         FastAPI 與權威遊戲邏輯
+│   ├── main.py                      啟動、遷移、服務組裝、CORS
+│   ├── api/                         HTTP：遊戲、角色、能力、健康、3D 工作／下載
+│   ├── orchestration/               回合協調、選項、Demo 導演、世界指令解析
+│   ├── content/                     角色／地點、配置、線索、揭露規則、授權背景查詢
+│   ├── schemas/                     Pydantic：行動、提案、操作、狀態、記憶、玩家投影
+│   ├── generation/                  規則 planner、模型 adapter、2D／3D 工作處理
+│   ├── modules/                     現行 ProposalResolver 與待整合的 C 引擎
+│   ├── rules/                       C 的固定事件、數值、階段與結局規則草案
+│   ├── database/                    SQLAlchemy 表、Session、repository、交易、遷移入口
+│   └── prompts/                     解析／結局模板，未接成現行完整主流程
+├── frontend/                        Next.js、React、Phaser、Babylon.js
+│   ├── app/
+│   │   ├── page.tsx                 /：2D UI、對話、瀏覽器語音與回合送出
+│   │   ├── layout.tsx               共用頁面殼與全域樣式入口
+│   │   ├── globals.css              共用與 2D 介面樣式
+│   │   ├── experiments/page.tsx     /experiments 轉到 Babylon 頁
+│   │   ├── experiments/babylon/     3D 頁面入口
+│   │   └── preview/veta/            維塔預覽、layout 與專用樣式
+│   ├── components/
+│   │   ├── MinglinGame.tsx          Phaser 人物、移動、Tiled、碰撞與互動
+│   │   ├── WorldMap.tsx             2D／3D 共用旅途地圖，顯示後端合法路線
+│   │   └── experiments/             3D UI、控制、渲染、森林主景、水材質、尺寸檢查
+│   ├── lib/                         共用 API 型別／請求、Session key、配樂與播放 hook
+│   └── public/
+│       ├── audio/                   場景音樂與維塔配樂
+│       ├── images/                  NPC 肖像等靜態圖
+│       └── game/                    森林素材、人物去背、旅途地圖、兩份 .tmj
+│           ├── scenes/              四張地點插畫與 manifest
+│           ├── models/              預設 GLB、manifest、references/ 生成參考圖
+│           └── materials/           沙土、玄武岩等材質
+├── infra/hunyuan3d/                  GPU Dockerfile、Compose、生成 API、容器依賴
+├── migrations/                      Alembic env.py、模板與 versions/ 七次遷移
+├── scripts/                         離線更新預設 GLB 與 manifest 的腳本
+├── tests/                           後端契約、交易、規則、adapter、失敗回復測試
+│   └── frontend/                    第一人稱操作與模型尺寸的 Node 測試
+├── docs/                            世界設計、契約、交接、素材來源、部署與進度
+│   └── qa/                          分階段瀏覽器截圖與驗收步驟
+├── data/                            本機 game.db、generated_assets/；不提交執行資料
+├── requirements.txt                 後端依賴；requirements-dev.txt 為測試依賴
+├── alembic.ini                      資料庫遷移設定
+└── .python-version                  Python 版本；前端依賴在 frontend/package*.json
+```
+
+`.venv/`、`frontend/node_modules/`、`frontend/.next/` 與快取是本機環境／建置產物。金鑰放被忽略的本機 `.env`，不放程式或文件；後端目前不自動載入根目錄 `.env`，啟動時需將變數帶入程序。前端設定檔為 `frontend/.env.local`。
+
+### 一個回合從哪裡經過
+
+```mermaid
+flowchart TD
+    UI[2D 或 3D 介面] --> API[api/game.py：start / turn / state / choices]
+    API --> O[GameOrchestrator：去重、版本、選擇路徑]
+    O --> D[Demo 選項：demo_story_director]
+    O --> P[一般互動：規則或外部 StoryPlanner]
+    O --> W[世界指令：world_commands]
+    D --> S[StoryProposal：尚未成立的提案]
+    P --> S
+    W --> S
+    S --> R[ProposalResolver：驗證與計算]
+    R --> DB[commit_turn：同交易保存狀態、事件、對話、記憶、去重結果]
+    DB --> V[PlayerViewState：玩家可見投影]
+    V --> UI
+```
+
+三條提案路徑共用規則與交易邊界。`/start` 建立／恢復 Session；每個新行動有 `action_id`，不確定成功時保留原 ID 重送。相同 ID／內容重播原結果；同 ID 換內容或過期 `expected_state_version` 回傳 409，不重複增加回合或物品。
+
+模型呼叫在提交交易前完成；客觀結果來自核准操作與系統敘事。NPC 發言不能直接增加背包或改寫設定，接真實模型後仍需測試台詞是否聲稱了未核准結果。
+
+**3D 生成是另一條非同步管線：** Tab 指令 → 回合驗證並保存配置 → `/scene-assets` 建立／回用工作 → `SceneAssetCoordinator` → SSH tunnel → GPU Docker `/generate` → GLB 驗證與保存 → 前端輪詢 → Babylon 尺寸檢查後替換裝飾。
+
+工作狀態存在資料庫，GLB 在 `data/generated_assets/`，最多嘗試兩次，重啟可恢復。瀏覽器只向遊戲 FastAPI 取模型，不直接連 GPU。GPU 只在遠端 loopback 發布埠；新幾何生成需要校內 VPN 與 SSH tunnel，未連 GPU 仍可用預設模型探索。
+
+### 要改哪種邏輯，就看哪個檔案
+
+下列位置均相對於專案根目錄。
+
+| 要改的事情 | 邏輯位置與責任 |
+| --- | --- |
+| Demo 分支、條件、台詞與線索 | `backend/content/demo_story.py` 定義內容；`backend/orchestration/demo_story_director.py` 轉提案，不在前端按鈕裡改狀態。 |
+| 選項、NPC 詢問與下一步 | `backend/orchestration/player_choices.py`；`backend/schemas/player_view.py` 將公開路線投影給地圖。 |
+| 地名、ID、合法出口、地圖座標 | `backend/content/scenes.py` 是單一 Scene Registry。 |
+| 物件分布、出生／互動點、核心地標 | `backend/content/world_scenes.py`；可調欄位／上限在 `backend/schemas/world_scene.py`。 |
+| 世界指令句型 | `backend/orchestration/world_commands.py` 只提出受限配置操作。 |
+| 3D UI、送回合、工作輪詢 | `frontend/components/experiments/TrialExperience.tsx`；按鍵／點擊步行在同目錄 `first-person.ts`。 |
+| 地形、光照、模型載入、碰撞 | `frontend/components/experiments/babylon-driver.ts`；`world.ts` 共用高度與 driver 契約，`asset-layout.ts` 檢查模型尺寸。 |
+| 原版森林祭壇、路、水池、樹葉 | `frontend/components/experiments/forest-sanctuary.ts`；`sanctuary-layout.ts` 共用水池範圍，`water-material.ts` 共用水材質；樣式在 `TrialExperience.module.css`。 |
+| 手記、回報、防劇透 | `backend/content/story_findings.py` 推導紀錄，`reveal_policy.py` 控制公開用語；前端 `InvestigationJournal.tsx` 呈現。 |
+| 角色與知識權限 | `backend/content/characters.py`、`backend/schemas/content.py`、`backend/content/context_repository.py`；依 NPC、Session、解鎖及回合過濾。 |
+| B 的模型、背景組合、逾時重試 | `backend/generation/config.py` 組裝，`gateway.py` 定義契約，`planner.py` 整理授權背景；`http_gateway.py`／`openai_compatible_gateway.py` 呼叫服務。 |
+| 合法事件、所有權、承諾、任務、換場 | `backend/modules/proposal_resolver.py`；操作格式在 `backend/schemas/story.py`。 |
+| 回合協調與執行分流 | `backend/orchestration/game_orchestrator.py`，目前解析仍是簡化版本，尚未完整接 C 的 InputEngine。 |
+| Session、交易、事件、對話、目擊記憶、去重 | `backend/database/repository.py`；資料表在 `models.py`，連線在 `session.py`。 |
+| C 的數值、危險事件、換幕與結局 | `backend/rules/`，以及 `backend/modules/input_engine.py`、`action_validator.py`、`state_manager.py`、`ending_engine.py`。已有模組，**現行 GameOrchestrator 未呼叫這套完整流程**。 |
+| 3D 工作與 GPU 服務 | `backend/generation/scene_assets.py` 處理 job／GLB；`infra/hunyuan3d/server.py` 執行 Hunyuan；`scripts/generate_scene_models.py` 更新離線資產。 |
+| 2D 圖片工作 | `backend/generation/image_gateway.py` 定義介面，`scene_image_jobs.py` 處理保存、工作與 fallback；尚無正式 provider 注入。 |
+| 2D 人物、移動、語音／對話 | `frontend/components/MinglinGame.tsx`、`frontend/app/page.tsx`；`.tmj` 的 Actors／Walkable 圖層定義角色點與可走區域。 |
+| 共用 API／Session、配樂 | `frontend/lib/game-api.ts`；`scene-music.ts`、`use-scene-music.ts`。 |
+
+### 資料實際保存在哪裡
+
+| 類別 | 程式／資料表 |
+| --- | --- |
+| 不可由普通生成改寫的設定 | `world_canon`、`character_definitions`。已有格式與表，不代表完整原始設定已匯入；初始公開角色在 `content/characters.py`。 |
+| 可變世界狀態 | `game_sessions.state_json` 保存 `GameState`：背包、所在場景、故事進度、場景配置；版本供併發檢查。 |
+| 事件、對話、請求紀錄 | `game_events`、`dialogue_records`；`action_records` 保存摘要、結果與私有提案核准／拒絕稽核。 |
+| NPC 知識與記憶 | `knowledge_records`、`memory_records` 含角色、來源與時間；目擊或回報後建立對應記憶。 |
+| 目標、承諾、任務 | `npc_goals`、`commitments`、`quests` 有來源、期限與狀態；已有資料與背景查詢，尚非完整自主世界模擬。 |
+| 圖片／模型工作 | `scene_image_jobs`、`scene_asset_jobs`；GLB 檔另存本機執行目錄。 |
+
+玩家 API 的 `PlayerViewState` 不含 NPC 私人記憶、關係數值、隱藏旗標或作者真相。前端不能直接讀寫資料表或任意 patch `GameState`。世界設計 Markdown 也尚未自動轉成授權 RAG 資料。
+
+## 5. 尚缺工作與交接責任
+
+| 優先 | 尚缺工作 | 負責方／需要提供的資料 |
+| --- | --- | --- |
+| 1 | 真正敘事生成與 RAG：匯入來源、按權限檢索，驗證人格及跨回合一致性；讓生成事件接續故事，而非只換聊天台詞。 | B／D：URL、模型名稱、請求回應範例、RAG 格式及授權條件；見 [B 交接](docs/B_AI_RAG_HANDOFF.md)、[模型契約](docs/MODEL_GATEWAY_CONTRACT.md)。 |
+| 2 | 正式第二／三幕、真相 A／B／C、危險事件、死亡即結束與五結局；協調數值門檻及 Demo 銜接。 | C／D／A：事件／效果契約、觸發與揭露條件，先修正舊死後轉化邏輯。 |
+| 3 | 完整人物與世界資料：人格、語氣、能力、初始知識、秘密、揭露時機、各地角色與配置。 | 作者／B／C：補角色卡與來源；確認符石林、烈燚原暫定內容。 |
+| 4 | 正式 NPC GLB／動畫、獨立建築與碰撞、安德烈 3D 出場、另外三張 Phaser 地圖及 2D／3D 功能對齊。 | A／D／美術：模型、材質、場景配置及互動點；目前三類 Hunyuan 物件不足以代表完整場景美術。 |
+| 5 | 即時 2D 插畫 provider、預算與生成策略，目前只有介面、工作保存、輪詢與 fallback。 | D／B：選定服務或校內部署及可驗收的介面。 |
+| 6 | NPC 自主行動循環、任務完整生命週期、連續座標存檔；多人部署的外部 worker／工作租約。 | D／B／C：定義觸發與測試；現行 3D worker 以單一 FastAPI 程序為前提。 |
+| 7 | 3D 語音 UI、外部 STT／TTS、目標瀏覽器／投影／手機實機驗收。 | A／D／B；目前 2D 使用瀏覽器語音能力，文字輸入持續保留。 |
+
+目前沒有把整份作者秘密塞進每位 NPC 的 prompt，也不會因為寫好設定 Markdown 就自動完成章節。下一個生成驗收單位應是：一個能跨數回合承接、通過規則及知識邊界、可回放的新事件。
+
+## 6. 本機啟動與設定
+
+需要 Python 3.12、Node.js 20.9+。以下依賴裝在本機專案環境；GPU 主機依賴一律放 Docker，不直接在主機執行 apt／pip／npm 安裝。
+
+後端（專案根目錄）：
 
 ```bash
 python3.12 -m venv .venv
@@ -53,31 +251,7 @@ python3.12 -m venv .venv
 ./.venv/bin/uvicorn backend.main:app --reload --port 8300
 ```
 
-後端啟動時會自動執行 Alembic migration，預設資料庫為 `data/game.db`。部署或手動升級也可執行：
-
-```bash
-./.venv/bin/alembic upgrade head
-```
-
-可用 `DATABASE_URL` 改變資料庫位置，例如 `sqlite+aiosqlite:////absolute/path/game.db`。
-
-外部模型是選用且預設關閉。後端同時支援 B 的自訂 HTTP 契約與 OpenAI 相容 Chat Completions（可接雲端 OpenAI 或校內 vLLM）。例如在啟動後端前設定：
-
-```bash
-export MODEL_GATEWAY_PROVIDER=openai_compatible
-export MODEL_GATEWAY_URL=https://api.openai.com/v1
-export MODEL_GATEWAY_MODEL='<由團隊選定的模型名稱>'
-export MODEL_GATEWAY_API_KEY='<本機金鑰>'
-./.venv/bin/uvicorn backend.main:app --reload --port 8300
-```
-
-程式不會替團隊選定模型，也不會自動讀取或提交本機 `.env`。未設定 URL 時使用可直接遊玩的「規則動態」；完整格式、JSON schema fallback 與 B 需確認的項目見 [`docs/MODEL_GATEWAY_CONTRACT.md`](docs/MODEL_GATEWAY_CONTRACT.md)。
-
-規則動態目前能處理招呼、場景觀察、任務詢問、明確承諾、物品交付、先前對話回想與場景移動。任務、承諾、物品移轉及換場仍需通過後端白名單驗證，並與完整回合同一交易保存。它是可驗收的程序式故事系統，不宣稱具備 LLM 的自由創作能力。
-
-對話介面會顯示由後端依 Session 產生的主線選項，以及安德烈、門梅司文托的角色專屬詢問選項。點選換場選項會提交含 `destination_scene_id` 的一般 `PlayerAction`，沿用相同的去重、版本、規則驗證與資料庫交易，不是只在前端切換假畫面。
-
-前端：
+前端（另一個終端）：
 
 ```bash
 cd frontend
@@ -85,65 +259,77 @@ npm ci
 npm run dev
 ```
 
-瀏覽器網址：
+production 展示：`npm run build` 後執行 `npm run start`，仍在 3200；不要同時啟動 dev 與 start 占同一埠。前端預設連 8300；要改位置，將 `frontend/.env.example` 複製為 `.env.local`，設定 `NEXT_PUBLIC_API_URL`。
 
-- Phaser 2D 遊戲：http://localhost:3200
-- Babylon.js 3D 原型：http://localhost:3200/experiments/babylon
-- 維塔獨立預覽：http://localhost:3200/preview/veta
-- FastAPI 文件：http://localhost:8300/docs
-- 健康檢查：http://localhost:8300/health
+後端啟動會執行 Alembic 遷移，預設 SQLite 為 `data/game.db`；可用 `DATABASE_URL` 改位置。手動遷移：`./.venv/bin/alembic upgrade head`。不要提交本機資料庫。
 
-前端預設呼叫 `http://localhost:8300`。需要改用其他後端時，將 `frontend/.env.example` 複製為 `.env.local` 後修改 `NEXT_PUBLIC_API_URL`。
+### 啟用已部署的校內 Hunyuan
 
-## 目前 API
-
-- `GET /api/characters/{npc_id}`：玩家可見的公開角色資料
-- `GET /api/capabilities`：目前使用規則動態或外部模型，以及已開放的操作類型
-- `POST /api/game/start`：建立或恢復持久化 Session
-- `POST /api/game/turn`：提交 `action_id`、訊息與預期狀態版本
-- `GET /api/game/{session_id}/state`：取得玩家可見狀態
-- `GET /api/game/{session_id}/choices`：取得依目前公開狀態產生的可點選行動；可用 `npc_id=andre` 或 `npc_id=menmesvento` 取得角色詢問選項
-- `GET /api/game/{session_id}/quests`：取得玩家可見且尚未結束的動態任務
-- `POST /api/game/{session_id}/scene-image`：依已提交的公開狀態建立／回用圖片工作
-- `GET /api/game/{session_id}/scene-image/{job_id}`：取得玩家安全的圖片工作狀態
-
-同一個 `action_id`、同一內容重送會回傳原結果；同 ID 換成不同內容或提交過期的 `expected_state_version` 會得到 HTTP 409。Session、狀態、對話、核准事件與完整回應會以單一交易保存，後端重啟後仍可接續。
-
-玩家 API 只回傳 `PlayerViewState`，不包含角色私有設定、NPC 關係數值、未解鎖知識或私人記憶。後端已建立 WorldCanon、角色設定、KnowledgeRecord 與 MemoryRecord 結構；NPC 生成背景會依 NPC、Session、解鎖狀態和可用回合過濾。這些結構已能送入 ModelGateway，但尚未用 B 的真實模型／RAG 服務驗收。
-
-未受信任的 `StoryProposal` 會先通過固定操作白名單。`transfer_item` 會確認行動者、接收者及實際持有權；`change_scene` 會確認目的地已登記且與目前場景相連。不存在的物品、角色、場景或不可直達的路線會整件拒絕；核准／拒絕紀錄只存後端，玩家只會看見已成立且可公開的事件與最終敘事。
-
-目前白名單也支援 `establish_commitment` 與 `offer_quest`。承諾、任務、玩家發言記憶與目擊事件會和回合同一交易保存，下一回合放入相關 NPC 的授權 context。生成任務只能先成為待接受提議，不能由模型自行標記為已接受或完成。
-
-## 畫面與圖片素材
-
-首頁、Babylon 試玩頁會依五個場景切換循環背景音樂，玩家可由右上角播放或關閉；維塔預覽頁另有配樂。音樂來源、授權與檔案雜湊記錄於 [`docs/AUDIO_ASSETS.md`](docs/AUDIO_ASSETS.md)。首頁左上角的旅途地圖使用 [`world-route-map-v1.png`](frontend/public/game/world-route-map-v1.png)，可展開查看地名，青色光點依目前場景更新；圖片上的道路是美術示意，不取代後端旅行規則。
-
-第一版採用「建置期生成、遊戲期只引用版本化資產」：命脈之泉、符石林、流塵谷與烈燚原由 OpenAI 內建圖片生成工具製作，工具沒有回傳底層模型名稱，因此不在文件中猜測型號。檔案、尺寸、SHA-256、提示摘要與 provisional 狀態記錄於 [`frontend/public/game/scenes/manifest.json`](frontend/public/game/scenes/manifest.json)，完整提示在 [`docs/SCENE_ASSET_PROMPTS.md`](docs/SCENE_ASSET_PROMPTS.md)。每回合不會重新生圖，也不會讓文字模型覆寫圖片。
-
-目前已加入 provider-neutral `ImageGateway`、可持久化 scene image jobs、fingerprint 去重、前端 polling 與失敗 fallback。部署端尚未注入正式圖片 provider，因此介面會標示「版本化場景」；圖片失敗不會回滾已成立的文字回合。正式生圖 adapter、API key、成本上限與獨立 worker 仍待團隊選定。
-
-後端的單一 Scene Registry 位於 `backend/content/scenes.py`，提供玩家可見名稱與合法出口；`backend/content/world_scenes.py` 從保存的設定組合 3D 空間配置。Phaser 主頁沿用生成插畫；Babylon 使用連續地形、天空、天氣與 Hunyuan GLB，玩家可自行移動探索。`current_scene_id`、場景配置、成立事件、對話與版本在同一交易保存，重新整理或重啟後仍可承接。
-
-符石林與烈燚原的具體內容仍標記為暫定。Demo Story Director 可依已核准線索解鎖流塵谷／烈燚原，但這是週四展示用 fallback，並非一般自由旅行出口，也尚未等同 C 的正式危險事件或完整世界路線。仍須由 C 確認正式事件 ID、入口、出口及 E1／E2／E3 對應後才可升格為正式設定。各地點的完整在場 NPC、獨立 GLB 與碰撞配置也仍待提供。若未來需要即時圖片生成，應另建有預算、快取、審核與失敗回復的 ImageGateway，不和文字回合交易綁死。
-
-校內 Hunyuan3D gateway、持久化 3D asset job 與 Babylon loader 已接通。模型有參考圖投影貼圖與平滑法線；單工、有限重試、GLB 大小／面數與外部資源檢查均保留。遊戲後端用 `HUNYUAN3D_URL=http://127.0.0.1:8081` 經 SSH tunnel 呼叫，瀏覽器只連 FastAPI。現階段支援樹木、符石、祭壇與五個已登記地點的空間重建；正式角色模型與任意文字生成整個世界仍待後續。部署與量測見 [`docs/HUNYUAN3D_GPU_SETUP.md`](docs/HUNYUAN3D_GPU_SETUP.md)。
-
-## 驗證
-
-後端契約測試：
+連校內 VPN，使用本機已設定的 SSH alias 開 tunnel：
 
 ```bash
-./.venv/bin/pip install -r requirements-dev.txt
-PYTHONPATH=. ./.venv/bin/pytest -q
+ssh -N -L 127.0.0.1:8081:127.0.0.1:8081 nccu-gpu
+curl http://127.0.0.1:8081/health
 ```
 
-前端 production build：
+health 為 `ready` 後，後端改用：
 
 ```bash
+HUNYUAN3D_URL=http://127.0.0.1:8081 ./.venv/bin/uvicorn backend.main:app --port 8300
+```
+
+SSH alias 與存取權需各自設定，倉庫不保存帳密或私鑰。部署見 [GPU 設定](docs/HUNYUAN3D_GPU_SETUP.md)。GPU 未就緒可省略 `HUNYUAN3D_URL`，用預設 GLB 探索。
+
+### 接 B 的敘事模型
+
+目前尚無正式端點，以下只表示設定介面，值由 B 提供，不代表已接通：
+
+```bash
+export MODEL_GATEWAY_PROVIDER=openai_compatible
+export MODEL_GATEWAY_URL='<B 的 OpenAI 相容服務基底 URL>'
+export MODEL_GATEWAY_MODEL='<B 提供的模型名稱>'
+# 若需要金鑰，以本機安全方式設定 MODEL_GATEWAY_API_KEY，勿提交。
+./.venv/bin/uvicorn backend.main:app --reload --port 8300
+```
+
+也支援 `contract_http` 自訂契約；URL 未設定採規則 planner，錯誤端點不會當成生成成功。預設呼叫逾時 15 秒、最多兩次嘗試；見 [MODEL_GATEWAY_CONTRACT](docs/MODEL_GATEWAY_CONTRACT.md)。
+
+## 7. API 與驗收
+
+| API | 用途 |
+| --- | --- |
+| `GET /health`、`GET /api/capabilities` | 健康與生成模式；RAG／外部語音 pending 不代表 2D 瀏覽器語音不存在。 |
+| `GET /api/characters/{npc_id}` | 已登記角色公開資料。 |
+| `POST /api/game/start` | 建立／恢復 Session。 |
+| `POST /api/game/turn` | 提交 action_id、預期版本與行動模式。 |
+| `GET /api/game/{session_id}/state` | 公開狀態、場景、手記、地圖及下一步。 |
+| `GET /api/game/{session_id}/choices` | 情境選項；npc_id 可為 vidalia／andre／menmesvento。 |
+| `GET /api/game/{session_id}/quests` | 玩家可見的未結束任務。 |
+| `POST /api/game/{session_id}/scene-image`、`GET .../scene-image/{job_id}` | 2D 圖片工作；未設定 provider 使用版本化場景。 |
+| `POST /api/game/{session_id}/scene-assets`、`GET .../scene-assets/{job_id}` | 3D 工作建立、輪詢；POST 要帶 expected_state_version。 |
+| `GET /api/game/{session_id}/scene-assets/{job_id}/model` | 取得該 Session 成功工作的 GLB。 |
+
+最近一次功能驗收（2026-11-12）：**123 個後端測試、11 個前端測試、Next.js production build 通過**。Chrome 實走兩條分支與不同回報、重整承接、地標保護、新 Hunyuan GLB、下載失敗保留場景及恢復。這不替代尚未接入的正式 LLM、結局或完整美術驗收。
+
+```bash
+# 專案根目錄：後端與前端邏輯測試
+./.venv/bin/pip install -r requirements-dev.txt
+PYTHONPATH=. ./.venv/bin/pytest -q
+node --experimental-strip-types --test tests/frontend/*.test.ts
+
+# 前端 production build
 cd frontend
-npm ci
 npm run build
 ```
 
-整合進度與待協調項目請見 [`docs/PROGRESS.md`](docs/PROGRESS.md)。
+Node 控制測試需使用支援 `--experimental-strip-types` 的版本；Next.js 最低 Node 版本不等於支援此測試旗標。
+
+| 文件／證據 | 內容 |
+| --- | --- |
+| [最新故事與生成場景 QA](docs/qa/story-consequences/README.md) | 火焰／風沙手記、回報、固定泉眼、新 GLB 與失敗回復。 |
+| [地圖 QA](docs/qa/world-map/README.md)、[森林 QA](docs/qa/forest-sanctuary/README.md) | 路線、承接、原版主景與操作。 |
+| [音樂資產](docs/AUDIO_ASSETS.md) | 曲目、來源、授權、雜湊。 |
+| [B AI／RAG 交接](docs/B_AI_RAG_HANDOFF.md) | 模型、資料、檢索與驗收交付。 |
+| [A／D Demo 交接](docs/DEMO_HANDOFF.md) | 展示、環境、限制、下一位接手事項。 |
+
+A 負責前端、遊戲畫面與語音；B 負責模型與 RAG；C 負責行為解析、規則與結局；D 負責 API、Session、資料庫、Orchestrator、記憶及整合。共用 Schema 由 D 整合；涉及設定或 C 的規則先協調，不在前端另寫一套權威邏輯。
