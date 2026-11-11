@@ -17,7 +17,7 @@ import {
   TransformNode,
 } from "@babylonjs/core";
 import type { SceneVisualProfile } from "../../lib/game-api";
-import { EYE_HEIGHT, NPC, pillars, RELIC, trees, type Pick, type TrialDriver } from "./world";
+import { EYE_HEIGHT, NPC, pillars, trees, type Pick, type TrialDriver } from "./world";
 
 export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   const engine = new Engine(canvas, true, { powerPreference: "high-performance", stencil: false });
@@ -225,16 +225,6 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   portraitLight.intensity = 0.58;
   portraitLight.range = 5.5;
 
-  const pedestal = at(MeshBuilder.CreateCylinder("relic pedestal", { diameterTop: 0.9, diameterBottom: 1.2, height: 1.05, tessellation: 8 }, scene), RELIC.x, 0.52, RELIC.z, stoneDark, true);
-  pedestal.rotation.y = 0.25;
-  const relicMaterial = material("teal relic crystal", "#75b4a7", "#1c6962");
-  const relic = at(MeshBuilder.CreatePolyhedron("floating relic", { type: 1, size: 0.43 }, scene), RELIC.x, 1.43, RELIC.z, relicMaterial, true);
-  relic.rotation.z = 0.24;
-  const relicLight = new PointLight("relic glow", new Vector3(RELIC.x, 1.4, RELIC.z), scene);
-  relicLight.diffuse = new Color3(0.24, 0.72, 0.63);
-  relicLight.intensity = 0.8;
-  relicLight.range = 4;
-
   function propGroup(
     meshName: string,
   ): SceneVisualProfile["prop_groups"][number] | null {
@@ -282,9 +272,6 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     npcTalking = false;
     npcRoot.setEnabled(profile.show_vidalia);
     portraitLight.setEnabled(profile.show_vidalia);
-    pedestal.setEnabled(profile.show_relic);
-    relic.setEnabled(profile.show_relic);
-    relicLight.setEnabled(profile.show_relic);
   }
 
   const started = performance.now();
@@ -339,10 +326,9 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     pick(clientX, clientY): Pick {
       const bounds = canvas.getBoundingClientRect();
       if (!bounds.width || !bounds.height) return null;
-      const hit = scene.pick(clientX - bounds.left, clientY - bounds.top, (mesh) => mesh === ground || npcMeshes.has(mesh as Mesh) || mesh === relic || mesh === pedestal, false, camera);
+      const hit = scene.pick(clientX - bounds.left, clientY - bounds.top, (mesh) => mesh === ground || npcMeshes.has(mesh as Mesh), false, camera);
       if (!hit?.hit || !hit.pickedMesh) return null;
       if (npcMeshes.has(hit.pickedMesh as Mesh)) return { kind: "npc" };
-      if (hit.pickedMesh === relic || hit.pickedMesh === pedestal) return { kind: "relic" };
       if (hit.pickedMesh === ground && hit.pickedPoint) return { kind: "ground", x: hit.pickedPoint.x, z: hit.pickedPoint.z };
       return null;
     },
@@ -350,8 +336,6 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       const time = (performance.now() - started) / 1000;
       npcRoot.position.y = (npcTalking ? 0.055 : 0.018) * Math.sin(time * (npcTalking ? 3.1 : 1.3));
       npcRoot.rotation.z = (npcTalking ? 0.008 : 0.003) * Math.sin(time * (npcTalking ? 1.8 : 0.8));
-      relic.rotation.y = time * 0.75;
-      relic.position.y = 1.43 + Math.sin(time * 1.7) * 0.08;
       scene.render();
     },
     resize() {

@@ -25,7 +25,6 @@ export type SceneVisualProfile = {
   prop_groups: Array<"forest" | "path" | "council" | "pillars" | "spring">;
   show_ground: boolean;
   show_vidalia: boolean;
-  show_relic: boolean;
 };
 
 export const DEFAULT_SCENE_VISUAL_PROFILE: SceneVisualProfile = {
@@ -52,10 +51,9 @@ export const DEFAULT_SCENE_VISUAL_PROFILE: SceneVisualProfile = {
   rune_emissive_color: "#183d39",
   liquid_color: "#2d9297",
   liquid_emissive_color: "#1e626c",
-  prop_groups: ["forest", "path", "council", "pillars", "spring"],
-  show_ground: true,
+  prop_groups: [],
+  show_ground: false,
   show_vidalia: true,
-  show_relic: true,
 };
 
 export type PlayerScene = {

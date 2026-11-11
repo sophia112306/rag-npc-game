@@ -3,8 +3,6 @@ import type { SceneVisualProfile } from "../../lib/game-api";
 export const START = { x: 0, z: 8 };
 export const NPC = { x: 0, z: -8 };
 export const NPC_STOP = { x: 0, z: -3.8 };
-export const RELIC = { x: 2.8, z: -5.8 };
-export const RELIC_STOP = { x: 2.0, z: -3.6 };
 export const EYE_HEIGHT = 1.65;
 
 export const trees = [
@@ -16,7 +14,7 @@ export const pillars = [
   [-4.3, -7.2, 2.9], [4.3, -7.2, 2.9], [-5.1, -3.8, 1.8], [5.1, -3.8, 1.8],
 ] as const;
 
-export type Pick = { kind: "ground"; x: number; z: number } | { kind: "npc" | "relic" } | null;
+export type Pick = { kind: "ground"; x: number; z: number } | { kind: "npc" } | null;
 export type TrialDriver = {
   setView: (x: number, z: number, yaw: number, pitch: number, eyeBob?: number) => void;
   setBackdrop?: (url: string) => Promise<void>;

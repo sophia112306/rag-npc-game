@@ -38,8 +38,8 @@ def test_scene_registry_references_existing_assets_and_destinations() -> None:
     assert SCENES["liuchen_valley"].visual_profile.use_ground_texture is False
     assert SCENES["lieyi_plains"].visual_profile.liquid_color == "#ff681c"
     assert SCENES["minglin"].visual_profile.show_vidalia is True
-    assert SCENES["minglin"].visual_profile.show_relic is True
-    assert SCENES["minglin"].visual_profile.show_ground is True
+    assert SCENES["minglin"].visual_profile.show_ground is False
+    assert SCENES["minglin"].visual_profile.prop_groups == ()
     for story_scene_id in (
         "minglin_life_spring",
         "minglin_rune_grove",
@@ -48,7 +48,6 @@ def test_scene_registry_references_existing_assets_and_destinations() -> None:
     ):
         profile = SCENES[story_scene_id].visual_profile
         assert profile.show_vidalia is False
-        assert profile.show_relic is False
         assert profile.show_ground is False
 
     assert SCENES["liuchen_valley"].visual_profile.prop_groups == ()

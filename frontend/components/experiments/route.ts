@@ -1,4 +1,4 @@
-import { NPC_STOP, RELIC_STOP, START } from "./world";
+import { NPC_STOP, START } from "./world";
 
 export type RoutePoint = { x: number; z: number };
 export type WalkRoute = { points: RoutePoint[]; distances: number[]; length: number };
@@ -6,11 +6,6 @@ export type WalkRoute = { points: RoutePoint[]; distances: number[]; length: num
 const toCouncil = [
   START, { x: 0.1, z: 5.2 }, { x: -0.12, z: 2.2 },
   { x: 0.08, z: -1.4 }, NPC_STOP,
-];
-
-const toRelic = [
-  NPC_STOP, { x: 0.13, z: -4.35 }, { x: 0.46, z: -5.08 },
-  { x: 0.85, z: -5.05 }, { x: 1.5, z: -4.55 }, RELIC_STOP,
 ];
 
 function smoothPoint(a: RoutePoint, b: RoutePoint, c: RoutePoint, d: RoutePoint, t: number): RoutePoint {
@@ -41,7 +36,6 @@ function makeRoute(control: RoutePoint[]): WalkRoute {
 }
 
 export const COUNCIL_ROUTE = makeRoute(toCouncil);
-export const RELIC_ROUTE = makeRoute(toRelic);
 
 export function routePoint(route: WalkRoute, distance: number): RoutePoint {
   const clamped = Math.max(0, Math.min(route.length, distance));

@@ -36,7 +36,6 @@ class SceneVisualProfile(BaseModel):
     prop_groups: tuple[Literal["forest", "path", "council", "pillars", "spring"], ...]
     show_ground: bool
     show_vidalia: bool
-    show_relic: bool
 
 
 class SceneDefinition(BaseModel):
@@ -89,10 +88,9 @@ SCENES: dict[str, SceneDefinition] = {
             rune_emissive_color="#183d39",
             liquid_color="#2d9297",
             liquid_emissive_color="#1e626c",
-            prop_groups=("forest", "path", "council", "pillars", "spring"),
-            show_ground=True,
+            prop_groups=(),
+            show_ground=False,
             show_vidalia=True,
-            show_relic=True,
         ),
         canon_status="confirmed",
         allowed_destinations=("minglin_life_spring", "minglin_rune_grove"),
@@ -132,7 +130,6 @@ SCENES: dict[str, SceneDefinition] = {
             prop_groups=("forest", "spring"),
             show_ground=False,
             show_vidalia=False,
-            show_relic=False,
         ),
         canon_status="confirmed",
         allowed_destinations=("minglin",),
@@ -172,7 +169,6 @@ SCENES: dict[str, SceneDefinition] = {
             prop_groups=("forest", "pillars"),
             show_ground=False,
             show_vidalia=False,
-            show_relic=False,
         ),
         canon_status="provisional",
         allowed_destinations=("minglin",),
@@ -212,7 +208,6 @@ SCENES: dict[str, SceneDefinition] = {
             prop_groups=(),
             show_ground=False,
             show_vidalia=False,
-            show_relic=False,
         ),
         canon_status="confirmed",
         allowed_destinations=(),
@@ -252,7 +247,6 @@ SCENES: dict[str, SceneDefinition] = {
             prop_groups=(),
             show_ground=False,
             show_vidalia=False,
-            show_relic=False,
         ),
         canon_status="provisional",
         allowed_destinations=(),
