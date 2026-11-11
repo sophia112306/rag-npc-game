@@ -8,6 +8,7 @@ from backend.content.demo_story import (
     find_demo_story_choice_definition,
 )
 from backend.content.scenes import can_travel, get_scene
+from backend.content.story_findings import finding_report, public_findings
 from backend.schemas.game_state import GameState
 from backend.schemas.story import (
     AdvanceStoryOperation,
@@ -338,6 +339,11 @@ class ProposalResolver:
             "revealed_clue_ids": list(choice.reveal_clue_ids),
             "unlocked_scene_ids": list(choice.unlock_scene_ids),
         }
+        if choice.choice_id == "review_demo_findings":
+            if choice.target_npc_id not in event.witness_ids:
+                raise ProposalRuleViolation("report_recipient_missing", "Reporting requires the recipient to witness it.")
+            effect["reported_clue_ids"] = [finding.clue_id for finding in public_findings(state)]
+            return f"{state.player.name}向維達利亞回報了已記錄的線索：\n{finding_report(state)}", effect
         return (
             f"故事進度已推進至「{choice.next_chapter_title}」。",
             effect,

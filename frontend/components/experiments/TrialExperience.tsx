@@ -11,11 +11,13 @@ import {
   type GameTurnResponse,
   type PlayerChoice,
   type SceneAssetJob,
+  type Capabilities,
 } from "../../lib/game-api";
 import { getSceneMusic } from "../../lib/scene-music";
 import { useSceneMusic } from "../../lib/use-scene-music";
 import { createFirstPerson, type MoveDirection } from "./first-person";
 import WorldMap from "../WorldMap";
+import InvestigationJournal from "./InvestigationJournal";
 import type { TrialDriver } from "./world";
 import styles from "./TrialExperience.module.css";
 
@@ -55,6 +57,8 @@ export default function TrialExperience() {
   const [panel, setPanel] = useState(false);
   const [journal, setJournal] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [trackedDestination, setTrackedDestination] = useState<string | null>(null);
   const [milestone, setMilestone] = useState("");
   const [command, setCommand] = useState("");
@@ -69,11 +73,12 @@ export default function TrialExperience() {
   const scene = state?.current_scene;
   const world = state?.world_scene;
   const layoutKey = world
-    ? `${state?.session_id}:${world.scene_id}:${world.config.revision}:${world.config.seed}`
+    ? `${state?.session_id}:${world.scene_id}:${world.config.revision}:${world.config.seed}:${world.discovery?.clue_id ?? ""}`
     : "";
   const track = getSceneMusic(scene?.scene_id ?? "minglin");
   const music = useSceneMusic(track.src, panel ? 0.1 : 0.18);
   const near = distance <= 3.6;
+  const findings = state?.story_progress.findings ?? [];
 
   function applyState(next: GameStateSummary) {
     const previous = stateRef.current;
@@ -110,6 +115,7 @@ export default function TrialExperience() {
     void sync(id).catch((cause) =>
       setError(cause instanceof Error ? cause.message : "無法連線遊戲服務"),
     );
+    void requestJson<Capabilities>("/api/capabilities").then(setCapabilities).catch(()=>{});
   }, []);
 
   interactionRef.current = () => {
@@ -132,7 +138,12 @@ export default function TrialExperience() {
 
   function showMap(open: boolean) {
     setWorldMapOpen(open);
-    if (open) { setPanel(false); setJournal(false); }
+    if (open) { setPanel(false); setJournal(false); setLogOpen(false); }
+  }
+
+  function showLog(open:boolean) {
+    setLogOpen(open);
+    if(open){setPanel(false);setJournal(false);setWorldMapOpen(false);}
   }
 
   useEffect(() => {
@@ -204,7 +215,7 @@ export default function TrialExperience() {
   }, []);
 
   useEffect(() => {
-    const paused = panel || journal || worldMapOpen || !sceneReady || !state;
+    const paused = panel || journal || worldMapOpen || logOpen || !sceneReady || !state;
     controlsRef.current?.pause(paused);
     if (!paused && pendingMapWalk.current && stateRef.current) {
       pendingMapWalk.current = false;
@@ -216,16 +227,22 @@ export default function TrialExperience() {
         setPanel(false);
         setJournal(false);
         setWorldMapOpen(false);
+        setLogOpen(false);
       } else if (event.code === "KeyM" && !event.repeat &&
         !(event.target instanceof HTMLElement && event.target.closest("input,textarea,[contenteditable=true]"))) {
         event.preventDefault();
         setWorldMapOpen(open => !open);
         setPanel(false);setJournal(false);
+        setLogOpen(false);
+      } else if (event.code === "KeyJ" && !event.repeat &&
+        !(event.target instanceof HTMLElement && event.target.closest("input,textarea,[contenteditable=true]"))) {
+        event.preventDefault();
+        setLogOpen(open=>!open);setPanel(false);setJournal(false);setWorldMapOpen(false);
       }
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [ready, panel, journal, worldMapOpen, sceneReady, state?.session_id]);
+  }, [ready, panel, journal, worldMapOpen, logOpen, sceneReady, state?.session_id]);
 
   useEffect(() => {
     if (!milestone) return;
@@ -350,6 +367,9 @@ export default function TrialExperience() {
       } else if (turn.state.story_progress.public_clue_ids.length > snapshot.story_progress.public_clue_ids.length) {
         setMilestone("新的調查線索已記錄");
       }
+      if((turn.state.story_progress.findings?.length ?? 0) > (snapshot.story_progress.findings?.length ?? 0)) {
+        setMilestone(`新的線索已記錄 · 按 J 查看 ${turn.state.story_progress.findings?.length} 項紀錄`);
+      }
       const result = turn.story.dialogue.map((l) => l.text).join(" ");
       setLine(result);
       setNotice(result);
@@ -390,6 +410,7 @@ export default function TrialExperience() {
   function followMapRoute(choice: PlayerChoice) {
     if (busy || !sceneReady) return;
     setWorldMapOpen(false);
+    setLogOpen(false);
     if (near) { select(choice); return; }
     setTrackedDestination(choice.destination_scene_id);
     pendingMapWalk.current = true;
@@ -408,6 +429,7 @@ export default function TrialExperience() {
     setPanel(false);
     setJournal(false);
     setWorldMapOpen(false);
+    setLogOpen(false);
     setTrackedDestination(null);
     pendingMapWalk.current = false;
     setMilestone("");
@@ -468,6 +490,7 @@ export default function TrialExperience() {
           </div>
         </div>
         <nav>
+          <button onClick={() => showLog(true)}>調查紀錄 {findings.length} <kbd>J</kbd></button>
           <button onClick={() => showMap(true)}>旅途地圖 <kbd>M</kbd></button>
           <button disabled={busy} onClick={() => void restartJourney()}>
             新旅程
@@ -485,6 +508,12 @@ export default function TrialExperience() {
         expanded={worldMapOpen} onExpandedChange={showMap} navigation={state?.navigation}
         onTravel={followMapRoute} near={near} busy={busy} exploration />
       {milestone && <div className={styles.milestone} role="status">✧ {milestone}</div>}
+      {logOpen && <InvestigationJournal findings={findings} objective={state?.navigation?.objective ?? "走近地標繼續調查。"}
+        near={near} onClose={()=>showLog(false)} onReport={choices.some(c=>c.choice_id==="review_demo_findings") ? ()=>{
+          setLogOpen(false);
+          const choice=choices.find(c=>c.choice_id==="review_demo_findings")!;
+          if(near){setPanel(true);select(choice);}else pendingMapWalk.current=true;
+        } : undefined} />}
       <div className={styles.crosshair} aria-hidden>
         ·
       </div>
@@ -504,11 +533,12 @@ export default function TrialExperience() {
         </span>
         <p className={styles.nextStep}>{state?.navigation?.objective ?? "走近維達利亞，選擇一條調查路線。"}</p>
         <button className={styles.routeLink} onClick={() => showMap(true)}>查看路線 <kbd>M</kbd></button>
+        {world?.discovery && <p className={styles.discoveryLabel} data-signal={world.discovery.signal}>✧ 已記錄：{world.discovery.label}</p>}
       </aside>
       <div className={styles.coordinates} aria-label="玩家位置">
         ⌖ {poseLabel}
       </div>
-      {!panel && !journal && !worldMapOpen && ready && (
+      {!panel && !journal && !worldMapOpen && !logOpen && ready && (
         <div className={styles.movePad} aria-label="按住方向鍵移動">
           {(
             [
@@ -538,7 +568,7 @@ export default function TrialExperience() {
           ))}
         </div>
       )}
-      {ready && sceneReady && !panel && !journal && !worldMapOpen && (
+      {ready && sceneReady && !panel && !journal && !worldMapOpen && !logOpen && (
         <div className={styles.interaction}>
           <button disabled={!near} onClick={() => interactionRef.current()}>
             <kbd>E</kbd>{" "}
@@ -550,6 +580,7 @@ export default function TrialExperience() {
       )}
       <footer className={styles.footer}>
         <span>
+          {capabilities ? (capabilities.generation_mode === "rule_based" ? "規則式劇情 · " : "外部 NPC 模型介面 · ") : ""}
           點地面移動 · <kbd>W A S D</kbd> 移動 <kbd>Shift</kbd> 奔跑 · 拖曳環視{" "}
           <button
             onClick={async () => {
@@ -574,7 +605,7 @@ export default function TrialExperience() {
               : "3D 場景就緒"}
         </span>
       </footer>
-      {!panel && !journal && !worldMapOpen && (
+      {!panel && !journal && !worldMapOpen && !logOpen && (
         <div className={styles.notice} role="status">
           {notice}
         </div>
@@ -610,6 +641,7 @@ export default function TrialExperience() {
             </small>
             <p>{line}</p>
             <p className={styles.dialogueNext}>{state?.navigation?.objective}</p>
+            {findings.length>0 && <button className={styles.routeLink} onClick={()=>showLog(true)}>查看已取得的 {findings.length} 項調查紀錄 <kbd>J</kbd></button>}
             <div className={styles.choices}>
               {choices.map((choice) => (
                 <button

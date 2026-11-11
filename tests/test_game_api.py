@@ -150,6 +150,7 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
         "chapter_title": "鳴霖異象",
         "mode": "demo_fallback",
         "public_clue_ids": [],
+        "findings": [],
     }
     assert state["npc_states"]["vidalia"]["met"] is True
     assert "truth_level" not in state

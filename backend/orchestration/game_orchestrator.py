@@ -325,11 +325,14 @@ class GameOrchestrator:
         dialogue = list(proposal.proposed_dialogue)
         for event in resolution.established_events:
             if event.visibility.get("audience") == "player":
+                reports = [op["reported_clue_ids"] for op in event.effect.get("operations", []) if "reported_clue_ids" in op]
+                recipient = resolution.updated_state.npc_states.get(event.target_id)
                 dialogue.append(
                     DialogueLine(
                         speaker_type=SpeakerType.NARRATOR,
                         speaker_name="系統",
-                        text=event.description,
+                        text=(f"你已向{recipient.name if recipient else '對方'}回報 {len(reports[0])} 項調查紀錄。"
+                              if reports else event.description),
                     )
                 )
         return ResolvedStory(

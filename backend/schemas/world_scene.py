@@ -30,6 +30,12 @@ class WorldObject(BaseModel):
     yaw: float
 
 
+class WorldDiscovery(BaseModel):
+    clue_id: str
+    label: str
+    signal: Literal["ember", "dust"]
+
+
 class WorldSceneView(BaseModel):
     scene_id: str
     config: WorldSceneConfig
@@ -42,6 +48,7 @@ class WorldSceneView(BaseModel):
     npc_id: str | None = None
     water: bool = False
     fire: bool = False
+    discovery: WorldDiscovery | None = None
 
 
 class SceneAssetJobView(BaseModel):

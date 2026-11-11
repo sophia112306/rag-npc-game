@@ -81,6 +81,8 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   let lavaShader: ShaderMaterial | null = null;
   let flameRoot: TransformNode | null = null;
   let sanctuary: ReturnType<typeof createForestSanctuary> | null = null;
+  let discoveryRoot: TransformNode | null = null;
+  let discoveryParticles: ParticleSystem | null = null;
   let disposed = false;
   let sceneGeneration = 0;
   const modelGroups = new Map<AssetKind, TransformNode>();
@@ -192,6 +194,9 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
   }
 
   function buildLandmark(current: WorldScene) {
+    discoveryParticles?.dispose(false);
+    discoveryParticles = null;
+    discoveryRoot = null;
     sanctuary?.dispose();
     sanctuary = null;
     fireShader?.dispose();
@@ -277,14 +282,15 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
         scene,
         {
           vertexSource: `precision highp float; attribute vec3 position;attribute vec2 uv;uniform mat4 worldViewProjection;varying vec2 v;void main(){v=uv;gl_Position=worldViewProjection*vec4(position,1.);}`,
-          fragmentSource: `precision highp float;varying vec2 v;uniform float clock;void main(){vec2 p=v-.5;float r=length(p);float wave=sin(r*90.-clock*2.+sin(p.x*21.+clock)*.4)*.5+.5;float caustic=pow(wave,10.)*.18;vec3 c=mix(vec3(.025,.18,.21),vec3(.08,.43,.44),1.-r);c+=vec3(.25,.5,.42)*caustic;gl_FragColor=vec4(c,1.);}`,
+          fragmentSource: `precision highp float;varying vec2 v;uniform float clock;uniform vec3 discovery;void main(){vec2 p=v-.5;float r=length(p);float wave=sin(r*90.-clock*2.+sin(p.x*21.+clock)*.4)*.5+.5;float caustic=pow(wave,10.)*.18;vec3 c=mix(vec3(.025,.18,.21),vec3(.08,.43,.44),1.-r);c+=(vec3(.25,.5,.42)+discovery*.8)*caustic;gl_FragColor=vec4(c,1.);}`,
         },
         {
           attributes: ["position", "uv"],
-          uniforms: ["worldViewProjection", "clock"],
+          uniforms: ["worldViewProjection", "clock", "discovery"],
         },
       );
       waterShader.backFaceCulling = false;
+      waterShader.setColor3("discovery", current.discovery ? Color3.FromHexString(current.discovery.signal==="ember"?"#d99d42":"#72b5ce") : Color3.Black());
       water.material = waterShader;
       waterSurface = water;
     }
@@ -418,6 +424,23 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       );
       particles.start();
     }
+    if (current.discovery) {
+      const colour = current.discovery.signal === "ember" ? "#efb85e" : "#8dccdb";
+      discoveryRoot = new TransformNode("recorded investigation", scene);
+      discoveryRoot.parent = landmark;
+      discoveryRoot.position.set(0, .2, .3);
+      discoveryParticles=new ParticleSystem("recorded investigation motes",40,scene);
+      discoveryParticles.particleTexture=particleTexture;
+      discoveryParticles.emitter=new Vector3(x,y+.8,z+.3);
+      discoveryParticles.minEmitBox=new Vector3(-.8,0,-.8);discoveryParticles.maxEmitBox=new Vector3(.8,.1,.8);
+      const tint=Color3.FromHexString(colour);
+      discoveryParticles.color1=new Color4(tint.r,tint.g,tint.b,.8);discoveryParticles.color2=new Color4(tint.r,tint.g,tint.b,.3);
+      discoveryParticles.colorDead=new Color4(0,0,0,0);
+      discoveryParticles.minSize=.015;discoveryParticles.maxSize=.04;
+      discoveryParticles.minLifeTime=1;discoveryParticles.maxLifeTime=2.4;discoveryParticles.emitRate=12;
+      discoveryParticles.direction1=new Vector3(-.05,.2,-.05);discoveryParticles.direction2=new Vector3(.05,.5,.05);
+      discoveryParticles.start();
+    }
   }
 
   async function setAsset(kind: AssetKind, url: string) {
@@ -472,6 +495,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       ) {
         const top = size.y * scale * vertical;
         if (waterSurface) waterSurface.position.y = top * 0.99;
+        if (discoveryRoot) discoveryRoot.position.y = top + .15;
         if (current.fire && flameRoot) flameRoot.position.y = top + 0.05;
         if (current.fire && particles)
           particles.emitter = new Vector3(
@@ -562,6 +586,8 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     async setWorld(next) {
       if (disposed) return;
       world = next;
+      canvas.dataset.sceneId = next.scene_id;
+      canvas.dataset.discovery = next.discovery?.signal ?? "none";
       sceneGeneration++;
       for (const group of modelGroups.values()) disposeGroup(group);
       modelGroups.clear();
@@ -650,6 +676,10 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       return { x: blocked(nx, z) ? x : nx, z: blocked(x, nz) ? z : nz };
     },
     render() {
+      if (discoveryRoot && discoveryParticles?.emitter instanceof Vector3) {
+        discoveryParticles.emitter.copyFrom(discoveryRoot.getAbsolutePosition());
+        discoveryParticles.emitter.y += .65;
+      }
       sanctuary?.update(performance.now() / 1000);
       skyMaterial.setFloat("clock", performance.now() / 1000);
       waterShader?.setFloat("clock", performance.now() / 1000);
@@ -664,6 +694,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       disposed = true;
       sceneGeneration++;
       particles?.dispose();
+      discoveryParticles?.dispose(false);
       sanctuary?.dispose();
       foliage.dispose();
       for (const pending of containers.values())

@@ -28,6 +28,7 @@ class DemoStoryChoiceDefinition:
     reveal_clue_ids: tuple[str, ...] = ()
     unlock_scene_ids: tuple[str, ...] = ()
     special_scene_transition: bool = False
+    visual_signal: str | None = None
 
     def to_player_choice(self) -> PlayerChoice:
         return PlayerChoice(
@@ -191,6 +192,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "灰燼沒有沉入泉底，反而逆著水脈指向遙遠的聖火。烈燚原的方向被短暫照亮。",
         "ember_route_ready",
         "通往聖火的餘燼",
+        visual_signal="ember",
         reveal_clue_ids=("ember_current",),
         unlock_scene_ids=("lieyi_plains",),
     ),
@@ -203,6 +205,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "裂響與泉水無關，像是從世界另一側的峽谷傳回。碎光拼出一段通往流塵谷的裂隙路徑。",
         "fissure_route_ready",
         "裂隙中的風沙",
+        visual_signal="dust",
         reveal_clue_ids=("dust_route_trace",),
         unlock_scene_ids=("liuchen_valley",),
     ),
@@ -227,6 +230,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "灼熱紋路不是精靈文字，卻與人族聖火的方向一致。烈燚原成為可以追查的暫定路線。",
         "ember_route_ready",
         "通往聖火的符痕",
+        visual_signal="ember",
         reveal_clue_ids=("ember_rune_trace",),
         unlock_scene_ids=("lieyi_plains",),
     ),
@@ -239,6 +243,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "符石的缺口指向流塵谷。你記下這條暫定路線，準備前往查探。",
         "fissure_route_ready",
         "流塵谷的路標",
+        visual_signal="dust",
         reveal_clue_ids=("dust_route_trace",),
         unlock_scene_ids=("liuchen_valley",),
     ),
@@ -315,6 +320,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "聖火不是單純的毀滅：它把木乃伊送回人族，讓兩族爭奪同一批靈魂的矛盾顯現出來。",
         "demo_fire_complete",
         "Demo 完成：輪迴的代價",
+        visual_signal="ember",
         reveal_clue_ids=("sacred_fire_cycle",),
     ),
     _choice(
@@ -326,6 +332,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "長老會也在關注聖火，但你還沒有足夠證據判斷他們的目的。",
         "demo_fire_complete",
         "Demo 完成：長老的行蹤",
+        visual_signal="ember",
         reveal_clue_ids=("elders_surveyed_fire",),
     ),
     _choice(
@@ -337,6 +344,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "他們希望自己的名字不只留在沙裡。你記住了其中幾個，卻還不知道這份請求背後的原因。",
         "demo_dust_complete",
         "Demo 完成：被記住的人",
+        visual_signal="dust",
         reveal_clue_ids=("mummies_seek_remembrance",),
     ),
     _choice(
@@ -348,6 +356,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "墓葬痕跡證明人族與木乃伊並不是兩批靈魂，而是同一群存在在埋葬與聖火之間循環。",
         "demo_dust_complete",
         "Demo 完成：同一批靈魂",
+        visual_signal="dust",
         reveal_clue_ids=("burial_fire_cycle",),
     ),
     _choice(
@@ -380,8 +389,8 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "review_demo_findings",
         "demo_complete",
         "minglin",
-        "整理這次調查結果",
-        "請整理這次調查已經成立的結果。",
+        "回報這次調查結果",
+        "我把這次已記錄的調查結果告訴你，請協助整理。",
         "維達利亞只整理你實際建立的公開線索；尚未核准的推測、正式結局與其他角色秘密都保留到下一章。",
         "demo_complete",
         "下一章待續",

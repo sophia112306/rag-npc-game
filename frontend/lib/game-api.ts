@@ -83,7 +83,19 @@ export type GameStateSummary = {
     chapter_title: string;
     mode: "demo_fallback";
     public_clue_ids: string[];
+    findings?: StoryFinding[];
   };
+};
+
+export type StoryFinding = {
+  clue_id: string;
+  title: string;
+  summary: string;
+  scene_id: string;
+  scene_name: string;
+  source_npc_id: string | null;
+  kind: "conversation" | "investigation";
+  visual_signal: "ember" | "dust" | null;
 };
 
 export type GameTurnResponse = {
@@ -196,6 +208,7 @@ export function resolveApiAsset(url: string): string {
 export type AssetKind = "tree" | "runestone" | "altar";
 export type WorldScene = {
   scene_id: string;
+  discovery?: {clue_id:string;label:string;signal:"ember"|"dust"} | null;
   config: {
     revision: number;
     seed: number;

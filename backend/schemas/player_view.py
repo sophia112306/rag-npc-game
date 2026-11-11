@@ -1,14 +1,15 @@
 """Player-visible projections derived from authoritative internal state."""
 
 from datetime import datetime
+from dataclasses import asdict
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.content.reveal_policy import is_demo_first_stage, public_chapter_title, public_clue_ids
 from backend.content.scenes import SCENES, SceneVisualProfile, require_scene
 from backend.content.world_scenes import build_world_scene
-from backend.schemas.world_scene import WorldSceneView
+from backend.schemas.world_scene import WorldDiscovery, WorldSceneView
 
 from .game_state import GameState
 from .player_choice import PlayerChoice
@@ -106,6 +107,17 @@ class PlayerSceneView(BaseModel):
     canon_status: Literal["confirmed", "provisional"]
 
 
+class PlayerFindingView(BaseModel):
+    clue_id: str
+    title: str
+    summary: str
+    scene_id: str
+    scene_name: str
+    source_npc_id: str | None
+    kind: Literal["conversation", "investigation"]
+    visual_signal: Literal["ember", "dust"] | None = None
+
+
 class PlayerStoryProgressView(BaseModel):
     """Only story progress that has already been revealed to the player."""
 
@@ -116,6 +128,7 @@ class PlayerStoryProgressView(BaseModel):
     chapter_title: str
     mode: Literal["demo_fallback"]
     public_clue_ids: list[str]
+    findings: list[PlayerFindingView] = Field(default_factory=list)
 
 
 class PlayerViewState(BaseModel):
@@ -140,14 +153,22 @@ class PlayerViewState(BaseModel):
 def project_player_view(state: GameState) -> PlayerViewState:
     """Remove author-only facts, secret flags, and private NPC state."""
 
+    from backend.content.story_findings import public_findings
+
     scene = require_scene(state.current_scene_id)
+    findings = public_findings(state)
+    world = build_world_scene(state.current_scene_id, state.world_scenes.get(state.current_scene_id))
+    latest = next((finding for finding in reversed(findings)
+                   if finding.scene_id == state.current_scene_id and finding.visual_signal), None)
+    if latest:
+        world.discovery = WorldDiscovery(clue_id=latest.clue_id, label=latest.title, signal=latest.visual_signal)
     return PlayerViewState(
         session_id=state.session_id,
         state_version=state.state_version,
         turn_count=state.turn_count,
         current_scene_id=state.current_scene_id,
         navigation=project_navigation(state),
-        world_scene=build_world_scene(state.current_scene_id, state.world_scenes.get(state.current_scene_id)),
+        world_scene=world,
         current_scene=PlayerSceneView(
             scene_id=scene.scene_id,
             region_name=scene.region_name,
@@ -164,6 +185,7 @@ def project_player_view(state: GameState) -> PlayerViewState:
             node_id=state.story_progress.node_id,
             chapter_title=public_chapter_title(state.story_progress.chapter_title),
             mode=state.story_progress.mode,
+            findings=[PlayerFindingView(**asdict(finding)) for finding in findings],
             public_clue_ids=public_clue_ids(
                 state.story_progress.public_clue_ids,
                 demo_act1=is_demo_first_stage(state),

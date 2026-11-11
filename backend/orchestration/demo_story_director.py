@@ -1,6 +1,7 @@
 """Turn validated fallback choices into ordinary story proposals."""
 
 from backend.content.demo_story import DemoStoryChoiceDefinition, available_demo_story_choices
+from backend.content.story_findings import finding_report
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import PlayerAction
 from backend.schemas.story import (
@@ -63,7 +64,8 @@ def build_demo_story_proposal(
             speaker_type=SpeakerType.NPC,
             speaker_id=choice.target_npc_id,
             speaker_name=state.npc_states[choice.target_npc_id].name,
-            text=choice.response_text,
+            text=(f"我記下了你這次的回報：\n{finding_report(state)}\n我們先保留這些紀錄，再比對另一條路線。"
+                  if choice.choice_id == "review_demo_findings" else choice.response_text),
             emotion="focused",
         )
     else:
@@ -85,7 +87,7 @@ def build_demo_story_proposal(
                 actor_id=state.player.player_id,
                 target_id=choice.destination_scene_id or choice.target_npc_id,
                 operations=operations,
-                witness_ids=[state.player.player_id],
+                witness_ids=[state.player.player_id, *([choice.target_npc_id] if choice.target_npc_id else [])],
                 visible_to_player=True,
             )
         ],
