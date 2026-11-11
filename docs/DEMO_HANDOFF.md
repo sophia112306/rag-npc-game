@@ -113,6 +113,7 @@ npm run dev
 - Hunyuan3D-2mini shape-only，固定 CUDA 12.8、PyTorch 2.7.1+cu128 與 upstream commit。
 - 遠端只綁 `127.0.0.1:8081`，本機透過 `ssh -N -L 8081:127.0.0.1:8081 nccu-gpu` 使用。
 - Hunyuan、Hugging Face 與 U2Net cache 都在 named volume；強制重建 container 後 42 秒恢復 `ready`，不重抓 7.2 GB 權重。
+- 校機帳號目前 `Linger=no`；主機重開或使用者 session 結束後，可能要重新啟動 rootless Docker 與 Compose，操作見 Hunyuan 部署文件。
 - `/generate` 限制單工、圖片大小／格式、octree、steps 與 `max_faces`；輸出經官方 FloaterRemover、DegenerateFaceRemover、FaceReducer 後回傳 GLB。
 - 正式 API 驗收：6.75 秒、687,488 bytes、17,222 vertices／40,000 faces、watertight。
 

@@ -65,6 +65,16 @@ docker compose -f infra/hunyuan3d/compose.yaml logs --tail=200 api
 docker stats --no-stream
 ```
 
+校機目前 `loginctl show-user "$USER" -p Linger` 回報 `Linger=no`。主機重開機或所有使用者 session 結束後，不要假設 rootless Docker 一定會自動常駐；重新連線時若 health 無回應，執行：
+
+```bash
+systemctl --user start docker
+cd ~/rag-npc-game
+docker compose -f infra/hunyuan3d/compose.yaml up -d
+```
+
+若團隊需要無人登入也能在重開機後啟動，請由校機管理員依政策評估是否為這個帳號啟用 linger；不要自行改系統層設定。
+
 停止服務但保留模型與輸出 volume：
 
 ```bash
