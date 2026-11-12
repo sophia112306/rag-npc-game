@@ -75,7 +75,8 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, paused,
         private visibleNpcIds: NpcId[] = sceneId === "liuchen_valley"
           ? ["menmesvento", "seth", "syra"]
           : sceneId === "lieyi_plains" ? ["dasso"]
-            : sceneId === "minglin" ? ["vidalia", "andre"] : [];
+            : sceneId === "minglin" ? ["vidalia", "andre"]
+              : sceneId === "minglin_life_spring" ? ["vidalia"] : [];
         private walkable?: Phaser.Geom.Polygon;
         private destination?: Destination;
         private cursorKeys?: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -91,7 +92,9 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, paused,
 
         preload() {
           const tilemapUrl = sceneId === "liuchen_valley" ? "/game/liuchen.tmj"
-            : sceneId === "lieyi_plains" ? "/game/lieyi.tmj" : "/game/minglin.tmj";
+            : sceneId === "lieyi_plains" ? "/game/lieyi.tmj"
+              : sceneId === "minglin_life_spring" ? "/game/minglin-life-spring.tmj"
+                : "/game/minglin.tmj";
           this.load.tilemapTiledJSON("scene-map", tilemapUrl);
           this.load.image("minglin-forest", backgroundUrl);
           this.load.image("traveler", "/game/traveler.png");
