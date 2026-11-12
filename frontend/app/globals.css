@@ -115,10 +115,19 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
 .dialogue-panel::after { bottom: -3px; right: -3px; border-bottom: 3px solid #e3c47d; border-right: 3px solid #e3c47d; }
 .dialogue-portrait { position: absolute; left: -1px; top: -18px; bottom: -1px; width: 180px; overflow: hidden; border: 2px solid #d9b768; background: #46502b; box-shadow: inset 0 0 0 3px #24230e, 5px 0 22px #0009; }
 .dialogue-portrait img { object-fit: cover; object-position: center 17%; }
+.dialogue-portrait.npc-dasso { background: #4b2319; }
+.dialogue-portrait.npc-dasso img { object-position: 51% 14%; }
+.dialogue-portrait.npc-seth { background: #3b2b1d; }
+.dialogue-portrait.npc-seth img { object-position: 67% 14%; }
+.dialogue-portrait.npc-syra { background: #514534; }
+.dialogue-portrait.npc-syra img { object-position: 55% 14%; }
+.dialogue-panel.is-open .dialogue-portrait img { animation: portrait-breathe 3.6s ease-in-out infinite; }
+@keyframes portrait-breathe { 50% { transform: translateY(2px) scale(1.02); } }
 .dialogue-main { flex: 1; min-width: 0; margin-left: 184px; padding: 12px 21px 12px 19px; display: flex; flex-direction: column; }
 .dialogue-heading { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 5px; border-bottom: 1px solid #a88a4cb0; }
-.dialogue-heading > div { display: flex; align-items: baseline; gap: 18px; }
+.dialogue-heading > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 15px; }
 .dialogue-heading h1 { margin: 0; color: #f6dc9d; font-size: clamp(19px, 1.6vw, 26px); font-weight: 500; letter-spacing: .12em; text-shadow: 0 2px 4px #000; }
+.dialogue-title { color: #d5bb82; font-size: 11px; letter-spacing: .08em; }
 .turn-indicator { color: #a99363; font-size: 11px; white-space: nowrap; }
 .generation-badge { padding: 2px 7px; border: 1px solid #806f48; border-radius: 999px; color: #c8b98e; background: #302b1dbd; font-size: 10px; line-height: 1.2; letter-spacing: .08em; white-space: nowrap; }
 .generation-badge.mode-rule_based { border-color: #c5a860; color: #ffedbd; background: #443817c9; }

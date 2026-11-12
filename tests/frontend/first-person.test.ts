@@ -16,10 +16,10 @@ class Surface {
 function setup(){
   const windowSurface=new Surface(),canvas=new Surface();
   Object.assign(globalThis,{window:windowSurface,document:{pointerLockElement:null},HTMLElement:Surface});
-  let picked:{x:number;z:number;interaction?:boolean}|null={x:0,z:4};let interactions=0;
+  let picked:{x:number;z:number;interaction?:boolean;npcId?:string}|null={x:0,z:4};let interactions=0;let lastNpcId:string|undefined;
   const driver={pickGround:()=>picked,move:(x:number,z:number,dx:number,dz:number)=>({x:x+dx,z:z+dz}),setView(){},setWorld:async()=>{},setAsset:async()=>{},render(){},resize(){},dispose(){}};
-  const controls=createFirstPerson(canvas as unknown as HTMLCanvasElement,driver,()=>interactions++,()=>{});
-  return{canvas,windowSurface,controls,driver,setPicked:(point:typeof picked)=>{picked=point;},interactions:()=>interactions};
+  const controls=createFirstPerson(canvas as unknown as HTMLCanvasElement,driver,(npcId)=>{interactions++;lastNpcId=npcId;},()=>{});
+  return{canvas,windowSurface,controls,driver,setPicked:(point:typeof picked)=>{picked=point;},interactions:()=>interactions,lastNpcId:()=>lastNpcId};
 }
 
 test("WASD still moves after a toolbar button has focus",()=>{
@@ -68,5 +68,15 @@ test("a solid protected landmark still allows interaction at the advertised dist
   for(let i=0;i<100;i++)controls.tick(.05);
   assert.equal(interactions(),1);
   assert.ok(controls.pose.z>=-4.5&&controls.pose.z<-4.4);
+  controls.dispose();
+});
+
+test("clicking one of two NPCs preserves its identity through automatic walking",()=>{
+  const {controls,canvas,setPicked,interactions,lastNpcId}=setup();
+  setPicked({x:3.4,z:-6,interaction:true,npcId:"syra"});
+  canvas.emit("pointerdown");canvas.emit("pointerup");
+  for(let i=0;i<140;i++)controls.tick(.05);
+  assert.equal(interactions(),1);
+  assert.equal(lastNpcId(),"syra");
   controls.dispose();
 });

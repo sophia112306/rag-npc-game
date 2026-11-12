@@ -234,6 +234,7 @@ export type WorldScene = {
   interaction_z: number;
   interaction_label: string;
   npc_id: string | null;
+  npc_interactions?: Array<{ npc_id: string; x: number; z: number; label: string }>;
   water: boolean;
   fire: boolean;
 };

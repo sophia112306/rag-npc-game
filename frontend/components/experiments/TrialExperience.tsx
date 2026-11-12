@@ -41,7 +41,7 @@ export default function TrialExperience() {
   const driverRef = useRef<TrialDriver | null>(null);
   const controlsRef = useRef<ReturnType<typeof createFirstPerson> | null>(null);
   const stateRef = useRef<GameStateSummary | null>(null);
-  const interactionRef = useRef<() => void>(() => {});
+  const interactionRef = useRef<(npcId?: string) => void>(() => {});
   const journalRef = useRef<() => void>(() => {});
   const pendingRef = useRef<Pending | null>(null);
   const pendingMapWalk = useRef(false);
@@ -54,6 +54,8 @@ export default function TrialExperience() {
     "點擊石板路移動，或用 WASD；拖曳環視，走近人物後按 E。",
   );
   const [choices, setChoices] = useState<PlayerChoice[]>([]);
+  const [npcChoices, setNpcChoices] = useState<PlayerChoice[]>([]);
+  const [activeNpcId, setActiveNpcId] = useState<string | null>(null);
   const [panel, setPanel] = useState(false);
   const [journal, setJournal] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
@@ -80,6 +82,11 @@ export default function TrialExperience() {
   const music = useSceneMusic(track.src, panel ? 0.1 : 0.18);
   const near = distance <= 3.6;
   const findings = state?.story_progress.findings ?? [];
+  const panelNpcId = activeNpcId ?? world?.npc_id ?? null;
+  const npcNames: Record<string, string> = {
+    vidalia: "維達利亞", menmesvento: "門梅司文托",
+    dasso: "達索", seth: "塞特", syra: "希拉",
+  };
 
   function applyState(next: GameStateSummary) {
     const previous = stateRef.current;
@@ -91,6 +98,8 @@ export default function TrialExperience() {
         next.world_scene.spawn_z,
       );
       setPanel(false);
+      setActiveNpcId(null);
+      setNpcChoices([]);
       pendingMapWalk.current = false;
       setTrackedDestination(null);
       setLine(next.current_scene.description);
@@ -119,21 +128,35 @@ export default function TrialExperience() {
     void requestJson<Capabilities>("/api/capabilities").then(setCapabilities).catch(()=>{});
   }, []);
 
-  interactionRef.current = () => {
+  interactionRef.current = (requestedNpcId?: string) => {
     if (!stateRef.current) return;
     const current = stateRef.current.world_scene;
     const pose = controlsRef.current?.pose;
-    if (
-      !pose ||
-      Math.hypot(
-        pose.x - current.interaction_x,
-        pose.z - current.interaction_z,
-      ) > 3.6
-    ) {
+    const candidates = [
+      ...(current.npc_id ? [{npc_id: current.npc_id, x: current.interaction_x, z: current.interaction_z}] : []),
+      ...(current.npc_interactions ?? []),
+    ];
+    const selected = requestedNpcId
+      ? candidates.find((npc) => npc.npc_id === requestedNpcId)
+      : pose ? [...candidates].sort((left, right) =>
+        Math.hypot(pose.x-left.x, pose.z-left.z) - Math.hypot(pose.x-right.x, pose.z-right.z))[0] : undefined;
+    const npcDistance = pose && selected ? Math.hypot(pose.x-selected.x, pose.z-selected.z) : Infinity;
+    const landmarkDistance = pose ? Math.hypot(pose.x-current.interaction_x, pose.z-current.interaction_z) : Infinity;
+    if (npcDistance > 3.6 && (requestedNpcId || landmarkDistance > 3.6)) {
       setNotice("請先走近人物或發光地標，距離 3.6 公尺內按 E 互動。");
       return;
     }
-    setPanel((value) => !value);
+    const npcId = npcDistance <= 3.6 ? selected?.npc_id ?? null : null;
+    setActiveNpcId(npcId);
+    setNpcChoices([]);
+    setLine(npcId ? `你走近${npcNames[npcId] ?? npcId}，可以選擇想詢問的事。` : stateRef.current.current_scene.description);
+    if (npcId) {
+      const sceneId = stateRef.current.current_scene_id;
+      void requestJson<PlayerChoice[]>(`/api/game/${stateRef.current.session_id}/choices?npc_id=${npcId}`)
+        .then((options) => { if (stateRef.current?.current_scene_id === sceneId) setNpcChoices(options); })
+        .catch(() => {});
+    }
+    setPanel(true);
   };
   journalRef.current = () => setJournal((value) => !value);
 
@@ -170,7 +193,7 @@ export default function TrialExperience() {
         controls = createFirstPerson(
           canvas,
           loaded,
-          () => interactionRef.current(),
+          (npcId) => interactionRef.current(npcId),
           () => journalRef.current(),
           setNotice,
         );
@@ -187,10 +210,10 @@ export default function TrialExperience() {
             const pose = controls!.pose;
             const w = stateRef.current?.world_scene;
             setPoseLabel(`${pose.x.toFixed(1)}, ${pose.z.toFixed(1)}`);
-            if (w)
-              setDistance(
-                Math.hypot(pose.x - w.interaction_x, pose.z - w.interaction_z),
-              );
+            if (w) setDistance(Math.min(
+              Math.hypot(pose.x - w.interaction_x, pose.z - w.interaction_z),
+              ...(w.npc_interactions ?? []).map(npc => Math.hypot(pose.x - npc.x, pose.z - npc.z)),
+            ));
             canvas.dataset.playerX = pose.x.toFixed(3);
             canvas.dataset.playerZ = pose.z.toFixed(3);
             canvas.dataset.yaw = pose.yaw.toFixed(3);
@@ -386,6 +409,9 @@ export default function TrialExperience() {
       setChoices(
         await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`),
       );
+      if (input.target_npc_id && stateRef.current?.current_scene_id === snapshot.current_scene_id) {
+        setNpcChoices(await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices?npc_id=${input.target_npc_id}`));
+      }
     } catch (cause) {
       if (
         cause instanceof ApiRequestError &&
@@ -580,7 +606,7 @@ export default function TrialExperience() {
             <kbd>E</kbd>{" "}
             {near
               ? world?.interaction_label
-              : `走近${world?.npc_id ? "人物" : "地標"}後互動`}
+              : `走近${world?.npc_id || world?.npc_interactions?.length ? "人物" : "地標"}後互動`}
           </button>
         </div>
       )}
@@ -631,25 +657,21 @@ export default function TrialExperience() {
       )}
       {panel && (
         <section className={styles.dialogue} aria-label="地標互動">
-          {world?.npc_id && (
+          {panelNpcId && (
             <img
-              src={`/images/${world.npc_id}.png`}
-              alt={world.npc_id === "vidalia" ? "維達利亞" : "門梅司文托"}
+              src={`/images/${panelNpcId}.${["dasso", "seth", "syra"].includes(panelNpcId) ? "jpg" : "png"}`}
+              alt={npcNames[panelNpcId] ?? panelNpcId}
             />
           )}
           <div>
             <small>
-              {world?.npc_id === "vidalia"
-                ? "維達利亞"
-                : world?.npc_id === "menmesvento"
-                  ? "門梅司文托"
-                  : scene?.display_name}
+              {panelNpcId ? npcNames[panelNpcId] ?? panelNpcId : scene?.display_name}
             </small>
             <p>{line}</p>
             <p className={styles.dialogueNext}>{state?.navigation?.objective}</p>
             {findings.length>0 && <button className={styles.routeLink} onClick={()=>showLog(true)}>查看已取得的 {findings.length} 項調查紀錄 <kbd>J</kbd></button>}
             <div className={styles.choices}>
-              {choices.map((choice) => (
+              {[...npcChoices, ...choices].map((choice) => (
                 <button
                   key={choice.choice_id}
                   disabled={busy}
@@ -660,7 +682,7 @@ export default function TrialExperience() {
                 </button>
               ))}
             </div>
-            {world?.npc_id && (
+            {panelNpcId && (
               <form
                 className={styles.npcForm}
                 onSubmit={(event) => {
@@ -670,7 +692,7 @@ export default function TrialExperience() {
                     message: npcMessage.trim(),
                     input_type: "text",
                     action_mode: "dialogue",
-                    target_npc_id: world.npc_id,
+                    target_npc_id: panelNpcId,
                     destination_scene_id: null,
                     story_choice_id: null,
                   });

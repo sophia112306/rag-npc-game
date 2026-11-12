@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.content.scenes import SCENES
+from backend.content.world_scenes import build_world_scene
 from backend.main import create_app
 from backend.rules.event_rules import EventRules
 from backend.schemas.game_state import GameState
@@ -24,6 +25,7 @@ def test_scene_registry_references_existing_assets_and_destinations() -> None:
         "minglin_life_spring",
         "minglin_rune_grove",
         "liuchen_valley",
+        "border_ruins",
         "lieyi_plains",
     }
     for scene in SCENES.values():
@@ -56,6 +58,18 @@ def test_scene_registry_references_existing_assets_and_destinations() -> None:
             isolated_scene_id not in scene.allowed_destinations
             for scene in SCENES.values()
         )
+
+
+def test_3d_scene_contract_exposes_the_new_npcs_at_their_story_locations() -> None:
+    """The Babylon client needs separately pickable characters in each region."""
+    border = build_world_scene("border_ruins")
+    plains = build_world_scene("lieyi_plains")
+    valley = build_world_scene("liuchen_valley")
+
+    assert {npc.npc_id for npc in border.npc_interactions} == {"seth", "syra"}
+    assert {npc.npc_id for npc in plains.npc_interactions} == {"dasso"}
+    assert valley.npc_id == "menmesvento"
+    assert not valley.npc_interactions
 
 
 def test_valid_scene_change_is_saved_and_resumed_after_restart(tmp_path) -> None:

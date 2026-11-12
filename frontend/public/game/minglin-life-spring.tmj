@@ -1,0 +1,42 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.12.2",
+  "orientation": "isometric",
+  "renderorder": "right-down",
+  "width": 13,
+  "height": 15,
+  "tilewidth": 128,
+  "tileheight": 64,
+  "infinite": false,
+  "nextlayerid": 4,
+  "nextobjectid": 4,
+  "layers": [
+    {"id": 1, "name": "Background", "type": "imagelayer", "image": "scenes/minglin-life-spring-v1.png", "x": 0, "y": 0, "opacity": 1, "visible": true},
+    {
+      "id": 2,
+      "name": "Walkable",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {"id": 1, "name": "spring_stone_path", "type": "walkable", "x": 0, "y": 0, "width": 0, "height": 0, "rotation": 0, "visible": true,
+          "polygon": [{"x": 480, "y": 941}, {"x": 1250, "y": 941}, {"x": 1120, "y": 760}, {"x": 1040, "y": 650}, {"x": 950, "y": 570}, {"x": 715, "y": 570}, {"x": 645, "y": 650}, {"x": 570, "y": 760}]}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Actors",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {"id": 2, "name": "player_spawn", "type": "spawn", "point": true, "x": 765, "y": 700, "width": 0, "height": 0, "rotation": 0, "visible": true},
+        {"id": 3, "name": "vidalia", "type": "npc", "point": true, "x": 960, "y": 620, "width": 0, "height": 0, "rotation": 0, "visible": true}
+      ]
+    }
+  ],
+  "tilesets": []
+}

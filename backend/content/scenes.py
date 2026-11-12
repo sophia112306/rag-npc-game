@@ -264,6 +264,22 @@ SCENES: dict[str, SceneDefinition] = {
     ),
 }
 
+SCENES["border_ruins"] = SceneDefinition(
+    scene_id="border_ruins",
+    region_name="邊境廢墟",
+    display_name="邊境廢墟",
+    subtitle="流塵谷與人族領地之間",
+    description="塞特與希拉在第二幕相遇的邊境遺跡；目前提供對話預覽。",
+    background_url="/game/scenes/border-ruins-v1.png",
+    horizon_url="/game/scenes/border-ruins-v1.png",
+    visual_profile=SCENES["liuchen_valley"].visual_profile.model_copy(
+        update={"profile_id": "border_ruins", "fog_density": 0.019}
+    ),
+    canon_status="provisional",
+    allowed_destinations=(),
+    map_position=(1395, 452),
+)
+
 
 def get_scene(scene_id: str) -> SceneDefinition | None:
     """Return a registered scene without inventing missing metadata."""

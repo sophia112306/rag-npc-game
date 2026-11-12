@@ -24,6 +24,8 @@ npm run dev
 
 3D 使用 WASD／方向鍵移動、Shift 奔跑、點地面步行、拖曳環視、近距離 E 互動。它已接入 FastAPI／SQLite，舊版固定路線與「WASD 無效、未接後端」的描述已失效。人物目前仍是肖像 billboard，非完整骨架人物模型。
 
+目前 2D 可點擊的 NPC：鳴霖議會的維達利亞、安德烈；命脈之泉的維達利亞；首次進流塵谷只有門梅司文托；烈燚原有達索。3D 可點擊維達利亞、門梅司文托、達索，以及邊境廢墟的塞特與希拉。須先完成流塵谷、烈燚原各一條 Demo 調查路線並返回鳴霖，才能選「前往邊境廢墟（第二幕預覽）」。邊境廢墟使用 [`border-ruins.tmj`](public/game/border-ruins.tmj)；肖像採用使用者原圖，達索、塞特、希拉的地圖人物依原圖重做全身透明圖。這是對話與場景預覽，正式 E2-3 抉擇和裂隙地圖獎勵尚未實作。
+
 2D 可左鍵點地面／人物、WASD／方向鍵移動、右鍵或 Q／R 轉身、滾輪／按鈕縮放，靠近人物按 E。語音依瀏覽器能力、權限與 localhost／HTTPS 支援；3D 尚未加入同等語音 UI。
 
 ## 編輯位置
@@ -42,7 +44,7 @@ npm run dev
 | 場景音樂與播放 | `lib/scene-music.ts`、`lib/use-scene-music.ts` |
 | 全域／2D、3D 樣式 | `app/globals.css`、`components/experiments/TrialExperience.module.css` |
 
-`public/game/minglin.tmj` 與 `liuchen.tmj` 的 Actors／Walkable 圖層定義 2D 角色點與可走區。泉眼、符石林、烈燚原尚未有各自的 Tiled 地圖。背景構圖變更時需一起校正角色點和可走區。
+`public/game/minglin.tmj`、`minglin-life-spring.tmj`、`liuchen.tmj`、`lieyi.tmj`、`border-ruins.tmj` 的 Actors／Walkable 圖層定義 2D 角色點與可走區。符石林尚未有專屬 Tiled 地圖。背景構圖變更時需一起校正角色點和可走區。
 
 `public/game/scenes/` 保存版本化插畫，`models/` 保存預設 GLB／參考圖／manifest，`materials/` 是地表材質；`public/images/` 是肖像，`public/audio/` 是配樂。動態 GLB 由 FastAPI 下載，不把本機生成檔寫進前端原始碼。
 

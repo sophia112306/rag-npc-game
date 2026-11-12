@@ -15,6 +15,15 @@ def build_player_choices(
 ) -> list[PlayerChoice]:
     """Return a small contextual set; movement comes from the scene graph."""
 
+    npc_scene = {
+        "menmesvento": "liuchen_valley",
+        "dasso": "lieyi_plains",
+        "seth": "border_ruins",
+        "syra": "border_ruins",
+    }
+    if npc_id in npc_scene and state.current_scene_id != npc_scene[npc_id]:
+        return []
+
     if npc_id == "andre":
         return [
             PlayerChoice(
@@ -45,6 +54,31 @@ def build_player_choices(
                 message="你在古卷裡記錄什麼？",
                 target_npc_id="menmesvento",
             ),
+        ]
+
+    if npc_id in {"dasso", "seth", "syra"}:
+        prompts = {
+            "dasso": (
+                ("詢問聖火", "這裡的聖火目前有什麼異常？"),
+                ("詢問長老會", "長老會正在調查什麼？"),
+            ),
+            "seth": (
+                ("詢問去向", "你想往哪個方向走？"),
+                ("詢問風沙", "流塵谷最近的風沙有什麼變化？"),
+            ),
+            "syra": (
+                ("詢問記錄盒", "你懷裡的記錄盒是做什麼的？"),
+                ("詢問旅途", "你是怎麼來到流塵谷的？"),
+            ),
+        }
+        return [
+            PlayerChoice(
+                choice_id=f"{npc_id}_ask_{index}",
+                label=label,
+                message=message,
+                target_npc_id=npc_id,
+            )
+            for index, (label, message) in enumerate(prompts[npc_id], start=1)
         ]
 
     story_choices = available_demo_story_choices(state)

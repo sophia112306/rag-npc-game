@@ -37,6 +37,13 @@ class WorldDiscovery(BaseModel):
     signal: Literal["ember", "dust"]
 
 
+class WorldNpc(BaseModel):
+    npc_id: str
+    x: float
+    z: float
+    label: str
+
+
 class WorldSceneView(BaseModel):
     scene_id: str
     config: WorldSceneConfig
@@ -47,6 +54,7 @@ class WorldSceneView(BaseModel):
     interaction_z: float = -6
     interaction_label: str
     npc_id: str | None = None
+    npc_interactions: list[WorldNpc] = Field(default_factory=list)
     water: bool = False
     fire: bool = False
     discovery: WorldDiscovery | None = None
