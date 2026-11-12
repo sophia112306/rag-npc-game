@@ -71,6 +71,7 @@ export type PlayerScene = {
 
 export type GameStateSummary = {
   session_id: string;
+  player: { player_id: string; name: string; inventory: string[]; items?: PlayerItem[] };
   world_scene: WorldScene;
   turn_count: number;
   state_version: number;
@@ -87,6 +88,8 @@ export type GameStateSummary = {
     findings?: StoryFinding[];
   };
 };
+
+export type PlayerItem = { item_id: string; name: string; description: string; image_url: string | null };
 
 export type StoryFinding = {
   clue_id: string;

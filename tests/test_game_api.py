@@ -102,7 +102,7 @@ def test_menmesvento_appears_on_dust_route_without_revealing_later_truths(client
     assert state["current_scene_id"] == "liuchen_valley"
     npc_choices = client.get(f"/api/game/{session_id}/choices?npc_id=menmesvento")
     assert npc_choices.status_code == 200
-    assert all(choice["target_npc_id"] == "menmesvento" and choice["story_choice_id"] is None for choice in npc_choices.json())
+    assert all(choice["target_npc_id"] == "menmesvento" and choice["story_choice_id"] == choice["choice_id"] for choice in npc_choices.json())
     action = action_payload(session_id, expected_state_version=state["state_version"])
     action.update(message=npc_choices.json()[0]["message"], target_npc_id="menmesvento")
     reply = client.post("/api/game/turn", json=action)

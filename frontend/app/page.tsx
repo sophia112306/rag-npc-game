@@ -65,6 +65,7 @@ type BrowserSpeechRecognition = {
 type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
 const conversationKey = (id: string) => `vidalia-conversation:${id}`;
+const CONVERSATION_FORMAT_VERSION = 2;
 const legacyNpcDialogue: Record<string, string> = {
   "這裡是鳴霖的平衡議會。泉水在第一次入侵後停止擴張，而現在出現的失序值得重新調查。": "這裡是鳴霖的平衡議會。命脈之泉已經很久沒有向外延伸；最近又出現異象，我還不知道兩者是否相關。",
   "人族長老害怕失去輪迴，木乃伊則害怕被世界遺忘。他們都可能注意到唯一連著維塔意識的外來者。": "人族長老與流塵谷的居民都在留意這場異象。各自為何而來，還需要查證。",
@@ -209,7 +210,7 @@ export default function Home() {
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
   const questLabel = gameState?.story_progress.chapter_title ?? "鳴霖異象";
   const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
-  const [npcChoices, setNpcChoices] = useState<PlayerChoice[]>([]);
+  const [npcChoiceSet, setNpcChoiceSet] = useState<{npcId: NpcId; choices: PlayerChoice[]} | null>(null);
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
@@ -225,10 +226,11 @@ export default function Home() {
     ? message.targetId === "landmark" && message.sceneId === scene.scene_id
     : message.targetId !== "landmark" && (message.npcId ?? "vidalia") === displayNpcId);
   const sceneChoices = gameState?.world_scene.npc_id === activeNpcId
-    ? playerChoices : playerChoices.filter(choice => choice.action_mode === "movement");
+    ? playerChoices : playerChoices.filter(choice => choice.action_mode === "movement" || choice.target_npc_id === activeNpcId);
+  const npcChoices = npcChoiceSet?.npcId === activeNpcId ? npcChoiceSet.choices : [];
   const visibleChoices = activeLandmark ? playerChoices
-    : activeNpcId === "vidalia" ? sceneChoices
-      : [...npcChoices, ...(activeNpcId === "andre" ? [] : sceneChoices)];
+    : activeNpcId === "vidalia" && scene.scene_id === "minglin" ? sceneChoices
+      : [...(activeNpcId === "andre" ? [] : sceneChoices), ...npcChoices].slice(0, 4);
   const reportChoice = playerChoices.find(choice => choice.choice_id === "review_demo_findings");
 
   useEffect(() => {
@@ -260,10 +262,10 @@ export default function Home() {
   useEffect(() => {
     if (!ready || !sessionId) return;
     let current = true;
-    if (!dialogueOpen || activeLandmark || activeNpcId === "vidalia") return;
-    setNpcChoices([]);
+    if (!dialogueOpen || activeLandmark || activeNpcId === "vidalia" && scene.scene_id === "minglin") return;
+    setNpcChoiceSet(null);
     void requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices?npc_id=${activeNpcId}`)
-      .then(choices => { if (current) setNpcChoices(choices); })
+      .then(choices => { if (current) setNpcChoiceSet({npcId: activeNpcId, choices}); })
       .catch(() => { /* Free dialogue remains available if shortcuts fail. */ });
     return () => { current = false; };
   }, [ready, dialogueOpen, activeLandmark, activeNpcId, scene.scene_id, sessionId, stateVersion]);
@@ -340,9 +342,9 @@ export default function Home() {
           cached.messages.every((message: ChatMessage) => typeof message.id === "string" &&
             typeof message.speaker === "string" && typeof message.text === "string" &&
             (message.kind === "npc" || message.kind === "player"))) {
-          restored = migrateRecordedDialogue(cached.messages);
-          if (restored.some((message, index) => message !== cached.messages[index])) {
-            window.localStorage.setItem(conversationKey(id), JSON.stringify({ ...cached, messages: restored }));
+          restored = cached.format_version === CONVERSATION_FORMAT_VERSION ? cached.messages : migrateRecordedDialogue(cached.messages);
+          if (cached.format_version !== CONVERSATION_FORMAT_VERSION) {
+            window.localStorage.setItem(conversationKey(id), JSON.stringify({ ...cached, format_version: CONVERSATION_FORMAT_VERSION, messages: restored }));
           }
         }
       } catch { /* A missing or old browser record starts with the greeting. */ }
@@ -530,7 +532,7 @@ export default function Home() {
       setMessages(nextMessages);
       setLastNpcSpeech(turn.story.dialogue.filter((line) => line.speaker_name !== "系統").map((line) => line.text).join("\n"));
       try {
-        window.localStorage.setItem(conversationKey(sessionId), JSON.stringify({ turn_number: turn.turn_number, updated_at: turn.state.updated_at, messages: nextMessages }));
+        window.localStorage.setItem(conversationKey(sessionId), JSON.stringify({ format_version: CONVERSATION_FORMAT_VERSION, turn_number: turn.turn_number, updated_at: turn.state.updated_at, messages: nextMessages }));
       } catch { /* The current conversation still works when browser storage is unavailable. */ }
     } catch (cause) {
       if (cause instanceof ApiRequestError && ["STATE_VERSION_CONFLICT", "STORY_CHOICE_UNAVAILABLE", "STORY_CHOICE_MISMATCH", "NPC_UNAVAILABLE"].includes(cause.code ?? "")) {
@@ -683,7 +685,7 @@ export default function Home() {
           </div>
         </section>}
 
-        {journalOpen && <InvestigationJournal findings={findings} objective={navigation?.objective ?? "走近地標開始調查。"} onClose={()=>setJournalOpen(false)} near={nearTarget===primaryTarget} onReport={reportChoice ? ()=>requestChoice(reportChoice) : undefined} />}
+        {journalOpen && <InvestigationJournal inventory={gameState?.player.items ?? []} findings={findings} objective={navigation?.objective ?? "走近地標開始調查。"} onClose={()=>setJournalOpen(false)} near={nearTarget===primaryTarget} onReport={reportChoice ? ()=>requestChoice(reportChoice) : undefined} />}
 
         {initializing && (
           <div className="game-overlay" role="status" aria-live="polite">

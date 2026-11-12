@@ -37,13 +37,21 @@ def project_navigation(state: GameState) -> PlayerNavigationView:
     """Public map and exact validated actions; no private rules or memory."""
     # Imported at projection time because schemas are re-exported by __init__.
     from backend.orchestration.player_choices import build_player_choices
+    from backend.content.demo_story import BORDER_RESOLUTION_IDS, available_demo_story_choices
+    from backend.content.characters import CHARACTER_PROFILES
 
     choices = build_player_choices(state, [])
     routes = {c.destination_scene_id: c for c in choices if c.destination_scene_id}
     investigations = [c for c in choices if c.action_mode == "interaction"]
-    if state.story_progress.node_id == "demo_complete":
+    decisions = [choice for choice in available_demo_story_choices(state) if choice.rule_event_id]
+    if decisions:
+        name = CHARACTER_PROFILES[decisions[0].target_npc_id].name
+        objective = f"下一步：走近{name}，在交談選項做出邊境決定。"
+    elif state.story_progress.node_id == "demo_complete":
         objective = (
-            "兩條調查已完成，可前往邊境廢墟預覽第二幕；正式章節尚未開放。"
+            "邊境的選擇已保存，可回訪各地；後續章節尚未開放。"
+            if BORDER_RESOLUTION_IDS.intersection(state.story_progress.completed_choice_ids) else
+            "兩地線索已帶回議會，可前往邊境廢墟與兩名旅人交談。"
             if "border_ruins" in routes else
             "這條調查已完成。可探索另一條路線；正式後續章節尚未開放。"
         )
@@ -75,6 +83,13 @@ def project_navigation(state: GameState) -> PlayerNavigationView:
     return PlayerNavigationView(objective=objective, scenes=scenes)
 
 
+class PlayerItemView(BaseModel):
+    item_id: str
+    name: str
+    description: str
+    image_url: str | None = None
+
+
 class PlayerIdentityView(BaseModel):
     """Safe player fields that may be rendered by the client."""
 
@@ -83,6 +98,18 @@ class PlayerIdentityView(BaseModel):
     player_id: str
     name: str
     inventory: list[str]
+    items: list[PlayerItemView] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def describe_inventory(self):
+        from backend.content.items import ITEMS
+        self.items = [PlayerItemView(
+            item_id=item_id,
+            name=ITEMS[item_id].name if item_id in ITEMS else item_id,
+            description=ITEMS[item_id].description if item_id in ITEMS else "",
+            image_url=ITEMS[item_id].image_url if item_id in ITEMS else None,
+        ) for item_id in self.inventory]
+        return self
 
 
 class NPCPublicStateView(BaseModel):

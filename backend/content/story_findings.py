@@ -33,7 +33,7 @@ def public_findings(state: GameState) -> list[PublicFinding]:
             continue  # An unknown ID is not permission to invent its contents.
         result.append(PublicFinding(
             clue_id=clue_id, title=source.label,
-            summary=public_story_text(source.response_text),
+            summary=public_story_text(source.response_text, allow_fissure_map=source.rule_event_id is not None),
             scene_id=source.source_scene_id,
             scene_name=require_scene(source.source_scene_id).display_name,
             source_npc_id=source.target_npc_id,

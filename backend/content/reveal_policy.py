@@ -97,9 +97,11 @@ def public_chapter_title(title: str) -> str:
     return LEGACY_CHAPTER_TITLES.get(title, title)
 
 
-def public_story_text(text: str) -> str:
+def public_story_text(text: str, *, allow_fissure_map: bool = False) -> str:
     """Keep old first-stage replay text within the current public reveal boundary."""
 
     for old, current in {**LEGACY_CHAPTER_TITLES, **LEGACY_DEMO_STORY_TEXT}.items():
+        if old == "裂隙地圖" and allow_fissure_map:
+            continue
         text = text.replace(old, current)
     return text

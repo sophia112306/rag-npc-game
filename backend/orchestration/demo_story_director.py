@@ -1,6 +1,7 @@
 """Turn validated fallback choices into ordinary story proposals."""
 
-from backend.content.demo_story import DemoStoryChoiceDefinition, available_demo_story_choices
+from backend.content.characters import CHARACTER_PROFILES
+from backend.content.demo_story import DemoStoryChoiceDefinition, available_demo_story_choices, available_npc_dialogue_choices
 from backend.content.story_findings import finding_report
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import PlayerAction
@@ -23,7 +24,8 @@ def match_typed_story_dialogue(action: PlayerAction, state: GameState) -> DemoSt
     if action.action_mode != "dialogue" or action.destination_scene_id:
         return None
     text = action.message.strip(" \t\n。？！!?")
-    return next((choice for choice in available_demo_story_choices(state)
+    choices = (*available_demo_story_choices(state), *available_npc_dialogue_choices(state, action.target_npc_id or ""))
+    return next((choice for choice in choices
                  if choice.action_mode == "dialogue"
                  and choice.target_npc_id == action.target_npc_id
                  and text in {choice.label.strip("。？！!?"), choice.message.strip("。？！!?")}), None)
@@ -59,11 +61,11 @@ def build_demo_story_proposal(
             )
         )
 
-    if choice.target_npc_id:
+    if choice.target_npc_id and not choice.narrate_response:
         dialogue = DialogueLine(
             speaker_type=SpeakerType.NPC,
             speaker_id=choice.target_npc_id,
-            speaker_name=state.npc_states[choice.target_npc_id].name,
+            speaker_name=CHARACTER_PROFILES[choice.target_npc_id].name,
             text=(f"我記下了你這次的回報：\n{finding_report(state)}\n我們先保留這些紀錄，再比對另一條路線。"
                   if choice.choice_id == "review_demo_findings" else choice.response_text),
             emotion="focused",
@@ -87,7 +89,7 @@ def build_demo_story_proposal(
                 actor_id=state.player.player_id,
                 target_id=choice.destination_scene_id or choice.target_npc_id,
                 operations=operations,
-                witness_ids=[state.player.player_id, *([choice.target_npc_id] if choice.target_npc_id else [])],
+                witness_ids=list(dict.fromkeys([state.player.player_id, *([choice.target_npc_id] if choice.target_npc_id else []), *choice.witness_npc_ids])),
                 visible_to_player=True,
             )
         ],

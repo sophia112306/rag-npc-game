@@ -1,6 +1,7 @@
 """Deterministic dynamic story planner used before a live model is configured."""
 
 from backend.content.context_repository import CharacterDefinitionNotFoundError
+from backend.content.npc_dialogue import NPC_DIALOGUE_BY_ID
 from backend.content.scenes import get_scene
 from backend.generation.planner import NPCContextProvider
 from backend.schemas.content import MemoryItem, NPCGenerationContext
@@ -120,28 +121,28 @@ class RuleBasedStoryPlanner:
         elif npc_id == "menmesvento" and self._contains_any(normalized, ("名字", "記錄", "古卷", "流塵谷")):
             intent_summary = "依門梅司文托的公開記錄職責回應流塵谷見聞。"
             if self._contains_any(normalized, ("古卷", "記錄")):
-                text = "我記下願意留下的名字與親眼可證的往事。書頁上還有許多未釐清的痕跡，現在不能把猜測當成答案。"
+                text = NPC_DIALOGUE_BY_ID["menmesvento_ask_record"].response_text
             else:
-                text = "這裡的風很快就會抹去足跡。有些人只盼自己的名字仍有人願意聽見；先聽他們說吧。"
+                text = NPC_DIALOGUE_BY_ID["menmesvento_ask_names"].response_text
             emotion = "measured"
         elif npc_id == "andre" and self._contains_any(normalized, ("異象", "林地", "邊緣", "調查")):
             intent_summary = "依安德烈的公開調查職責回應鳴霖異象。"
             if self._contains_any(normalized, ("哪裡", "路線", "開始")):
-                text = "先去命脈之泉與符石林看看。把你親眼確認的變化記下來，回來再與我比對。"
+                text = NPC_DIALOGUE_BY_ID["andre_ask_trail"].response_text
             else:
-                text = "林地邊緣的地脈最近有幾次不尋常的震顫，泉水也久未向外延伸。我正在核對兩者是否相關。"
+                text = NPC_DIALOGUE_BY_ID["andre_ask_anomaly"].response_text
             emotion = "focused"
         elif npc_id == "dasso" and self._contains_any(normalized, ("聖火", "長老會", "調查")):
             intent_summary = "達索僅依公開的烈燚原現況回應。"
-            text = "聖火與長老會的事，得依現場證據談。你看見了什麼異常？"
+            text = NPC_DIALOGUE_BY_ID["dasso_ask_1"].response_text
             emotion = "measured"
         elif npc_id == "seth" and self._contains_any(normalized, ("去向", "方向", "風沙", "流塵谷")):
             intent_summary = "塞特保留尚未公開的個人目的。"
-            text = "風把每條路都吹得模糊。我還在找能走出去的方向。"
+            text = NPC_DIALOGUE_BY_ID["seth_ask_1"].response_text
             emotion = "wary"
         elif npc_id == "syra" and self._contains_any(normalized, ("記錄盒", "旅途", "流塵谷")):
             intent_summary = "希拉僅談可見的記錄與旅途。"
-            text = "這只盒子裝著我不想遺失的記錄。其他事，等我確定能信任你再說。"
+            text = NPC_DIALOGUE_BY_ID["syra_ask_1"].response_text
             emotion = "guarded"
         elif parsed_action.action_type == ActionType.INSPECT or self._contains_any(
             normalized,

@@ -1,0 +1,17 @@
+{
+  "assets": [
+    {
+      "item_id": "fissure_map",
+      "version": 1,
+      "file": "fissure-map-v1.png",
+      "sha256": "20d31ec084373927f000f7b81458c6cb84856a30b7178f9ccf4d14f721df009a",
+      "width": 1254,
+      "height": 1254,
+      "transparent": true,
+      "tool": "OpenAI built-in image generation",
+      "model": null,
+      "source_rule": "E2-3_help_both",
+      "prompt_document": "docs/ITEM_ASSET_PROMPTS.md"
+    }
+  ]
+}

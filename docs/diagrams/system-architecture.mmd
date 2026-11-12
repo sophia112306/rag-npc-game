@@ -32,7 +32,7 @@ flowchart TB
 
   subgraph CORE["D 協調，B 生成，C 判定｜回合 Orchestrator"]
     ROUTE{"已｜狀態快照與行動分流"}
-    DEMO["已｜Demo Story Director\n既有調查分支與合法選項"]
+    DEMO["已｜Demo Story Director\n固定情境、NPC 答案與合法選項"]
     CONTEXT["部分｜NPC 授權背景\n設定、狀態、記憶、目標、承諾"]
     GATE["部分｜StoryPlanner／ModelGateway\nStoryProposal、預算、逾時重試"]
     RULE{"部分｜事件與規則是否成立？\n人物、知識、所有權、路線、能力"}
@@ -71,7 +71,7 @@ flowchart TB
 
   OBS["部分｜追蹤與品質評測\n事件稽核已有；延遲／成本／品質待補"]
 
-  LIBRARY[("已｜固定 2D 圖庫與 Tiled 地圖\nScene Registry：scene_id → 圖片與互動配置")]
+  LIBRARY[("已｜固定 2D 圖庫、道具與 Tiled 地圖\nScene／Item Registry：ID → 固定資產")]
   RESULT["玩家收到核准結果與 2D 畫面更新"]
 
   UI --> ENTRY --> IDEM

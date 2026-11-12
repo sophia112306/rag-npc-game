@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from typing import Protocol
 from uuid import UUID
 
+from backend.content.characters import NPC_SCENES, npc_is_present
 from backend.content.demo_story import find_available_demo_story_choice
 from backend.orchestration.world_commands import build_world_command_proposal
 from backend.database.repository import (
@@ -157,18 +158,13 @@ class GameOrchestrator:
         if action.expected_state_version != state.state_version:
             raise StateVersionConflictError(action.expected_state_version, state.state_version)
 
-        npc_scene = {
-            "menmesvento": "liuchen_valley",
-            "dasso": "lieyi_plains",
-            "seth": "border_ruins",
-            "syra": "border_ruins",
-        }
-        if action.target_npc_id in npc_scene and state.current_scene_id != npc_scene[action.target_npc_id]:
+        if action.target_npc_id in NPC_SCENES and not npc_is_present(action.target_npc_id, state.current_scene_id):
             raise NpcUnavailableError(
                 f"NPC '{action.target_npc_id}' is not present in the current scene"
             )
 
         parsed_action = self._parse_action(action)
+        confirmed_choice_id = None
         if action.action_mode == ActionMode.SCENE_COMMAND:
             if action.story_choice_id or action.destination_scene_id or action.target_npc_id:
                 raise StoryChoiceMismatchError("Scene commands cannot impersonate story travel or NPC dialogue.")
@@ -178,10 +174,13 @@ class GameOrchestrator:
                 quests = await self._repository.get_player_quests(action.session_id)
             except PersistentSessionNotFoundError as exc:
                 raise SessionNotFoundError(str(exc)) from exc
+            available_choices = build_player_choices(state, quests)
+            if action.target_npc_id:
+                available_choices += build_player_choices(state, quests, action.target_npc_id)
             player_choice = next(
                 (
                     choice
-                    for choice in build_player_choices(state, quests)
+                    for choice in available_choices
                     if choice.choice_id == action.story_choice_id
                 ),
                 None,
@@ -199,6 +198,7 @@ class GameOrchestrator:
                 action.story_choice_id,
             )
             if story_choice and story_choice_action_matches(action, story_choice):
+                confirmed_choice_id = story_choice.choice_id
                 proposal = build_demo_story_proposal(action, state, story_choice)
             else:
                 proposal = await self._story_planner.propose(
@@ -208,6 +208,7 @@ class GameOrchestrator:
                 )
         else:
             typed_choice = match_typed_story_dialogue(action, state)
+            confirmed_choice_id = typed_choice.choice_id if typed_choice else None
             proposal = (
                 build_demo_story_proposal(action, state, typed_choice)
                 if typed_choice else await self._story_planner.propose(
@@ -215,7 +216,7 @@ class GameOrchestrator:
                 )
             )
         self._validate_proposal_envelope(proposal, state)
-        resolution = self._proposal_resolver.resolve(state, proposal, allow_scene_configuration=action.action_mode == ActionMode.SCENE_COMMAND)
+        resolution = self._proposal_resolver.resolve(state, proposal, allow_scene_configuration=action.action_mode == ActionMode.SCENE_COMMAND, confirmed_choice_id=confirmed_choice_id)
         if action.target_npc_id in resolution.updated_state.npc_states and any(
             line.speaker_id == action.target_npc_id for line in proposal.proposed_dialogue
         ):
@@ -260,7 +261,7 @@ class GameOrchestrator:
         except PersistentSessionNotFoundError as exc:
             raise SessionNotFoundError(str(exc)) from exc
 
-    async def get_player_choices(self, session_id: str, npc_id: str = "vidalia") -> list[PlayerChoice]:
+    async def get_player_choices(self, session_id: str, npc_id: str | None = None) -> list[PlayerChoice]:
         """Return state-aware shortcuts without exposing hidden rules or memories."""
 
         state = await self.get_state(session_id)
@@ -337,7 +338,10 @@ class GameOrchestrator:
     ) -> ResolvedStory:
         """Keep NPC speech subjective and describe objective effects deterministically."""
 
-        dialogue = list(proposal.proposed_dialogue)
+        rejected = any(decision.status == "rejected" for decision in resolution.decisions)
+        dialogue = [line for line in proposal.proposed_dialogue if line.speaker_type == SpeakerType.NPC or not rejected]
+        if rejected and not resolution.established_events:
+            dialogue.append(DialogueLine(speaker_type=SpeakerType.NARRATOR, speaker_name="系統", text="這個行動沒有成立，物品、位置與劇情進度維持原狀。"))
         for event in resolution.established_events:
             if event.visibility.get("audience") == "player":
                 reports = [op["reported_clue_ids"] for op in event.effect.get("operations", []) if "reported_clue_ids" in op]

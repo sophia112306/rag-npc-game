@@ -4,12 +4,17 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from backend.content.demo_story import (
+    BORDER_RULE_IDS,
     find_available_demo_story_choice,
     find_demo_story_choice_definition,
 )
 from backend.content.scenes import can_travel, get_scene
 from backend.content.story_findings import finding_report, public_findings
-from backend.schemas.game_state import GameState
+from backend.content.items import ITEMS
+from backend.content.characters import CHARACTER_PROFILES, npc_is_present
+from backend.rules.event_rules import EventRules
+from backend.rules.state_rules import StateRules
+from backend.schemas.game_state import GameState, NPCState
 from backend.schemas.story import (
     AdvanceStoryOperation,
     ChangeSceneOperation,
@@ -53,13 +58,15 @@ class ProposalResolution:
 class ProposalResolver:
     """Apply only known commands; reject each event atomically on rule failure."""
 
-    def resolve(self, state: GameState, proposal: StoryProposal, *, allow_scene_configuration: bool = False) -> ProposalResolution:
+    def resolve(self, state: GameState, proposal: StoryProposal, *, allow_scene_configuration: bool = False, confirmed_choice_id: str | None = None) -> ProposalResolution:
         candidate = state.model_copy(deep=True)
         decisions: list[ProposalDecision] = []
 
         for event in proposal.event_proposals:
             event_candidate = candidate.model_copy(deep=True)
             try:
+                if any(isinstance(op, AdvanceStoryOperation) and op.story_choice_id != confirmed_choice_id for op in event.operations):
+                    raise ProposalRuleViolation("story_choice_confirmation_required", "A prepared story outcome requires the player's confirmed choice.")
                 if not allow_scene_configuration and any(isinstance(op, ConfigureSceneOperation) for op in event.operations):
                     raise ProposalRuleViolation("scene_command_required", "Scene configuration requires an explicit player world command.")
                 applied = [
@@ -321,6 +328,26 @@ class ProposalResolver:
                 f"Story choice '{operation.story_choice_id}' is not available now.",
             )
 
+        awarded_items = []
+        if choice.rule_event_id:
+            # Only the three already-authored border outcomes are integrated.
+            # Full phase changes, danger rules and endings remain separate.
+            if choice.rule_event_id not in BORDER_RULE_IDS:
+                raise ProposalRuleViolation("unsupported_preset_rule", "This authored rule has not been integrated.")
+            if any(not npc_is_present(npc_id, state.current_scene_id) for npc_id in choice.witness_npc_ids):
+                raise ProposalRuleViolation("missing_story_participant", "The prepared scene requires its registered participants.")
+            rule = EventRules.get_event_effect(choice.rule_event_id)
+            if rule is None:
+                raise ProposalRuleViolation("missing_authored_rule", "The authored outcome has no rule definition.")
+            StateRules.apply_delta(state, axis_delta=rule.get("axis", 0), usurp_delta=rule.get("usurp", 0), relation_deltas=rule.get("relation", {}), is_event=True)
+            state.flags.update(rule.get("flags", {}))
+            for npc_id in choice.witness_npc_ids:
+                state.npc_states.setdefault(npc_id, NPCState(npc_id=npc_id, name=CHARACTER_PROFILES[npc_id].name)).met = True
+            for item in ITEMS.values():
+                if item.award_rule_event_id == choice.rule_event_id and item.item_id not in state.player.inventory:
+                    state.player.inventory.append(item.item_id)
+                    awarded_items.append(item.item_id)
+
         previous_node_id = state.story_progress.node_id
         if choice.choice_id not in state.story_progress.completed_choice_ids:
             state.story_progress.completed_choice_ids.append(choice.choice_id)
@@ -341,11 +368,21 @@ class ProposalResolver:
             "revealed_clue_ids": list(choice.reveal_clue_ids),
             "unlocked_scene_ids": list(choice.unlock_scene_ids),
         }
+        if choice.rule_event_id:
+            effect["rule_event_id"] = choice.rule_event_id
+            effect["awarded_item_ids"] = awarded_items
+            received = "、".join(ITEMS[item_id].name for item_id in awarded_items)
+            message = "邊境選擇已記錄。"
+            if received:
+                message += f"獲得道具：{received}。"
+            return message, effect
         if choice.choice_id == "review_demo_findings":
             if choice.target_npc_id not in event.witness_ids:
                 raise ProposalRuleViolation("report_recipient_missing", "Reporting requires the recipient to witness it.")
             effect["reported_clue_ids"] = [finding.clue_id for finding in public_findings(state)]
             return f"{state.player.name}向維達利亞回報了已記錄的線索：\n{finding_report(state)}", effect
+        if choice.next_node_id == previous_node_id and choice.target_npc_id:
+            return "這段交談已記錄。", effect
         return (
             f"故事進度已推進至「{choice.next_chapter_title}」。",
             effect,

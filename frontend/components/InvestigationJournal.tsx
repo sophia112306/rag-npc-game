@@ -1,4 +1,4 @@
-import type { StoryFinding } from "../lib/game-api";
+import type { PlayerItem, StoryFinding } from "../lib/game-api";
 import styles from "./InvestigationJournal.module.css";
 
 type Props = {
@@ -7,9 +7,10 @@ type Props = {
   onClose: () => void;
   onReport?: () => void;
   near: boolean;
+  inventory?: PlayerItem[];
 };
 
-export default function InvestigationJournal({findings,objective,onClose,onReport,near}:Props) {
+export default function InvestigationJournal({findings,objective,onClose,onReport,near,inventory=[]}:Props) {
   return <div className={styles.modal} onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
     <section className={styles.journal} role="dialog" aria-modal="true" aria-label="調查紀錄"
       onKeyDown={event=>{
@@ -23,6 +24,14 @@ export default function InvestigationJournal({findings,objective,onClose,onRepor
       <small>旅人的調查手記 · {findings.length} 項紀錄</small>
       <h2>你走過的路，留下不同的線索</h2>
       <p>{objective}</p>
+      <section className={styles.inventory} aria-label="隨身道具">
+        <h3>隨身道具 · {inventory.length} 件</h3>
+        {inventory.length ? <ul>{inventory.map(item=><li key={item.item_id}>
+          {item.image_url && <img src={item.image_url} alt="" width={72} height={72} />}
+          <div><strong>{item.name}</strong><p>{item.description}</p></div>
+        </li>)}</ul>
+          : <p>目前沒有道具。調查線索請查看下方紀錄。</p>}
+      </section>
       {findings.length ? <div className={styles.findingsGrid}>{findings.map(finding=><article key={finding.clue_id} data-signal={finding.visual_signal}>
         <small>{finding.scene_name} · {finding.kind==="conversation"?"交談記錄":"現場調查"}</small>
         <h3>{finding.title}</h3>

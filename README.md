@@ -2,7 +2,7 @@
 
 更新：2026-11-12（Asia/Taipei）。目前主遊戲改為 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。舊 3D 網址導回首頁；3D／Hunyuan 留作歷史原型，不再是遊玩依賴。正式敘事 LLM／RAG、第二幕與五結局尚未完成整合。
 
-美術保留既有末世寫實／奇幻遺跡風格，只在遊戲端降低背景取樣解析度，沒有換成可愛手繪。六張場景各有 Tiled 可走區與互動點，M 地圖、J 手記和調查選項已接入 2D。人物、場景與存檔均沿用現有成果。固定圖庫由後端 Scene Registry 維護，故事選項決定合法換場，不需 VPN 或 GPU 才能遊玩。
+美術保留既有末世寫實／奇幻遺跡風格，在遊戲端降低背景取樣解析度並做輕度柔化，沒有換成可愛手繪。六張場景各有 Tiled 可走區與互動點，M 地圖、J 手記和調查選項已接入 2D。人物、場景與存檔均沿用現有成果。固定圖庫由後端 Scene Registry 維護，故事選項決定合法換場，不需 VPN 或 GPU 才能遊玩。
 
 這份 README 說明目前程式；原始設定見 [世界設計](docs/GENERATIVE_WORLD_DESIGN.md)，操作與交接見 [Demo 交接](docs/DEMO_HANDOFF.md)，歷史進度見 [PROGRESS](docs/PROGRESS.md)。舊進度百分比只代表當時驗收範圍，不代表整個遊戲完成。
 
@@ -20,7 +20,7 @@
 | 安德烈 | 鳴霖邊界調查官的公開原型設定；2D 有人物及異象／路線選項。 |
 | 門梅司文托 | 流塵谷的名字／記憶記錄者，2D 有出場。深層動機與真相需按條件揭露。 |
 | 達索 | 烈燚原的首席長老，有近距離交談與公開現況選項。 |
-| 塞特、希拉 | 走訪兩地後在邊境廢墟出場，各有公開對話預覽；正式第二幕抉擇未接入。 |
+| 塞特、希拉 | 走訪兩地後在邊境廢墟出場，有固定詢問及協助／通報／不介入三種抉擇；協助兩人可取得裂隙地圖。 |
 | 維塔及其他勢力 | 已有設定或規則草案；維塔另有獨立預覽，尚未形成完整任務與結局流程。 |
 
 已登記 NPC 的初始 `private_profile` 目前都是空的，完整人格、語氣、能力及秘密權限卡尚未匯入。公開職稱與幾句回覆不能代替正式角色設定。
@@ -69,9 +69,9 @@
 | 符石林 `minglin_rune_grove` | 古樹、發光符石與石路；調查灼熱符痕或風沙方向。 |
 | 流塵谷 `liuchen_valley` | 荒原、龜裂地表、遺跡與風沙；與門梅司文托交談、調查名字及埋葬。 |
 | 烈燚原 `lieyi_plains` | 熔流、玄武岩道路、聖火祭壇；調查聖火與長老行蹤，也能與達索交談。 |
-| 邊境廢墟 `border_ruins` | 荒原與人族領地間的破損石門；兩地走訪後開放塞特、希拉對話預覽。 |
+| 邊境廢墟 `border_ruins` | 荒原與人族領地間的破損石門；走訪兩地後開放塞特／希拉交談與邊境抉擇。 |
 
-六地各有自己的 Tiled 地圖、可走範圍、出生點與角色／地標，URL 由 `backend/content/scenes.py` 統一提供。人物比例、原畫構圖與寫實風格保留；背景在遊戲內以 836×471 取樣再放大，降低過度細碎的清晰度，沒有重新畫成可愛風格。符石林與烈燚原的正式世界細節仍待確認，產品介面只描述可觀察景象。
+六地各有自己的 Tiled 地圖、可走範圍、出生點與角色／地標，URL 由 `backend/content/scenes.py` 統一提供。人物比例、原畫構圖與寫實風格保留；背景在遊戲內以 836×471 取樣再放大，以 0.55px 柔化及線性插值降低細碎與尖銳邊緣，沒有重新畫成可愛風格。符石林與烈燚原的正式世界細節仍待確認，產品介面只描述可觀察景象。
 
 ### 可玩的調查分支
 
@@ -88,10 +88,13 @@ flowchart TD
     F --> H[返回議會：手記與實際回報]
     G --> H
     H --> I[本條 Demo 完成：可探索另一條路線]
-    I -->|走訪兩地並返回議會| J[邊境廢墟：塞特與希拉對話預覽]
+    I -->|走訪兩地並返回議會| J[邊境廢墟：塞特與希拉]
+    J --> K[協助兩人：裂隙地圖與圖書館線索]
+    J --> L[通報長老會：長老協力]
+    J --> N[暫不介入：不發道具]
 ```
 
-不同選擇會保存不同線索、開放不同路線、顯示不同調查標記。回報時維達利亞只整理實際建立的公開紀錄；私下調查不直接變成她的記憶，需透過回報事件得知。走訪兩地並返回議會後可進入邊境廢墟與塞特、希拉對話，這仍是第二幕預覽，未連到正式 E2-3 抉擇或五結局。
+不同選擇會保存不同線索、開放不同路線、顯示不同調查標記。回報時維達利亞只整理實際建立的公開紀錄；私下調查不直接變成她的記憶，需透過回報事件得知。走訪兩地並返回議會後可進入邊境廢墟與塞特、希拉對話，可選協助兩人、通報長老會或暫不介入；只整合 C 既有 E2-3 三種效果，其他中期事件、圖書館關卡、危險事件使用地圖及五結局仍未完成。
 
 ### 故事與圖庫如何配合
 
@@ -100,12 +103,14 @@ flowchart TD
 | 部分 | 現在的實作 |
 | --- | --- |
 | 調查主線 | `demo_story.py` 的既有條件與分支，經驗證後推進；目前不是 LLM 即興創作。 |
-| 一般 NPC 互動 | 規則 planner 依輸入、回合、記憶、承諾與任務產生回覆／提案。 |
+| NPC 選項 | 六位角色的可見按鈕使用固定預寫答案，不呼叫模型；相同文字的明確詢問可走相同處理。自由輸入仍走設定的 planner。 |
 | 真正模型／RAG | adapter 與權限資料結構已有；B 的正式服務尚未接入。後續還需將生成的候選選項與事件驗證、保存，才能接續完整故事。 |
 | 場景圖 | 由已登記的場景 ID 選固定背景、配樂與 Tiled 地圖，前端不呼叫即時圖片或 GLB 工作。 |
 | 過去的 Hunyuan／世界指令 | 留在歷史原型及原分支，主遊戲停用；本輪不再依賴 3D 或 GPU。 |
 
 原素材來源與提示見 [場景插畫](docs/SCENE_ASSET_PROMPTS.md)、[場景 manifest](frontend/public/game/scenes/manifest.json)。本輪只改顯示取樣與互動，原始圖片檔案未重寫。
+
+固定情境、道具對應與未來評分方式見 [PRESET_STORY_FLOW](docs/PRESET_STORY_FLOW.md)。現在沒有訓練或啟用候選評分器，規則與選項流程不等同模型生成完成。
 
 ## 4. 整體程式架構
 
@@ -195,13 +200,15 @@ flowchart TD
 | 歷史 3D 原型（停用） | `frontend/components/experiments/TrialExperience.tsx`；按鍵／點擊步行在同目錄 `first-person.ts`。 |
 | 地形、光照、模型載入、碰撞 | `frontend/components/experiments/babylon-driver.ts`；`world.ts` 共用高度與 driver 契約，`asset-layout.ts` 檢查模型尺寸。 |
 | 歷史 3D 森林主景（停用） | `frontend/components/experiments/forest-sanctuary.ts`；`sanctuary-layout.ts` 共用水池範圍，`water-material.ts` 共用水材質；樣式在 `TrialExperience.module.css`。 |
+| NPC 固定答案／人物在場 | `backend/content/npc_dialogue.py`、`characters.py`；一般規則回覆引用同份文字。 |
+| 固定道具與圖片 | `backend/content/items.py`、`frontend/public/game/items/`；背包只呈現實際持有物品。 |
 | 手記、回報、防劇透 | `backend/content/story_findings.py` 推導紀錄，`reveal_policy.py` 控制公開用語；前端 `InvestigationJournal.tsx` 呈現。 |
 | 角色與知識權限 | `backend/content/characters.py`、`backend/schemas/content.py`、`backend/content/context_repository.py`；依 NPC、Session、解鎖及回合過濾。 |
 | B 的模型、背景組合、逾時重試 | `backend/generation/config.py` 組裝，`gateway.py` 定義契約，`planner.py` 整理授權背景；`http_gateway.py`／`openai_compatible_gateway.py` 呼叫服務。 |
 | 合法事件、所有權、承諾、任務、換場 | `backend/modules/proposal_resolver.py`；操作格式在 `backend/schemas/story.py`。 |
 | 回合協調與執行分流 | `backend/orchestration/game_orchestrator.py`，目前解析仍是簡化版本，尚未完整接 C 的 InputEngine。 |
 | Session、交易、事件、對話、目擊記憶、去重 | `backend/database/repository.py`；資料表在 `models.py`，連線在 `session.py`。 |
-| C 的數值、危險事件、換幕與結局 | `backend/rules/`，以及 `backend/modules/input_engine.py`、`action_validator.py`、`state_manager.py`、`ending_engine.py`。已有模組，**現行 GameOrchestrator 未呼叫這套完整流程**。 |
+| C 的數值、危險事件、換幕與結局 | `backend/rules/`，以及 `backend/modules/input_engine.py`、`action_validator.py`、`state_manager.py`、`ending_engine.py`。已有模組，**目前只整合 E2-3 的 EventRules／StateRules，未呼叫完整 StateManager 流程**。 |
 | 3D 工作與 GPU 服務 | `backend/generation/scene_assets.py` 處理 job／GLB；`infra/hunyuan3d/server.py` 執行 Hunyuan；`scripts/generate_scene_models.py` 更新離線資產。 |
 | 2D 圖片工作 | `backend/generation/image_gateway.py` 定義介面，`scene_image_jobs.py` 處理保存、工作與 fallback；尚無正式 provider 注入。 |
 | 目前 2D 人物、地標、取樣、語音／對話 | `frontend/components/MinglinGame.tsx`、`frontend/app/page.tsx`；`.tmj` 的 Actors／Walkable 定義人物、地標與可走區域；`tilemap_url` 由後端提供。 |
@@ -225,7 +232,7 @@ flowchart TD
 | 優先 | 工作 | 負責方 |
 | --- | --- | --- |
 | 1 | 真正故事 LLM／RAG、完整角色與知識來源；將生成事件／候選選項通過驗證、保存並跨回合承接。 | B／D／作者 |
-| 2 | 正式第二／三幕、危險事件、死亡即結束、五結局；修正舊死後轉化規則再整合。 | C／D／A |
+| 2 | 其餘第二／三幕、危險事件、死亡即結束、五結局；修正舊死後轉化規則再整合。 | C／D／A |
 | 3 | 擴充固定場景圖庫與地圖，按事件狀態選合適版本；每張圖需校正可走區、角色、調查點，維持末世寫實與一致比例。 | A／D／作者／美術 |
 | 4 | NPC 自主行動、任務完整生命週期、連續座標保存與正式多人存取權。 | B／C／D |
 | 5 | 投影／手機／瀏覽器語音實機驗收與效能調整。 | A／D |
@@ -289,7 +296,7 @@ export MODEL_GATEWAY_MODEL='<B 提供的模型名稱>'
 | `POST /api/game/{session_id}/scene-assets`、`GET .../scene-assets/{job_id}` | 3D 工作建立、輪詢；POST 要帶 expected_state_version。 |
 | `GET /api/game/{session_id}/scene-assets/{job_id}/model` | 取得該 Session 成功工作的 GLB。 |
 
-最近一次功能驗收（2026-11-12）：**130 個後端測試、既有 12 個前端邏輯測試、Next.js production build 通過**。Chrome 實際走兩條 2D 分支、四項紀錄與回報、重整／重啟承接、中文輸入法、地圖與手記，以及邊境塞特／希拉、烈燚原達索交談。2D 的操作另由瀏覽器驗收，既有 Node 控制測試仍包含歷史 3D 測試；這些不代表正式 LLM／結局完成。
+最近一次功能驗收（2026-11-12）：**137 個後端測試、既有 12 個前端邏輯測試、Next.js production build 通過**。Chrome 實際走兩條 2D 分支、四項紀錄與回報、重整／重啟承接、中文輸入法、地圖與手記，以及邊境選項、取得地圖、背包圖片與手機排版；另以 API 測試替身驗證固定選項不呼叫模型，三種結果、去重與重啟承接通過。2D 的操作另由瀏覽器驗收，既有 Node 控制測試仍包含歷史 3D 測試；這些不代表正式 LLM／結局完成。
 
 ```bash
 # 專案根目錄：後端與前端邏輯測試
@@ -306,7 +313,8 @@ Node 控制測試需使用支援 `--experimental-strip-types` 的版本；Next.j
 
 | 文件／證據 | 內容 |
 | --- | --- |
-| [最新 2D QA](docs/qa/2d-exploration/README.md) | 固定圖庫、六地探索、兩條分支、手記、移動及手機。 |
+| [最新固定選項／道具 QA](docs/qa/preset-story/README.md) | 寫實柔化、六地固定選項、邊境決定與真實背包。 |
+| [2D 基礎 QA](docs/qa/2d-exploration/README.md) | 固定圖庫、六地探索、兩條分支、手記、移動及手機。 |
 | [地圖 QA](docs/qa/world-map/README.md)、[森林 QA](docs/qa/forest-sanctuary/README.md) | 路線、承接、原版主景與操作。 |
 | [音樂資產](docs/AUDIO_ASSETS.md) | 曲目、來源、授權、雜湊。 |
 | [B AI／RAG 交接](docs/B_AI_RAG_HANDOFF.md) | 模型、資料、檢索與驗收交付。 |

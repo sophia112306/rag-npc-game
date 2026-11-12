@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from backend.content.scenes import SCENES
+from backend.content.characters import NPC_SCENES, npc_is_present
 from backend.schemas.game_state import GameState
 from backend.schemas.player_view import PlayerSceneView, project_player_view
 
@@ -33,6 +34,9 @@ def test_all_fixed_images_have_their_own_reachable_map():
         assert (path.parent / layers["Background"]["image"]).resolve() == (PUBLIC / scene.background_url.lstrip("/")).resolve()
         polygons = [obj["polygon"] for obj in layers["Walkable"]["objects"]]
         actors = layers["Actors"]["objects"]
+        assert {actor["name"] for actor in actors if actor["type"] == "npc"} == {
+            npc_id for npc_id in NPC_SCENES if npc_is_present(npc_id, scene.scene_id)
+        }, scene.scene_id
         spawn = next(actor for actor in actors if actor["name"] == "player_spawn")
         targets = [actor for actor in actors if actor["type"] in ("npc", "landmark")]
         assert targets, scene.scene_id

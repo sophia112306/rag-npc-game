@@ -12,7 +12,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from backend.content.demo_story import DEMO_STORY_CHOICES
+from backend.content.demo_story import BORDER_RULE_IDS, DEMO_STORY_CHOICES
 from backend.content.reveal_policy import (
     REVISED_DEMO_CHOICE_IDS,
     normalize_legacy_demo_state,
@@ -414,15 +414,20 @@ class SqlAlchemyGameRepository:
         # A saved action remains idempotent, while an older demo replay must not
         # repeat dialogue that revealed a later-stage truth prematurely.
         choice_id = record.request_json.get("story_choice_id")
+        confirmed_map_context = "fissure_map" in response.state.player.inventory or any(
+            operation.get("rule_event_id") in BORDER_RULE_IDS
+            for event in response.story.established_events
+            for operation in event.effect.get("operations", []) if isinstance(operation, dict)
+        )
         if choice_id in REVISED_DEMO_CHOICE_IDS and response.story.dialogue:
             current = next(
                 choice for choice in DEMO_STORY_CHOICES if choice.choice_id == choice_id
             )
             response.story.dialogue[0].text = current.response_text
         for line in response.story.dialogue:
-            line.text = public_story_text(line.text)
+            line.text = public_story_text(line.text, allow_fissure_map=confirmed_map_context)
         for event in response.story.established_events:
-            event.description = public_story_text(event.description)
+            event.description = public_story_text(event.description, allow_fissure_map=confirmed_map_context)
             operations = event.effect.get("operations")
             if isinstance(operations, list):
                 for operation in operations:

@@ -1,6 +1,7 @@
 """Build player-visible shortcuts from authoritative story and scene data."""
 
-from backend.content.demo_story import available_demo_story_choices
+from backend.content.characters import npc_is_present
+from backend.content.demo_story import available_demo_story_choices, available_npc_dialogue_choices
 from backend.content.scenes import travel_destinations
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import ActionMode, PlayerAction
@@ -11,75 +12,15 @@ from backend.schemas.progression import PlayerQuestView
 def build_player_choices(
     state: GameState,
     quests: list[PlayerQuestView],
-    npc_id: str = "vidalia",
+    npc_id: str | None = None,
 ) -> list[PlayerChoice]:
     """Return a small contextual set; movement comes from the scene graph."""
 
-    npc_scene = {
-        "menmesvento": "liuchen_valley",
-        "dasso": "lieyi_plains",
-        "seth": "border_ruins",
-        "syra": "border_ruins",
-    }
-    if npc_id in npc_scene and state.current_scene_id != npc_scene[npc_id]:
-        return []
-
-    if npc_id == "andre":
-        return [
-            PlayerChoice(
-                choice_id="andre_ask_anomaly",
-                label="詢問林地異象",
-                message="你在林地邊緣觀察到什麼異象？",
-                target_npc_id="andre",
-            ),
-            PlayerChoice(
-                choice_id="andre_ask_trail",
-                label="詢問調查路線",
-                message="我可以從哪裡開始調查？",
-                target_npc_id="andre",
-            ),
-        ]
-
-    if npc_id == "menmesvento":
-        return [
-            PlayerChoice(
-                choice_id="menmesvento_ask_names",
-                label="詢問流塵谷的名字",
-                message="為什麼這裡的人如此重視名字？",
-                target_npc_id="menmesvento",
-            ),
-            PlayerChoice(
-                choice_id="menmesvento_ask_record",
-                label="詢問手中的古卷",
-                message="你在古卷裡記錄什麼？",
-                target_npc_id="menmesvento",
-            ),
-        ]
-
-    if npc_id in {"dasso", "seth", "syra"}:
-        prompts = {
-            "dasso": (
-                ("詢問聖火", "這裡的聖火目前有什麼異常？"),
-                ("詢問長老會", "長老會正在調查什麼？"),
-            ),
-            "seth": (
-                ("詢問去向", "你想往哪個方向走？"),
-                ("詢問風沙", "流塵谷最近的風沙有什麼變化？"),
-            ),
-            "syra": (
-                ("詢問記錄盒", "你懷裡的記錄盒是做什麼的？"),
-                ("詢問旅途", "你是怎麼來到流塵谷的？"),
-            ),
-        }
-        return [
-            PlayerChoice(
-                choice_id=f"{npc_id}_ask_{index}",
-                label=label,
-                message=message,
-                target_npc_id=npc_id,
-            )
-            for index, (label, message) in enumerate(prompts[npc_id], start=1)
-        ]
+    if npc_id is not None:
+        if not npc_is_present(npc_id, state.current_scene_id):
+            return []
+        if npc_id != "vidalia" or state.current_scene_id != "minglin":
+            return [choice.to_player_choice() for choice in available_npc_dialogue_choices(state, npc_id)]
 
     story_choices = available_demo_story_choices(state)
     if story_choices:

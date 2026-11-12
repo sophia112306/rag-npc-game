@@ -4,6 +4,8 @@
 
 本契約是 A／D 與 B 的供應商無關邊界。B 可以在後方使用雲端模型、校內 GPU、vLLM 或其他服務；遊戲後端只呼叫本契約，不直接依賴特定 SDK。
 
+固定按鈕的回答與 E2-3 結果不呼叫 ModelGateway。`advance_story` 必須對應玩家已確認的合法選項，模型不能代替玩家選取固定獎勵；候選評分與排序仍待接入，見 [固定情境與評分設計](PRESET_STORY_FLOW.md)。
+
 ## 啟用方式
 
 未設定 `MODEL_GATEWAY_URL` 時，後端使用明確標示的 `RuleBasedStoryPlanner`，依玩家輸入及已保存狀態產生程序式動態回覆，不會呼叫外部服務。設定後，`MODEL_GATEWAY_PROVIDER` 可選兩種接法：

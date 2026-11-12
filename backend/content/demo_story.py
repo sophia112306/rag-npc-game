@@ -7,6 +7,8 @@ state change still passes through the normal proposal resolver.
 
 from dataclasses import dataclass
 
+from backend.content.characters import npc_is_present
+from backend.content.npc_dialogue import NPC_DIALOGUE_CHOICES
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import ActionMode
 from backend.schemas.player_choice import PlayerChoice
@@ -29,6 +31,9 @@ class DemoStoryChoiceDefinition:
     unlock_scene_ids: tuple[str, ...] = ()
     special_scene_transition: bool = False
     visual_signal: str | None = None
+    rule_event_id: str | None = None
+    witness_npc_ids: tuple[str, ...] = ()
+    narrate_response: bool = False
 
     def to_player_choice(self) -> PlayerChoice:
         return PlayerChoice(
@@ -402,11 +407,11 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "preview_border_ruins",
         "demo_complete",
         "minglin",
-        "前往邊境廢墟（第二幕預覽）",
+        "前往邊境廢墟",
         "我已走訪烈燚原和流塵谷，想去邊境廢墟看看。",
         "兩地的線索在邊境交會。殘破石門下，兩名旅人似乎正為各自的去路爭執。",
         "border_ruins_preview",
-        "第二幕預覽・邊境廢墟",
+        "邊境的抉擇",
         action_mode=ActionMode.MOVEMENT,
         destination_scene_id="border_ruins",
         unlock_scene_ids=("border_ruins",),
@@ -418,14 +423,49 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "border_ruins",
         "返回鳴霖整理線索",
         "我先離開邊境廢墟，返回鳴霖。",
-        "你記下兩人的名字與處境。這段相遇的正式抉擇，將由第二幕承接。",
+        "你暫時離開邊境廢墟，將已確認的相遇與線索帶回鳴霖。",
         "demo_complete",
         "下一章待續",
         action_mode=ActionMode.MOVEMENT,
         destination_scene_id="minglin",
         special_scene_transition=True,
     ),
+    _choice(
+        "border_help_both", "border_ruins_preview", "border_ruins",
+        "協助塞特與希拉", "我決定協助塞特與希拉，讓兩人繼續前行。",
+        "你決定協助塞特與希拉。裂隙地圖已收進背包，圖書館的路線成為可追查的線索。",
+        "border_choice_resolved", "邊境抉擇：協助兩人",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="seth", rule_event_id="E2-3_help_both",
+        witness_npc_ids=("seth", "syra"), narrate_response=True,
+        reveal_clue_ids=("library_route_lead",),
+    ),
+    _choice(
+        "border_report", "border_ruins_preview", "border_ruins",
+        "選擇通報長老會", "我選擇向長老會通報這次邊境相遇。",
+        "你選擇通報長老會，這次行動將沿長老協力的方向承接。你沒有取得裂隙地圖。",
+        "border_choice_resolved", "邊境抉擇：長老協力",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="seth", rule_event_id="E2-3_report",
+        witness_npc_ids=("seth", "syra"), narrate_response=True,
+    ),
+    _choice(
+        "border_ignore", "border_ruins_preview", "border_ruins",
+        "暫不介入兩人的處境", "我決定暫不介入兩人的處境。",
+        "你暫不介入兩人的處境，沒有取得新的道具或路線。",
+        "border_choice_resolved", "邊境抉擇：暫不介入",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="seth", rule_event_id="E2-3_ignore",
+        witness_npc_ids=("seth", "syra"), narrate_response=True,
+    ),
+    _choice(
+        "return_after_border_choice", "border_choice_resolved", "border_ruins",
+        "帶著邊境的選擇返回鳴霖", "我帶著這次邊境的選擇返回鳴霖。",
+        "你離開邊境廢墟。這次選擇與實際持有的物品會隨旅程保存。",
+        "demo_complete", "邊境之後",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
+    ),
 )
+
+BORDER_RULE_IDS = frozenset(("E2-3_help_both", "E2-3_report", "E2-3_ignore"))
+BORDER_RESOLUTION_IDS = frozenset(choice.choice_id for choice in DEMO_STORY_CHOICES if choice.rule_event_id in BORDER_RULE_IDS)
 
 
 def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefinition, ...]:
@@ -440,7 +480,25 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
         if choice.source_node_id == state.story_progress.node_id
         and choice.source_scene_id == state.current_scene_id
         and (choice.choice_id != "preview_border_ruins" or visited_both_regions)
+        and (choice.choice_id not in BORDER_RESOLUTION_IDS or not BORDER_RESOLUTION_IDS.intersection(state.story_progress.completed_choice_ids))
     )[:4]
+
+
+def available_npc_dialogue_choices(state: GameState, npc_id: str) -> tuple[DemoStoryChoiceDefinition, ...]:
+    """Fixed replies preserve the current scene, story node and item ownership."""
+    if not npc_is_present(npc_id, state.current_scene_id):
+        return ()
+    if npc_id == "vidalia" and state.current_scene_id == "minglin":
+        return ()  # Council dialogue already belongs to the story definitions.
+    return tuple(
+        _choice(
+            definition.choice_id, state.story_progress.node_id, state.current_scene_id,
+            definition.label, definition.message, definition.response_text,
+            state.story_progress.node_id, state.story_progress.chapter_title,
+            action_mode=ActionMode.DIALOGUE, target_npc_id=npc_id,
+        )
+        for definition in NPC_DIALOGUE_CHOICES.get(npc_id, ())
+    )
 
 
 def find_available_demo_story_choice(
@@ -450,7 +508,11 @@ def find_available_demo_story_choice(
     return next(
         (
             choice
-            for choice in available_demo_story_choices(state)
+            for choice in (
+                *available_demo_story_choices(state),
+                *(choice for npc_id in NPC_DIALOGUE_CHOICES
+                  for choice in available_npc_dialogue_choices(state, npc_id)),
+            )
             if choice.choice_id == choice_id
         ),
         None,

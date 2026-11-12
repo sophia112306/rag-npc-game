@@ -4,6 +4,20 @@ from backend.schemas.character import CharacterProfile
 from backend.schemas.content import CharacterDefinition, SourceReference
 
 
+NPC_SCENES = {
+    "vidalia": ("minglin", "minglin_life_spring"),
+    "andre": ("minglin",),
+    "menmesvento": ("liuchen_valley",),
+    "dasso": ("lieyi_plains",),
+    "seth": ("border_ruins",),
+    "syra": ("border_ruins",),
+}
+
+
+def npc_is_present(npc_id: str, scene_id: str) -> bool:
+    return scene_id in NPC_SCENES.get(npc_id, ())
+
+
 CHARACTER_PROFILES: dict[str, CharacterProfile] = {
     "vidalia": CharacterProfile(
         npc_id="vidalia",
