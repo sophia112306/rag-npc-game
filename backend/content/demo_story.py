@@ -388,17 +388,49 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         action_mode=ActionMode.DIALOGUE,
         target_npc_id="vidalia",
     ),
+    *_minglin_travel_choices("demo_complete"),
+    _choice(
+        "preview_border_ruins",
+        "demo_complete",
+        "minglin",
+        "前往邊境廢墟（第二幕預覽）",
+        "我已走訪烈燚原和流塵谷，想去邊境廢墟看看。",
+        "兩地的線索在邊境交會。殘破石門下，兩名旅人似乎正為各自的去路爭執。",
+        "border_ruins_preview",
+        "第二幕預覽・邊境廢墟",
+        action_mode=ActionMode.MOVEMENT,
+        destination_scene_id="border_ruins",
+        unlock_scene_ids=("border_ruins",),
+        special_scene_transition=True,
+    ),
+    _choice(
+        "return_from_border_ruins",
+        "border_ruins_preview",
+        "border_ruins",
+        "返回鳴霖整理線索",
+        "我先離開邊境廢墟，返回鳴霖。",
+        "你記下兩人的名字與處境。這段相遇的正式抉擇，將由第二幕承接。",
+        "demo_complete",
+        "下一章待續",
+        action_mode=ActionMode.MOVEMENT,
+        destination_scene_id="minglin",
+        special_scene_transition=True,
+    ),
 )
 
 
 def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefinition, ...]:
     """Return at most four choices valid for the authoritative story position."""
 
+    visited_both_regions = {"enter_lieyi_plains", "enter_liuchen_valley"}.issubset(
+        state.story_progress.completed_choice_ids
+    )
     return tuple(
         choice
         for choice in DEMO_STORY_CHOICES
         if choice.source_node_id == state.story_progress.node_id
         and choice.source_scene_id == state.current_scene_id
+        and (choice.choice_id != "preview_border_ruins" or visited_both_regions)
     )[:4]
 
 

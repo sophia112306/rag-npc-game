@@ -138,22 +138,22 @@ const previewSethProfile: CharacterProfile = {
   npc_id: "seth",
   name: "塞特",
   romanized_name: "Seth",
-  title: "流塵谷旅人",
-  scene_name: "流塵谷",
+  title: "木乃伊旅人・邊境逃亡者",
+  scene_name: "邊境廢墟",
   portrait_url: "/images/seth.jpg",
-  description: "披著舊斗篷的木乃伊，在風沙中尋找去路。",
-  greeting: "別靠得太近……我只是想找一條能離開這裡的路。",
+  description: "披著抗熱斗篷、以繃帶掩面，在邊境尋找出路的木乃伊。",
+  greeting: "別叫我的名字……我已經記得太多了。你能帶我離開這裡嗎？",
 };
 
 const previewSyraProfile: CharacterProfile = {
   npc_id: "syra",
   name: "希拉",
   romanized_name: "Syra",
-  title: "逃亡的記錄員",
-  scene_name: "流塵谷",
+  title: "人族記錄員・邊境逃亡者",
+  scene_name: "邊境廢墟",
   portrait_url: "/images/syra.jpg",
-  description: "抱著記錄盒來到流塵谷的人族女孩。",
-  greeting: "我會記下親眼看見的事。你從哪個方向來？",
+  description: "緊抱個人記錄盒、穿著破損圖書館制服的年輕人族。",
+  greeting: "這盒子裡記著我這一世的事。請別讓他們把它拿走。",
 };
 
 const previewScene: PlayerScene = {
@@ -228,11 +228,39 @@ export default function Home() {
     } else if (scene.scene_id === "lieyi_plains") {
       setActiveNpcId("dasso");
       setLastNpcSpeech(previewDassoProfile.greeting);
+    } else if (scene.scene_id === "border_ruins") {
+      setActiveNpcId("seth");
+      setLastNpcSpeech(previewSethProfile.greeting);
     } else if (scene.scene_id === "minglin" || scene.scene_id === "minglin_life_spring") {
       setActiveNpcId("vidalia");
     }
     setNearNpcId(null);
   }, [scene.scene_id]);
+
+  useEffect(() => {
+    if (!ready || !sessionId) return;
+    let current = true;
+    const visible = scene.scene_id === "border_ruins" ? (["seth", "syra"] as const)
+      : scene.scene_id === "liuchen_valley" ? (["menmesvento"] as const)
+        : scene.scene_id === "lieyi_plains" ? (["dasso"] as const) : [];
+    setMenmesventoChoices([]);
+    setDassoChoices([]);
+    setSethChoices([]);
+    setSyraChoices([]);
+    void Promise.all(visible.map((npcId) =>
+      requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices?npc_id=${npcId}`)
+    )).then((choiceSets) => {
+      if (!current) return;
+      choiceSets.forEach((choices, index) => {
+        const npcId = visible[index];
+        if (npcId === "menmesvento") setMenmesventoChoices(choices);
+        if (npcId === "dasso") setDassoChoices(choices);
+        if (npcId === "seth") setSethChoices(choices);
+        if (npcId === "syra") setSyraChoices(choices);
+      });
+    }).catch(() => { /* The main dialogue still works if optional shortcuts fail. */ });
+    return () => { current = false; };
+  }, [ready, scene.scene_id, sessionId]);
 
   useEffect(() => {
     const id = window.localStorage.getItem(GAME_SESSION_STORAGE_KEY) ?? window.crypto.randomUUID();
@@ -612,12 +640,12 @@ export default function Home() {
         </div>
 
         <section className={`dialogue-panel ${dialogueOpen ? "is-open" : "is-preview"}`} aria-label={`與${profile.name}對話`}>
-          <div className="dialogue-portrait">
+          <div className={`dialogue-portrait npc-${displayNpcId}`}>
             <Image src={profile.portrait_url} alt={`${profile.name}肖像`} fill sizes="(max-width: 640px) 90px, 175px" />
           </div>
           <div className="dialogue-main">
             <div className="dialogue-heading">
-              <div><h1>{profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 動態" : "規則動態"}</span></div>
+              <div><h1>{profile.name}</h1><span className="dialogue-title">{profile.title}</span><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 動態" : "規則動態"}</span></div>
               {dialogueOpen && <button type="button" className="close-dialogue" onClick={() => setDialogueOpen(false)} aria-label="關閉對話">✕</button>}
             </div>
 

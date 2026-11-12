@@ -12,6 +12,7 @@ const places: Record<string, { x: number; y: number }> = {
   minglin_life_spring: { x: 276, y: 188 },
   minglin_rune_grove: { x: 287, y: 663 },
   liuchen_valley: { x: 1360, y: 307 },
+  border_ruins: { x: 1395, y: 452 },
   lieyi_plains: { x: 1418, y: 584 },
 };
 

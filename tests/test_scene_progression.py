@@ -24,6 +24,7 @@ def test_scene_registry_references_existing_assets_and_destinations() -> None:
         "minglin_life_spring",
         "minglin_rune_grove",
         "liuchen_valley",
+        "border_ruins",
         "lieyi_plains",
     }
     for scene in SCENES.values():

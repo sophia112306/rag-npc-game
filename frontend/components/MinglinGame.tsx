@@ -73,7 +73,8 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, paused,
         private playerShadow?: Phaser.GameObjects.Ellipse;
         private npcs: Partial<Record<NpcId, Phaser.GameObjects.Image>> = {};
         private visibleNpcIds: NpcId[] = sceneId === "liuchen_valley"
-          ? ["menmesvento", "seth", "syra"]
+          ? ["menmesvento"]
+          : sceneId === "border_ruins" ? ["seth", "syra"]
           : sceneId === "lieyi_plains" ? ["dasso"]
             : sceneId === "minglin" ? ["vidalia", "andre"]
               : sceneId === "minglin_life_spring" ? ["vidalia"] : [];
@@ -92,6 +93,7 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, paused,
 
         preload() {
           const tilemapUrl = sceneId === "liuchen_valley" ? "/game/liuchen.tmj"
+            : sceneId === "border_ruins" ? "/game/border-ruins.tmj"
             : sceneId === "lieyi_plains" ? "/game/lieyi.tmj"
               : sceneId === "minglin_life_spring" ? "/game/minglin-life-spring.tmj"
                 : "/game/minglin.tmj";
@@ -131,16 +133,21 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, paused,
             const npcX = actor.x ?? 0;
             const npcY = actor.y ?? 0;
             this.add.ellipse(npcX, npcY + 4, 40, 12, 0x232119, 0.35).setDepth(npcY - 1);
-            const spriteWidth: Partial<Record<NpcId, number>> = {
-              vidalia: 52, andre: 70, menmesvento: 70, dasso: 135, seth: 115, syra: 95,
+            const spriteHeight: Record<NpcId, number> = {
+              vidalia: 132, andre: 137, menmesvento: 137, dasso: 154, seth: 148, syra: 143,
             };
+            const texture = this.textures.get(npcId).getSourceImage();
+            const height = spriteHeight[npcId];
+            const width = height * texture.width / texture.height;
             this.npcs[npcId] = this.add.image(npcX, npcY, npcId).setOrigin(0.5, 1)
-              .setDisplaySize(spriteWidth[npcId] ?? 70, npcId === "vidalia" ? 132 : 137).setDepth(npcY);
-            const marker = this.add.text(npcX, npcY - 149, "◇", {
+              .setDisplaySize(width, height).setDepth(npcY);
+            this.tweens.add({ targets: this.npcs[npcId], y: npcY - 2, duration: 1750 + this.visibleNpcIds.indexOf(npcId) * 190, yoyo: true, repeat: -1, ease: "Sine.InOut" });
+            const markerY = npcY - height - 14;
+            const marker = this.add.text(npcX, markerY, "◇", {
               color: "#ffe496", fontSize: "31px", fontFamily: "Georgia, serif",
               stroke: "#3f3519", strokeThickness: 4,
             }).setOrigin(0.5).setDepth(npcY + 1);
-            this.tweens.add({ targets: marker, y: npcY - 155, duration: 1150, yoyo: true, repeat: -1, ease: "Sine.InOut" });
+            this.tweens.add({ targets: marker, y: markerY - 6, duration: 1150, yoyo: true, repeat: -1, ease: "Sine.InOut" });
           }
           this.cursorKeys = this.input.keyboard?.createCursorKeys();
           this.movementKeys = this.input.keyboard?.addKeys("W,A,S,D") as Record<string, Phaser.Input.Keyboard.Key> | undefined;
@@ -206,7 +213,7 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, paused,
             }
             const clickedNpcId = this.visibleNpcIds.find((npcId) => {
               const npc = this.npcs[npcId];
-              return npc && Math.abs(x - npc.x) < 64 && y > npc.y - 150 && y < npc.y + 23;
+              return npc && Math.abs(x - npc.x) < Math.max(48, npc.displayWidth / 2 + 8) && y > npc.y - npc.displayHeight - 20 && y < npc.y + 23;
             });
             if (clickedNpcId) {
               const npc = this.npcs[clickedNpcId]!;

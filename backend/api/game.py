@@ -17,6 +17,7 @@ from backend.orchestration.game_orchestrator import (
     StateVersionConflictError,
     StoryChoiceMismatchError,
     StoryChoiceUnavailableError,
+    NpcUnavailableError,
 )
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.player_action import PlayerAction
@@ -104,6 +105,11 @@ async def submit_player_action(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "STORY_CHOICE_UNAVAILABLE", "message": str(exc)},
+        ) from exc
+    except NpcUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "NPC_UNAVAILABLE", "message": str(exc)},
         ) from exc
     except StoryChoiceMismatchError as exc:
         raise HTTPException(

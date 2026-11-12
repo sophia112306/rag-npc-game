@@ -15,6 +15,15 @@ def build_player_choices(
 ) -> list[PlayerChoice]:
     """Return a small contextual set; movement comes from the scene graph."""
 
+    npc_scene = {
+        "menmesvento": "liuchen_valley",
+        "dasso": "lieyi_plains",
+        "seth": "border_ruins",
+        "syra": "border_ruins",
+    }
+    if npc_id in npc_scene and state.current_scene_id != npc_scene[npc_id]:
+        return []
+
     if npc_id == "andre":
         return [
             PlayerChoice(

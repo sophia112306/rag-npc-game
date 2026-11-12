@@ -12,11 +12,11 @@
 
 | 範圍 | 本次變更 |
 | --- | --- |
-| 角色與對話 | 鳴霖有維達利亞、安德烈，流塵谷有門梅司文托、塞特、希拉，烈燚原有達索。六人有公開角色 API、肖像、Phaser 場景互動、角色專屬詢問選項和規則動態回覆；塞特、希拉、達索採用使用者提供的原圖與透明場景人物圖。角色私有設定及正式支線仍未填完。 |
+| 角色與對話 | 鳴霖有維達利亞、安德烈；首次進流塵谷遇門梅司文托；烈燚原遇達索。塞特與希拉只在兩地調查後開放的邊境廢墟第二幕預覽中同場。三位新角色依原圖重做完整全身透明圖，肖像仍用使用者原圖；正式支線尚未實作。 |
 | 開場劇情與舊存檔 | 第一階段台詞、線索 ID 和場景圖片 prompt 改為只公開當時可觀察的資訊；符石路徑先給風沙方向，不提早發放正式裂隙地圖。舊 Demo 存檔、舊回合重送及瀏覽器對話紀錄會轉成新版公開用語。 |
-| 場景與旅途地圖 | 流塵谷及烈燚原新增 Tiled 可走區域與 NPC 位置。首頁加入俯視旅途地圖縮圖，可展開查看鳴霖、命脈之泉、符石林、流塵谷、烈燚原；青色光點會依目前場景移動，地圖本身不觸發旅行。 |
-| 音樂與預覽 | 五個遊戲場景各有一首配樂；首頁與 Babylon 試玩頁會隨場景換曲。另有獨立的維塔預覽頁 `/preview/veta`，可切換觀察視角並播放專用配樂。曲目、來源及檔案記錄見 [`docs/AUDIO_ASSETS.md`](docs/AUDIO_ASSETS.md)。 |
-| 驗證 | 新增第一階段揭露、角色選項與劇情路線測試；本次執行後端 `105 passed`，Next.js production build 通過並產生 `/`、`/experiments/babylon`、`/preview/veta`。 |
+| 場景與旅途地圖 | 流塵谷、烈燚原及邊境廢墟各有 Tiled 可走區域與 NPC 位置。首頁旅途地圖可展開查看地名，青色光點依目前場景移動；地圖本身不觸發旅行。 |
+| 音樂與預覽 | 場景切換時會依地區播放配樂；邊境廢墟沿用流塵谷曲目。另有獨立的維塔預覽頁 `/preview/veta`。曲目與來源見 [`docs/AUDIO_ASSETS.md`](docs/AUDIO_ASSETS.md)。 |
+| 驗證 | 後端 `106 passed`，Next.js production build 通過；新增出場順序與邊境解鎖測試。 |
 
 ### 目前還缺什麼
 
@@ -68,7 +68,7 @@ export MODEL_GATEWAY_API_KEY='<本機金鑰>'
 
 規則動態目前能處理招呼、場景觀察、任務詢問、明確承諾、物品交付、先前對話回想與場景移動。任務、承諾、物品移轉及換場仍需通過後端白名單驗證，並與完整回合同一交易保存。它是可驗收的程序式故事系統，不宣稱具備 LLM 的自由創作能力。
 
-對話介面會顯示由後端依 Session 產生的主線選項，以及安德烈、門梅司文托、達索、塞特、希拉的角色專屬詢問選項。點選換場選項會提交含 `destination_scene_id` 的一般 `PlayerAction`，沿用相同的去重、版本、規則驗證與資料庫交易，不是只在前端切換假畫面。
+對話介面會依目前所在地顯示可接觸 NPC 的詢問選項。首次進流塵谷只有門梅司文托；達索在烈燚原；塞特與希拉位於邊境廢墟。要進入邊境廢墟預覽，先完成流塵谷、烈燚原各一條 Demo 調查路線並返回鳴霖，再選「前往邊境廢墟（第二幕預覽）」。預覽只提供場景與對話；E2-3 的協助、揭發、不介入以及裂隙地圖獎勵尚未實作。換場與 NPC 可用性由後端驗證。
 
 前端：
 
@@ -109,9 +109,9 @@ npm run dev
 
 ## 畫面與圖片素材
 
-首頁、Babylon 試玩頁會依五個場景切換循環背景音樂，玩家可由右上角播放或關閉；維塔預覽頁另有配樂。音樂來源、授權與檔案雜湊記錄於 [`docs/AUDIO_ASSETS.md`](docs/AUDIO_ASSETS.md)。首頁左上角的旅途地圖使用 [`world-route-map-v1.png`](frontend/public/game/world-route-map-v1.png)，可展開查看地名，青色光點依目前場景更新；圖片上的道路是美術示意，不取代後端旅行規則。
+首頁、Babylon 試玩頁會依場景切換循環背景音樂，玩家可由右上角播放或關閉；邊境廢墟沿用流塵谷曲目，維塔預覽頁另有配樂。音樂來源、授權與檔案雜湊記錄於 [`docs/AUDIO_ASSETS.md`](docs/AUDIO_ASSETS.md)。首頁左上角的旅途地圖使用 [`world-route-map-v1.png`](frontend/public/game/world-route-map-v1.png)，可展開查看地名，青色光點依目前場景更新；圖片上的道路是美術示意，不取代後端旅行規則。
 
-第一版採用「建置期生成、遊戲期只引用版本化資產」：命脈之泉、符石林、流塵谷與烈燚原由 OpenAI 內建圖片生成工具製作，工具沒有回傳底層模型名稱，因此不在文件中猜測型號。檔案、尺寸、SHA-256、提示摘要與 provisional 狀態記錄於 [`frontend/public/game/scenes/manifest.json`](frontend/public/game/scenes/manifest.json)，完整提示在 [`docs/SCENE_ASSET_PROMPTS.md`](docs/SCENE_ASSET_PROMPTS.md)。每回合不會重新生圖，也不會讓文字模型覆寫圖片。
+第一版採用「建置期生成、遊戲期只引用版本化資產」：命脈之泉、符石林、流塵谷、烈燚原與邊境廢墟由 OpenAI 內建圖片生成工具製作，工具沒有回傳底層模型名稱，因此不在文件中猜測型號。檔案、尺寸、SHA-256、提示摘要與 provisional 狀態記錄於 [`frontend/public/game/scenes/manifest.json`](frontend/public/game/scenes/manifest.json)，完整提示在 [`docs/SCENE_ASSET_PROMPTS.md`](docs/SCENE_ASSET_PROMPTS.md)。每回合不會重新生圖，也不會讓文字模型覆寫圖片。
 
 後端的單一 Scene Registry 位於 `backend/content/scenes.py`，同時提供 2D 背景、3D 遠景、玩家可見名稱與合法出口。Phaser 主頁會切換完整背景；Babylon.js 3D 試玩保留原有幾何、燈光與相機，並依同一個 Session 切換遠景貼圖與場景名稱。`current_scene_id`、成立事件、對話與版本會在同一交易保存，重新整理或重啟後仍可承接。
 

@@ -134,6 +134,37 @@ def test_new_npc_profile_choice_and_dialogue(
 
     session_id = f"{npc_id}-session"
     state = start_session(client, session_id)
+    assert client.get(f"/api/game/{session_id}/choices?npc_id={npc_id}").json() == []
+    route = (
+        "travel_to_minglin_life_spring",
+        "study_spring_ash",
+        "enter_lieyi_plains",
+    ) if npc_id == "dasso" else (
+        "travel_to_minglin_rune_grove",
+        "trace_dust_runes",
+        "enter_liuchen_valley",
+        "listen_to_forgotten_names",
+        "return_with_dust_findings",
+        "travel_to_minglin_life_spring",
+        "study_spring_ash",
+        "enter_lieyi_plains",
+        "observe_sacred_fire",
+        "return_with_fire_findings",
+        "preview_border_ruins",
+    )
+    for choice_id in route:
+        options = client.get(f"/api/game/{session_id}/choices").json()
+        choice = next(item for item in options if item["choice_id"] == choice_id)
+        turn = client.post("/api/game/turn", json={
+            **action_payload(session_id, expected_state_version=state["state_version"]),
+            "message": choice["message"],
+            "target_npc_id": choice["target_npc_id"],
+            "action_mode": choice["action_mode"],
+            "destination_scene_id": choice["destination_scene_id"],
+            "story_choice_id": choice["story_choice_id"],
+        })
+        assert turn.status_code == 200, turn.text
+        state = turn.json()["state"]
     choices = client.get(f"/api/game/{session_id}/choices?npc_id={npc_id}")
     assert choices.status_code == 200
     assert len(choices.json()) == 2
