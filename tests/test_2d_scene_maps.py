@@ -24,8 +24,8 @@ def _contains(polygon, x, y):
     return inside
 
 
-def test_all_five_fixed_images_have_their_own_reachable_map():
-    assert len({scene.tilemap_url for scene in SCENES.values()}) == 5
+def test_all_fixed_images_have_their_own_reachable_map():
+    assert len({scene.tilemap_url for scene in SCENES.values()}) == len(SCENES)
     for scene in SCENES.values():
         path = PUBLIC / scene.tilemap_url.lstrip("/")
         document = json.loads(path.read_text())

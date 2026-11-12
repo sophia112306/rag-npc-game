@@ -1,5 +1,7 @@
 # ModelGateway HTTP 契約與模型接法
 
+**2026-11-12 玩法更新：目前主遊戲採 2D 固定場景圖庫。模型負責故事／事件提案，不必產生圖片或 3D；換場只能引用 Scene Registry 已登記的 ID，並經後端驗證與保存。目前選項仍由 Demo Director 提供，接通一般 NPC 模型不會自動變成生成式選項；生成候選選項的契約與整合仍待 B／D 協調。**
+
 本契約是 A／D 與 B 的供應商無關邊界。B 可以在後方使用雲端模型、校內 GPU、vLLM 或其他服務；遊戲後端只呼叫本契約，不直接依賴特定 SDK。
 
 ## 啟用方式
@@ -37,7 +39,7 @@ MODEL_GATEWAY_MAX_ATTEMPTS=2
 
 `json_schema` 會傳送 `strict: true` 的回應 schema，並依該回合的 operation 白名單縮小可生成的操作。若實際部署模型只支援 JSON mode，可改成 `MODEL_GATEWAY_RESPONSE_FORMAT=json_object`；這只保證輸出為 JSON，後端的 Pydantic、操作白名單及規則驗證仍然保留。OpenAI 官方也建議在模型支援時優先使用 Structured Outputs，而非只使用 JSON mode。[OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=chat)
 
-目前 repository 沒有保存真實 URL、模型名稱或 API key，所以僅代表 adapter 已完成；未設定上述環境變數時，畫面會顯示「規則動態」，不會誤標為 AI。
+目前 repository 沒有保存真實 URL、模型名稱或 API key，所以僅代表 adapter 已完成；未設定上述環境變數時，畫面會顯示「規則式劇情」，不會誤標為 AI。
 
 ## 自訂契約 Request
 

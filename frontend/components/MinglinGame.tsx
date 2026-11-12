@@ -4,7 +4,11 @@ import { useEffect, useRef } from "react";
 import type Phaser from "phaser";
 
 export type GameCommand = { dx: number; dy: number };
-export type NpcId = "vidalia" | "andre" | "menmesvento";
+export const NPC_IDS = ["vidalia", "andre", "menmesvento", "dasso", "seth", "syra"] as const;
+export type NpcId = typeof NPC_IDS[number];
+export function isNpcId(value: string | null | undefined): value is NpcId {
+  return NPC_IDS.some(id => id === value);
+}
 export type InteractionTarget = NpcId | "landmark";
 export const MIN_MAP_ZOOM = 1;
 export const MAX_MAP_ZOOM = 2.2;
@@ -101,9 +105,9 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
           this.load.image("traveler-front", "/game/traveler-front.png");
           this.load.image("traveler-front-quarter", "/game/traveler-front-quarter.png");
           this.load.image("traveler-side", "/game/traveler-side.png");
-          this.load.image("vidalia", "/game/vidalia-cutout.png");
-          this.load.image("andre", "/game/andre-cutout.png");
-          this.load.image("menmesvento", "/game/menmesvento-cutout.png");
+          for (const npcId of NPC_IDS) {
+            this.load.image(npcId, `/game/${npcId}-cutout.png`);
+          }
         }
 
         create() {
@@ -136,7 +140,7 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
           this.player = this.add.image(playerX, playerY, "traveler").setOrigin(0.5, 1).setDisplaySize(56, 100).setDepth(playerY);
           for (const actor of actors ?? []) {
             const npcId = actor.name as NpcId;
-            const isNpc = ["vidalia", "andre", "menmesvento"].includes(npcId);
+            const isNpc = isNpcId(npcId);
             if (!isNpc && actor.name !== "landmark") continue;
             const npcX = actor.x ?? 0;
             const npcY = actor.y ?? 0;
@@ -144,9 +148,14 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
             const label = isNpc ? namesRef.current[npcId] : actor.properties?.find((p: {name:string}) => p.name === "label")?.value ?? "調查地標";
             this.targets.set(targetId, { x: npcX, y: npcY, label });
             if (isNpc) {
-            this.add.ellipse(npcX, npcY + 4, 40, 12, 0x232119, 0.35).setDepth(npcY - 1);
-            this.npcs[npcId] = this.add.image(npcX, npcY, npcId).setOrigin(0.5, 1)
-              .setDisplaySize(npcId === "vidalia" ? 52 : 70, npcId === "vidalia" ? 132 : 137).setDepth(npcY);
+              this.add.ellipse(npcX, npcY + 4, 40, 12, 0x232119, 0.35).setDepth(npcY - 1);
+              const spriteHeight: Record<NpcId, number> = {
+                vidalia: 132, andre: 137, menmesvento: 137, dasso: 154, seth: 148, syra: 143,
+              };
+              const texture = this.textures.get(npcId).getSourceImage();
+              const height = spriteHeight[npcId];
+              this.npcs[npcId] = this.add.image(npcX, npcY, npcId).setOrigin(0.5, 1)
+                .setDisplaySize(height * texture.width / texture.height, height).setDepth(npcY);
             } else {
               const ring = this.add.ellipse(npcX, npcY, 64, 26).setStrokeStyle(2, 0xddc181, .8).setDepth(npcY - 1);
               this.tweens.add({targets:ring, alpha:.35,duration:1400,yoyo:true,repeat:-1});

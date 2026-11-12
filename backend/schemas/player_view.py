@@ -42,7 +42,11 @@ def project_navigation(state: GameState) -> PlayerNavigationView:
     routes = {c.destination_scene_id: c for c in choices if c.destination_scene_id}
     investigations = [c for c in choices if c.action_mode == "interaction"]
     if state.story_progress.node_id == "demo_complete":
-        objective = "這條調查已完成。可探索另一條路線；正式後續章節尚未開放。"
+        objective = (
+            "兩條調查已完成，可前往邊境廢墟預覽第二幕；正式章節尚未開放。"
+            if "border_ruins" in routes else
+            "這條調查已完成。可探索另一條路線；正式後續章節尚未開放。"
+        )
     elif investigations:
         objective = "下一步：" + "／".join(c.label for c in investigations[:2]) + "。走近地標按 E 調查。"
     elif routes:

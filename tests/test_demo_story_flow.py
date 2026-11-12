@@ -1,5 +1,7 @@
 """End-to-end fallback story choices, validation, and persistence."""
 
+import json
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -110,11 +112,76 @@ def test_fire_branch_reaches_lieyi_and_resumes_after_restart(tmp_path) -> None:
         assert resumed["current_scene_id"] == "minglin"
         assert resumed["story_progress"] == completed["state"]["story_progress"]
         assert [choice["choice_id"] for choice in choices] == [
-            "review_demo_findings", "travel_to_minglin_life_spring", "travel_to_minglin_rune_grove"
+            "review_demo_findings",
+            "travel_to_minglin_life_spring",
+            "travel_to_minglin_rune_grove",
         ]
         alternate = _submit_choice(restarted, session_id, resumed["state_version"], "travel_to_minglin_rune_grove")
         assert alternate["state"]["story_progress"]["node_id"] == "rune_grove_arrival"
         assert set(resumed["story_progress"]["public_clue_ids"]) <= set(alternate["state"]["story_progress"]["public_clue_ids"])
+
+
+def test_border_ruins_preview_only_after_both_regions_and_npcs_are_staged(tmp_path) -> None:
+    public_root = Path("frontend/public/game")
+    valley_map = json.loads((public_root / "liuchen.tmj").read_text())
+    border_map = json.loads((public_root / "border-ruins.tmj").read_text())
+
+    def names(tilemap: dict) -> set[str]:
+        return {
+            actor["name"] for layer in tilemap["layers"]
+            if layer["name"] == "Actors" for actor in layer["objects"]
+        }
+    assert names(valley_map) == {"player_spawn", "menmesvento"}
+    assert names(border_map) == {"player_spawn", "seth", "syra"}
+
+    with TestClient(create_app(f"sqlite+aiosqlite:///{tmp_path / 'border.db'}")) as client:
+        session_id = "border-preview"
+        state = _start(client, session_id)
+        version = state["state_version"]
+        assert client.get(f"/api/game/{session_id}/choices?npc_id=seth").json() == []
+        assert client.get(f"/api/game/{session_id}/choices?npc_id=syra").json() == []
+        premature = client.post("/api/game/turn", json={
+            "session_id": session_id,
+            "action_id": str(uuid4()),
+            "message": "塞特，你在嗎？",
+            "input_type": "text",
+            "target_npc_id": "seth",
+            "action_mode": "dialogue",
+            "expected_state_version": version,
+        })
+        assert premature.status_code == 409
+        assert premature.json()["detail"]["code"] == "NPC_UNAVAILABLE"
+
+        for choice_id in (
+            "travel_to_minglin_rune_grove",
+            "trace_dust_runes",
+            "enter_liuchen_valley",
+            "listen_to_forgotten_names",
+            "return_with_dust_findings",
+        ):
+            state = _submit_choice(client, session_id, version, choice_id)
+            version = state["state"]["state_version"]
+        assert "preview_border_ruins" not in {
+            choice["choice_id"] for choice in client.get(f"/api/game/{session_id}/choices").json()
+        }
+
+        for choice_id in (
+            "travel_to_minglin_life_spring",
+            "study_spring_ash",
+            "enter_lieyi_plains",
+            "observe_sacred_fire",
+            "return_with_fire_findings",
+        ):
+            state = _submit_choice(client, session_id, version, choice_id)
+            version = state["state"]["state_version"]
+        assert "preview_border_ruins" in {
+            choice["choice_id"] for choice in client.get(f"/api/game/{session_id}/choices").json()
+        }
+        border = _submit_choice(client, session_id, version, "preview_border_ruins")
+        assert border["state"]["current_scene_id"] == "border_ruins"
+        assert "fissure_map" not in border["state"]["story_progress"]["public_clue_ids"]
+        assert client.get(f"/api/game/{session_id}/choices?npc_id=seth").json()
+        assert client.get(f"/api/game/{session_id}/choices?npc_id=syra").json()
 
 
 def test_dust_branch_reaches_liuchen_with_different_clues(tmp_path) -> None:
@@ -412,8 +479,9 @@ def test_map_routes_are_server_choices_and_unlock_after_investigation(tmp_path):
     with TestClient(create_app(f"sqlite+aiosqlite:///{tmp_path / 'map.db'}")) as client:
         state = _start(client, "map-routes")
         scenes = {scene["scene_id"]: scene for scene in state["navigation"]["scenes"]}
-        assert len(scenes) == 5 and scenes["minglin"]["current"]
+        assert len(scenes) == 6 and scenes["minglin"]["current"]
         assert not scenes["liuchen_valley"]["unlocked"]
+        assert not scenes["border_ruins"]["unlocked"]
         assert scenes["liuchen_valley"]["travel_choice"] is None
         choices = client.get("/api/game/map-routes/choices").json()
         assert scenes["minglin_rune_grove"]["travel_choice"] in choices

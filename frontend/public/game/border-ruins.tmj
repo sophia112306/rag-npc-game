@@ -1,0 +1,71 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.12.2",
+  "orientation": "isometric",
+  "renderorder": "right-down",
+  "width": 13,
+  "height": 15,
+  "tilewidth": 128,
+  "tileheight": 64,
+  "infinite": false,
+  "nextlayerid": 4,
+  "nextobjectid": 5,
+  "layers": [
+    {
+      "id": 1,
+      "name": "Background",
+      "type": "imagelayer",
+      "image": "scenes/border-ruins-v1.png",
+      "x": 0,
+      "y": 0,
+      "opacity": 1,
+      "visible": true
+    },
+    {
+      "id": 2,
+      "name": "Walkable",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {
+          "id": 1,
+          "name": "border_road",
+          "type": "walkable",
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "polygon": [
+            {"x": 370, "y": 941},
+            {"x": 1320, "y": 941},
+            {"x": 1470, "y": 610},
+            {"x": 1250, "y": 470},
+            {"x": 930, "y": 530},
+            {"x": 740, "y": 530},
+            {"x": 430, "y": 470},
+            {"x": 200, "y": 610}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Actors",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {"id": 2, "name": "player_spawn", "type": "spawn", "point": true, "x": 836, "y": 810, "width": 0, "height": 0, "rotation": 0, "visible": true},
+        {"id": 3, "name": "seth", "type": "npc", "point": true, "x": 530, "y": 580, "width": 0, "height": 0, "rotation": 0, "visible": true},
+        {"id": 4, "name": "syra", "type": "npc", "point": true, "x": 1150, "y": 580, "width": 0, "height": 0, "rotation": 0, "visible": true}
+      ]
+    }
+  ],
+  "tilesets": []
+}

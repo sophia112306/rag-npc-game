@@ -25,7 +25,7 @@ const keyFallback: Record<string, string> = {
 export function createFirstPerson(
   canvas: HTMLCanvasElement,
   driver: TrialDriver,
-  onInteract: () => void,
+  onInteract: (npcId?: string) => void,
   onToggleJournal: () => void,
   onNotice: (message: string) => void = () => {},
 ) {
@@ -103,7 +103,7 @@ export function createFirstPerson(
     const target = {...point};
     const distance = Math.hypot(target.x - pose.x, target.z - pose.z);
     if (target.interaction && distance <= 3.6) {
-      onInteract();
+      onInteract(target.npcId);
       return;
     }
     if (target.interaction) {
@@ -183,9 +183,10 @@ export function createFirstPerson(
           const reached = goal.origin ? Math.hypot(goal.origin.x-pose.x,goal.origin.z-pose.z)<=3.6 : distance<.18;
           if (reached) {
             const interact = goal.interaction;
+            const npcId = goal.npcId;
             goal = null;
             onNotice("已抵達。拖曳環視，或繼續點選地面探索。");
-            if (interact) onInteract();
+            if (interact) onInteract(npcId);
           } else {
             const heading = Math.atan2(goal.x - pose.x, pose.z - goal.z);
             pose.yaw +=

@@ -34,7 +34,9 @@ WASD／方向鍵、點地面移動，右鍵或 Q／R 轉身。點人物／地標
 | 原始圖庫／人物／配樂 | `public/game/`、`public/images/`、`public/audio/` |
 | 歷史 3D 原型（停用） | `components/experiments/`，不由主遊戲載入 |
 
-五份 `.tmj` 是 `minglin.tmj`、`life-spring.tmj`、`rune-grove.tmj`、`liuchen.tmj`、`lieyi-plains.tmj`。Actors 定義玩家、人物或 landmark 點，Walkable 定義安全範圍；URL 由後端 Scene Registry 的 `tilemap_url` 提供。改背景構圖時需同步校正這些點。
+六份 `.tmj` 是 `minglin.tmj`、`life-spring.tmj`、`rune-grove.tmj`、`liuchen.tmj`、`lieyi-plains.tmj`、`border-ruins.tmj`。Actors 定義玩家、人物或 landmark 點，Walkable 定義安全範圍；URL 由後端 Scene Registry 的 `tilemap_url` 提供。改背景構圖時需同步校正這些點。
+
+NPC 選項在開啟交談時由共用請求取得，沒有每位 NPC 各建一套狀態與 effect。泉眼與聖火調查仍由獨立 landmark 互動，不混入旁邊人物的對話。
 
 背景載入後取樣為 836×471，再顯示於 1672×941 世界；原圖片不修改。角色、地標與 UI 分層呈現，不降低文字可讀性，也不需要重新生圖。
 
@@ -42,6 +44,6 @@ WASD／方向鍵、點地面移動，右鍵或 Q／R 轉身。點人物／地標
 
 ## 驗證
 
-在本目錄執行 `npm run build`。後端地圖測試檢查五地圖檔、背景一致性、出生點與互動點可達性，以及舊回合 map URL 相容。
+在本目錄執行 `npm run build`。後端地圖測試檢查六地圖檔、背景一致性、出生點與互動點可達性，以及舊回合 map URL 相容。
 
 [最新 2D 瀏覽器驗收](../docs/qa/2d-exploration/README.md)。歷史 Node 控制測試仍保留於 `tests/frontend/`，不將它們當成完整的 2D UI 驗收。

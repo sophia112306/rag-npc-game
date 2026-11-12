@@ -48,6 +48,15 @@
       "prompt_summary": "Adapt the user-provided Liuchen Valley reference into a game-ready hand-painted fantasy background: an ochre desert canyon with cracked earth, funerary ruins, dead trees, deep fissures, a central drifting-dust column, a clear traversable route, and only a few small distant mummy wanderers. Keep the lower center open for the player; no close character, UI, text, logo, watermark, gore, modern objects, science-fiction machinery, or exact copying of the reference composition."
     },
     {
+      "scene_id": "border_ruins",
+      "file": "/game/scenes/border-ruins-v1.png",
+      "sha256": "4c4dea7ceb4e5421707fae2501f7c8922a140439eb10c13bfc0c04bf80f3b5db",
+      "width": 1672,
+      "height": 941,
+      "canon_status": "provisional",
+      "prompt_summary": "A distinct border ruins environment between Liuchen Valley and human lands, with a forked cracked road and ancient sandstone gateway. Hand-painted elevated three-quarter game perspective. No characters or UI."
+    },
+    {
       "scene_id": "lieyi_plains",
       "file": "/game/scenes/lieyi-plains-v1.png",
       "sha256": "057e66a66b2391cccb0249bfc5a405a03d9d2b425d9644ed9f32e0f6c6ec30cf",

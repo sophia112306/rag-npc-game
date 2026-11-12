@@ -153,7 +153,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
 
   function buildTerrain(current: WorldScene) {
     terrain?.dispose();
-    const desert = current.scene_id === "liuchen_valley";
+    const desert = current.scene_id === "liuchen_valley" || current.scene_id === "border_ruins";
     const lava = current.scene_id === "lieyi_plains";
     terrain = MeshBuilder.CreateGround(
       "continuous walkable terrain",
@@ -223,7 +223,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
     const council = current.scene_id === "minglin";
     if (council) {
       sanctuary = createForestSanctuary(scene, landmark, current);
-    } else {
+    } else if (current.scene_id !== "border_ruins") {
       const stone = mat("landmark stone", current.fire ? "#372622" : "#7f8977");
       stone.diffuseTexture = stoneTexture;
       const dais = MeshBuilder.CreateCylinder(
@@ -249,22 +249,23 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       ring.position.y = 0.09;
       ring.material = ringMaterial;
     }
-    if (current.npc_id) {
+    const addNpcPortrait = (npcId: string, npcX: number, npcZ: number) => {
       const portrait = MeshBuilder.CreatePlane(
         "npc",
-        { width: 1.26, height: 2.55 },
+        { width: ["dasso", "seth", "syra"].includes(npcId) ? 1.68 : 1.26, height: 2.55 },
         scene,
       );
       portrait.parent = landmark;
-      portrait.position.y = council ? 1.575 : 1.35;
+      portrait.position.set(npcX - x, terrainHeight(npcX, npcZ, current) - y + (council ? 1.575 : 1.35), npcZ - z);
+      portrait.metadata = { npcId, interactionX: npcX, interactionZ: npcZ };
       portrait.billboardMode = Mesh.BILLBOARDMODE_Y;
       const portraitMat = mat("npc artwork", "#ffffff");
-      if (!portraits.has(current.npc_id))
+      if (!portraits.has(npcId))
         portraits.set(
-          current.npc_id,
-          new Texture(`/game/${current.npc_id}-cutout.png`, scene),
+          npcId,
+          new Texture(`/game/${npcId}-cutout.png`, scene),
         );
-      portraitMat.diffuseTexture = portraits.get(current.npc_id)!;
+      portraitMat.diffuseTexture = portraits.get(npcId)!;
       portraitMat.diffuseTexture.hasAlpha = true;
       portraitMat.useAlphaFromDiffuseTexture = true;
       portraitMat.transparencyMode = Material.MATERIAL_ALPHATEST;
@@ -273,7 +274,10 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       portraitMat.emissiveColor = new Color3(0.12, 0.12, 0.1);
       portrait.material = portraitMat;
       shadows.addShadowCaster(portrait);
-    } else if (current.water) {
+    };
+    if (current.npc_id) addNpcPortrait(current.npc_id, x, z);
+    for (const npc of current.npc_interactions ?? []) addNpcPortrait(npc.npc_id, npc.x, npc.z);
+    if (!current.npc_id && current.water) {
       const water = MeshBuilder.CreateDisc(
         "spring surface",
         { radius: 2.15, tessellation: 80 },
@@ -585,11 +589,14 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
         camera,
       );
       if (!hit?.hit || !hit.pickedPoint) return null;
-      if (
-        hit.pickedMesh?.name === "npc" ||
-        hit.pickedMesh?.name === "landmark paving" ||
-        hit.pickedMesh?.metadata?.interaction
-      )
+      if (hit.pickedMesh?.name === "npc")
+        return {
+          x: hit.pickedMesh.metadata.interactionX as number,
+          z: hit.pickedMesh.metadata.interactionZ as number,
+          npcId: hit.pickedMesh.metadata.npcId as string,
+          interaction: true,
+        };
+      if (hit.pickedMesh?.name === "landmark paving" || hit.pickedMesh?.metadata?.interaction)
         return {
           x: world.interaction_x,
           z: world.interaction_z,
@@ -610,7 +617,7 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
       createdMaterials.length = 0;
       const night = next.config.time_of_day === "night";
       const dusk = next.config.time_of_day === "dusk";
-      const desert = next.scene_id === "liuchen_valley";
+      const desert = next.scene_id === "liuchen_valley" || next.scene_id === "border_ruins";
       const fire = next.scene_id === "lieyi_plains";
       const horizon = Color3.FromHexString(
         night
@@ -671,14 +678,16 @@ export function createBabylonDriver(canvas: HTMLCanvasElement): TrialDriver {
         for(const colliders of modelColliders.values())if(colliders.some(c=>Math.hypot(px-c.x,pz-c.z)<c.radius))return true;
         return false;
       };
+      const npcPositions = world ? [
+        ...(world.npc_id ? [{x:world.interaction_x,z:world.interaction_z}] : []),
+        ...(world.npc_interactions ?? []),
+      ] : [];
       const blocked = (px: number, pz: number) =>
         !world ||
         Math.abs(px) > 64 ||
         Math.abs(pz) > 64 ||
         !!sanctuary?.blocked(px, pz) ||
-        (!!world.npc_id &&
-          Math.hypot(px - world.interaction_x, pz - world.interaction_z) <
-            0.8) ||
+        npcPositions.some(npc => Math.hypot(px - npc.x, pz - npc.z) < 0.8) ||
         Math.abs(terrainHeight(px, pz, world) - terrainHeight(x, z, world)) >
           0.45 ||
         hitsObject(px,pz);

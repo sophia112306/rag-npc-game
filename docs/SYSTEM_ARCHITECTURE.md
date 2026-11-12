@@ -145,7 +145,7 @@ flowchart TD
 
 | 區域 | 主要程式 | 負責與狀態 |
 | --- | --- | --- |
-| 玩家 UI | `frontend/app/page.tsx`、`WorldMap.tsx`、`MinglinGame.tsx`、`InvestigationJournal.tsx` | A：2D 主頁、固定圖庫、五地互動、語音與手記；舊 3D 路徑導回首頁。 |
+| 玩家 UI | `frontend/app/page.tsx`、`WorldMap.tsx`、`MinglinGame.tsx`、`InvestigationJournal.tsx` | A：2D 主頁、固定圖庫、六地互動、語音與手記；舊 3D 路徑導回首頁。 |
 | API／回合 | `backend/main.py`、`api/`、`orchestration/game_orchestrator.py` | D：正式回合、去重與版本已有；完整身分權限待補。 |
 | 故事／世界指令 | `content/demo_story.py`、`demo_story_director.py`、`world_commands.py` | A／D：現有分支與受限指令已驗收。 |
 | 設定／授權背景 | `content/characters.py`、`context_repository.py`、`schemas/content.py` | B／D／作者：SQL 邊界已有，完整內容、索引與維護介面待補。 |

@@ -5,7 +5,7 @@ import math
 import random
 
 from backend.content.scenes import require_scene
-from backend.schemas.world_scene import WorldObject, WorldSceneConfig, WorldSceneView
+from backend.schemas.world_scene import WorldNpc, WorldObject, WorldSceneConfig, WorldSceneView
 
 
 def default_config(scene_id: str) -> WorldSceneConfig:
@@ -22,6 +22,14 @@ def default_config(scene_id: str) -> WorldSceneConfig:
             altar_count=2,
             terrain="dunes",
             weather="dust",
+        ),
+        "border_ruins": dict(
+            tree_count=1,
+            runestone_count=4,
+            altar_count=0,
+            terrain="dunes",
+            weather="dust",
+            time_of_day="dusk",
         ),
         "lieyi_plains": dict(
             tree_count=0,
@@ -101,18 +109,26 @@ def build_world_scene(
             )
 
     npc = {"minglin": "vidalia", "liuchen_valley": "menmesvento"}.get(scene_id)
+    scene_npcs = [
+        WorldNpc(npc_id="seth", x=-3.4, z=-6, label="與塞特交談"),
+        WorldNpc(npc_id="syra", x=3.4, z=-6, label="與希拉交談"),
+    ] if scene_id == "border_ruins" else [
+        WorldNpc(npc_id="dasso", x=3.5, z=-8, label="與達索交談")
+    ] if scene_id == "lieyi_plains" else []
     label = {
         "minglin": "與維達利亞交談",
         "minglin_life_spring": "調查泉眼",
         "minglin_rune_grove": "調查符石",
         "liuchen_valley": "與門梅司文托交談",
         "lieyi_plains": "調查中央聖火",
+        "border_ruins": "與塞特或希拉交談",
     }[scene_id]
     return WorldSceneView(
         scene_id=scene_id,
         config=config,
         objects=objects,
         npc_id=npc,
+        npc_interactions=scene_npcs,
         interaction_label=label,
         interaction_z=-8 if scene_id == "minglin" else -6,
         water=scene_id == "minglin_life_spring",

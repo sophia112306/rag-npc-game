@@ -65,6 +65,10 @@ class StoryChoiceUnavailableError(LookupError):
     """Raised when a choice is stale, forged, or unavailable in current state."""
 
 
+class NpcUnavailableError(LookupError):
+    """Raised when a player addresses an NPC before meeting them in the scene."""
+
+
 class StoryChoiceMismatchError(ValueError):
     """Raised when a valid choice ID is attached to altered action content."""
 
@@ -152,6 +156,17 @@ class GameOrchestrator:
         state = await self.get_state(action.session_id)
         if action.expected_state_version != state.state_version:
             raise StateVersionConflictError(action.expected_state_version, state.state_version)
+
+        npc_scene = {
+            "menmesvento": "liuchen_valley",
+            "dasso": "lieyi_plains",
+            "seth": "border_ruins",
+            "syra": "border_ruins",
+        }
+        if action.target_npc_id in npc_scene and state.current_scene_id != npc_scene[action.target_npc_id]:
+            raise NpcUnavailableError(
+                f"NPC '{action.target_npc_id}' is not present in the current scene"
+            )
 
         parsed_action = self._parse_action(action)
         if action.action_mode == ActionMode.SCENE_COMMAND:

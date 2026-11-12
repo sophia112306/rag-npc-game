@@ -35,6 +35,36 @@ CHARACTER_PROFILES: dict[str, CharacterProfile] = {
         description="在流塵谷記錄名字與記憶的隱者，言談沉靜，常攜著一本古卷。",
         greeting="風沙會掩去腳印，名字卻值得留下。旅人，你是從哪條路來的？",
     ),
+    "dasso": CharacterProfile(
+        npc_id="dasso",
+        name="達索",
+        romanized_name="Dasso",
+        title="首席長老・火焰長老會",
+        scene_name="烈燚原",
+        portrait_url="/images/dasso.jpg",
+        description="掌管火焰長老會的首席長老。",
+        greeting="旅人，烈燚原的火焰不會替任何人回答問題。你想知道什麼？",
+    ),
+    "seth": CharacterProfile(
+        npc_id="seth",
+        name="塞特",
+        romanized_name="Seth",
+        title="木乃伊旅人・邊境逃亡者",
+        scene_name="邊境廢墟",
+        portrait_url="/images/seth.jpg",
+        description="披著抗熱斗篷、以繃帶掩面，在邊境尋找出路的木乃伊。",
+        greeting="別叫我的名字……我已經記得太多了。你能帶我離開這裡嗎？",
+    ),
+    "syra": CharacterProfile(
+        npc_id="syra",
+        name="希拉",
+        romanized_name="Syra",
+        title="人族記錄員・邊境逃亡者",
+        scene_name="邊境廢墟",
+        portrait_url="/images/syra.jpg",
+        description="緊抱個人記錄盒、穿著破損圖書館制服的年輕人族。",
+        greeting="這盒子裡記著我這一世的事。請別讓他們把它拿走。",
+    ),
 }
 
 
@@ -81,4 +111,23 @@ CHARACTER_DEFINITIONS: dict[str, CharacterDefinition] = {
         setting_version=1,
         completeness_status="incomplete",
     ),
+    **{
+        npc_id: CharacterDefinition(
+            npc_id=npc_id,
+            public_profile=CHARACTER_PROFILES[npc_id],
+            private_profile={},
+            sources=[SourceReference(
+                source_type="character_notes",
+                source_id="pasted_world_document",
+                locator=locator,
+            )],
+            setting_version=1,
+            completeness_status="incomplete",
+        )
+        for npc_id, locator in (
+            ("dasso", "五.1 首席長老・達索"),
+            ("seth", "六、塞特"),
+            ("syra", "七、希拉"),
+        )
+    },
 }

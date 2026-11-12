@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import MinglinGame, { approachTarget, interactWithTarget, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP, type NpcId, type InteractionTarget } from "../components/MinglinGame";
+import MinglinGame, { approachTarget, isNpcId, interactWithTarget, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP, type NpcId, type InteractionTarget } from "../components/MinglinGame";
 import WorldMap from "../components/WorldMap";
 import InvestigationJournal from "../components/InvestigationJournal";
 import { getSceneMusic } from "../lib/scene-music";
@@ -125,6 +125,39 @@ const previewMenmesventoProfile: CharacterProfile = {
   greeting: "風沙會掩去腳印，名字卻值得留下。旅人，你是從哪條路來的？",
 };
 
+const previewDassoProfile: CharacterProfile = {
+  npc_id: "dasso",
+  name: "達索",
+  romanized_name: "Dasso",
+  title: "首席長老・火焰長老會",
+  scene_name: "烈燚原",
+  portrait_url: "/images/dasso.jpg",
+  description: "掌管火焰長老會的首席長老。",
+  greeting: "旅人，烈燚原的火焰不會替任何人回答問題。你想知道什麼？",
+};
+
+const previewSethProfile: CharacterProfile = {
+  npc_id: "seth",
+  name: "塞特",
+  romanized_name: "Seth",
+  title: "木乃伊旅人・邊境逃亡者",
+  scene_name: "邊境廢墟",
+  portrait_url: "/images/seth.jpg",
+  description: "披著抗熱斗篷、以繃帶掩面，在邊境尋找出路的木乃伊。",
+  greeting: "別叫我的名字……我已經記得太多了。你能帶我離開這裡嗎？",
+};
+
+const previewSyraProfile: CharacterProfile = {
+  npc_id: "syra",
+  name: "希拉",
+  romanized_name: "Syra",
+  title: "人族記錄員・邊境逃亡者",
+  scene_name: "邊境廢墟",
+  portrait_url: "/images/syra.jpg",
+  description: "緊抱個人記錄盒、穿著破損圖書館制服的年輕人族。",
+  greeting: "這盒子裡記著我這一世的事。請別讓他們把它拿走。",
+};
+
 const previewScene: PlayerScene = {
   scene_id: "minglin",
   region_name: "鳴霖",
@@ -139,7 +172,10 @@ const previewScene: PlayerScene = {
 };
 
 export default function Home() {
-  const [profiles, setProfiles] = useState<Record<NpcId, CharacterProfile>>({ vidalia: previewProfile, andre: previewAndreProfile, menmesvento: previewMenmesventoProfile });
+  const [profiles, setProfiles] = useState<Record<NpcId, CharacterProfile>>({
+    vidalia: previewProfile, andre: previewAndreProfile, menmesvento: previewMenmesventoProfile,
+    dasso: previewDassoProfile, seth: previewSethProfile, syra: previewSyraProfile,
+  });
   const [activeNpcId, setActiveNpcId] = useState<NpcId>("vidalia");
   const [sessionId, setSessionId] = useState("");
   const [dialogueOpen, setDialogueOpen] = useState(false);
@@ -173,8 +209,7 @@ export default function Home() {
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
   const questLabel = gameState?.story_progress.chapter_title ?? "鳴霖異象";
   const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
-  const [andreChoices, setAndreChoices] = useState<PlayerChoice[]>([]);
-  const [menmesventoChoices, setMenmesventoChoices] = useState<PlayerChoice[]>([]);
+  const [npcChoices, setNpcChoices] = useState<PlayerChoice[]>([]);
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
@@ -182,16 +217,18 @@ export default function Home() {
   const pendingApproach = useRef<string | null>(null);
   const sceneMusic = getSceneMusic(scene.scene_id);
   const music = useSceneMusic(sceneMusic.src, speaking ? 0.07 : dialogueOpen ? 0.11 : 0.2);
-  const primaryNpc = gameState?.world_scene.npc_id;
-  const primaryTarget: InteractionTarget = primaryNpc === "vidalia" || primaryNpc === "andre" || primaryNpc === "menmesvento" ? primaryNpc : "landmark";
+  const primaryNpc = gameState?.world_scene.npc_id ?? gameState?.world_scene.npc_interactions?.[0]?.npc_id;
+  const primaryTarget: InteractionTarget = isNpcId(primaryNpc) ? primaryNpc : "landmark";
   const displayNpcId = dialogueOpen ? activeNpcId : nearTarget && nearTarget !== "landmark" ? nearTarget : activeNpcId;
   const profile = profiles[displayNpcId];
   const visibleMessages = messages.filter(message => activeLandmark
     ? message.targetId === "landmark" && message.sceneId === scene.scene_id
     : message.targetId !== "landmark" && (message.npcId ?? "vidalia") === displayNpcId);
-  const visibleChoices = activeLandmark ? playerChoices : activeNpcId === "andre" ? andreChoices
-    : activeNpcId === "menmesvento" ? [...menmesventoChoices, ...playerChoices]
-      : playerChoices;
+  const sceneChoices = gameState?.world_scene.npc_id === activeNpcId
+    ? playerChoices : playerChoices.filter(choice => choice.action_mode === "movement");
+  const visibleChoices = activeLandmark ? playerChoices
+    : activeNpcId === "vidalia" ? sceneChoices
+      : [...npcChoices, ...(activeNpcId === "andre" ? [] : sceneChoices)];
   const reportChoice = playerChoices.find(choice => choice.choice_id === "review_demo_findings");
 
   useEffect(() => {
@@ -204,7 +241,13 @@ export default function Home() {
     if (scene.scene_id === "liuchen_valley") {
       setActiveNpcId("menmesvento");
       setLastNpcSpeech(previewMenmesventoProfile.greeting);
-    } else if (scene.scene_id === "minglin") {
+    } else if (scene.scene_id === "lieyi_plains") {
+      setActiveNpcId("dasso");
+      setLastNpcSpeech(previewDassoProfile.greeting);
+    } else if (scene.scene_id === "border_ruins") {
+      setActiveNpcId("seth");
+      setLastNpcSpeech(previewSethProfile.greeting);
+    } else if (scene.scene_id === "minglin" || scene.scene_id === "minglin_life_spring") {
       setActiveNpcId("vidalia");
     }
     setNearTarget(null);
@@ -213,6 +256,17 @@ export default function Home() {
     pendingApproach.current = null;
     setTrackedChoice(null);
   }, [scene.scene_id]);
+
+  useEffect(() => {
+    if (!ready || !sessionId) return;
+    let current = true;
+    if (!dialogueOpen || activeLandmark || activeNpcId === "vidalia") return;
+    setNpcChoices([]);
+    void requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices?npc_id=${activeNpcId}`)
+      .then(choices => { if (current) setNpcChoices(choices); })
+      .catch(() => { /* Free dialogue remains available if shortcuts fail. */ });
+    return () => { current = false; };
+  }, [ready, dialogueOpen, activeLandmark, activeNpcId, scene.scene_id, sessionId, stateVersion]);
 
   useEffect(() => {
     const id = window.localStorage.getItem(GAME_SESSION_STORAGE_KEY) ?? window.crypto.randomUUID();
@@ -259,10 +313,13 @@ export default function Home() {
     setError("");
     setReady(false);
     try {
-      const [character, andre, menmesvento, state, capabilities] = await Promise.all([
+      const [character, andre, menmesvento, dasso, seth, syra, state, capabilities] = await Promise.all([
         requestJson<CharacterProfile>("/api/characters/vidalia"),
         requestJson<CharacterProfile>("/api/characters/andre"),
         requestJson<CharacterProfile>("/api/characters/menmesvento"),
+        requestJson<CharacterProfile>("/api/characters/dasso"),
+        requestJson<CharacterProfile>("/api/characters/seth"),
+        requestJson<CharacterProfile>("/api/characters/syra"),
         requestJson<GameStateSummary>("/api/game/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -270,16 +327,9 @@ export default function Home() {
         }),
         requestJson<Capabilities>("/api/capabilities"),
       ]);
-      setProfiles({ vidalia: character, andre, menmesvento });
+      setProfiles({ vidalia: character, andre, menmesvento, dasso, seth, syra });
       setGenerationMode(capabilities.generation_mode);
-      const [choices, andreOptions, menmesventoOptions] = await Promise.all([
-        requestJson<PlayerChoice[]>(`/api/game/${id}/choices`),
-        requestJson<PlayerChoice[]>(`/api/game/${id}/choices?npc_id=andre`),
-        requestJson<PlayerChoice[]>(`/api/game/${id}/choices?npc_id=menmesvento`),
-      ]);
-      setPlayerChoices(choices);
-      setAndreChoices(andreOptions);
-      setMenmesventoChoices(menmesventoOptions);
+      setPlayerChoices(await requestJson<PlayerChoice[]>(`/api/game/${id}/choices`));
       setGameState(state);
       const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: character.name, text: character.greeting, kind: "npc" }];
       let restored = fallback;
@@ -440,8 +490,8 @@ export default function Home() {
     setInputType("text");
     setBusy(true);
     setError("");
-    const messageNpcId: NpcId = targetNpcId === "andre" || targetNpcId === "menmesvento" ? targetNpcId : activeNpcId;
-    const messageTarget: InteractionTarget = targetNpcId === "andre" || targetNpcId === "menmesvento" || targetNpcId === "vidalia" ? targetNpcId : primaryTarget;
+    const messageNpcId: NpcId = isNpcId(targetNpcId) ? targetNpcId : activeNpcId;
+    const messageTarget: InteractionTarget = isNpcId(targetNpcId) ? targetNpcId : activeLandmark ? "landmark" : primaryTarget;
     const playerLine: ChatMessage = { id: window.crypto.randomUUID(), speaker:"你", text, kind:"player", npcId:messageNpcId, targetId:messageTarget, sceneId:scene.scene_id };
     setMessages(current => [...current, playerLine]);
     const pending = pendingActionRef.current;
@@ -483,7 +533,7 @@ export default function Home() {
         window.localStorage.setItem(conversationKey(sessionId), JSON.stringify({ turn_number: turn.turn_number, updated_at: turn.state.updated_at, messages: nextMessages }));
       } catch { /* The current conversation still works when browser storage is unavailable. */ }
     } catch (cause) {
-      if (cause instanceof ApiRequestError && ["STATE_VERSION_CONFLICT", "STORY_CHOICE_UNAVAILABLE", "STORY_CHOICE_MISMATCH"].includes(cause.code ?? "")) {
+      if (cause instanceof ApiRequestError && ["STATE_VERSION_CONFLICT", "STORY_CHOICE_UNAVAILABLE", "STORY_CHOICE_MISMATCH", "NPC_UNAVAILABLE"].includes(cause.code ?? "")) {
         pendingActionRef.current = null;
         try {
           const latest = await requestJson<GameStateSummary>(`/api/game/${sessionId}/state`);
@@ -536,7 +586,7 @@ export default function Home() {
         onError={music.onError}
       />
       <section className="map-stage" aria-label={`斜俯視的${scene.region_name}遊戲地圖`}>
-        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={{vidalia:profiles.vidalia.name,andre:profiles.andre.name,menmesvento:profiles.menmesvento.name}} paused={dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onZoomChange={setMapZoom} />}
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, profile.name])) as Record<NpcId, string>} paused={dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
 
         <header className="location-banner" aria-label="目前場景">
@@ -550,7 +600,7 @@ export default function Home() {
           <span className="location-ornament" aria-hidden="true">✧</span>
         </header>
 
-        <WorldMap sceneId={scene.scene_id} sceneName={`${scene.region_name}・${scene.display_name}`} expanded={worldMapOpen} onExpandedChange={open => {setWorldMapOpen(open);if(open){setDialogueOpen(false);setJournalOpen(false);}}} navigation={navigation} onTravel={requestChoice} near={nearTarget===primaryTarget} busy={busy} />
+        <WorldMap sceneId={scene.scene_id} sceneName={scene.region_name === scene.display_name ? scene.display_name : `${scene.region_name}・${scene.display_name}`} expanded={worldMapOpen} onExpandedChange={open => {setWorldMapOpen(open);if(open){setDialogueOpen(false);setJournalOpen(false);}}} navigation={navigation} onTravel={requestChoice} near={nearTarget===primaryTarget} busy={busy} />
 
         <div className="game-toolbar">
         <button className="journal-toggle" onClick={()=>{setJournalOpen(true);setDialogueOpen(false);setWorldMapOpen(false);}}>手記 {findings.length} <kbd>J</kbd></button>
@@ -595,12 +645,12 @@ export default function Home() {
         </div>
 
         {dialogueOpen && <section className={`dialogue-panel is-open ${activeLandmark ? "is-landmark" : ""}`} aria-label={activeLandmark ? scene.display_name : `與${profile.name}對話`}>
-          {!activeLandmark && <div className="dialogue-portrait">
+          {!activeLandmark && <div className={`dialogue-portrait npc-${displayNpcId}`}>
             <Image src={profile.portrait_url} alt={`${profile.name}肖像`} fill sizes="(max-width: 640px) 90px, 175px" />
           </div>}
           <div className="dialogue-main">
             <div className="dialogue-heading">
-              <div><h1>{activeLandmark ? scene.display_name : profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 互動" : "規則式劇情"}</span></div>
+              <div><h1>{activeLandmark ? scene.display_name : profile.name}</h1>{!activeLandmark && <span className="dialogue-title">{profile.title}</span>}<span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 互動" : "規則式劇情"}</span></div>
               <button type="button" className="close-dialogue" onClick={() => setDialogueOpen(false)} aria-label="關閉對話">✕</button>
             </div>
 
@@ -652,7 +702,7 @@ export default function Home() {
             <section className="game-overlay-card help-card" role="dialog" aria-modal="true" aria-label="操作說明">
               <button type="button" className="overlay-close" onClick={() => setHelpOpen(false)} aria-label="關閉說明">✕</button>
               <span className="overlay-rune">✧</span><h2>旅人指南</h2>
-              <dl><div><dt>移動</dt><dd>左鍵點道路，或使用 WASD／方向鍵。角色會朝移動方向轉身。</dd></div><div><dt>旅途地圖</dt><dd>點左上角地圖可查看鳴霖、流塵谷、烈燚原及路線；青色光點標示目前場景。前往各地仍依劇情選項。</dd></div><div><dt>縮放</dt><dd>滑鼠滾輪、右側 ＋／－，或手機雙指縮放。點倍率可恢復全景。</dd></div><div><dt>轉身</dt><dd>右鍵點想面對的方向，或按 Q／R 原地轉身；手機可用 ↶／↷。</dd></div><div><dt>交談</dt><dd>鳴霖可與維達利亞、安德烈交談；流塵谷可與門梅司文托交談。點擊角色，或靠近後按 E。</dd></div><div><dt>音樂</dt><dd>右上角可播放或關閉背景音樂。</dd></div><div><dt>返回</dt><dd>按 Esc 關閉對話、地圖與說明。</dd></div></dl>
+              <dl><div><dt>移動</dt><dd>左鍵點道路，或使用 WASD／方向鍵。角色會朝移動方向轉身。</dd></div><div><dt>旅途地圖</dt><dd>點左上角地圖可查看鳴霖、流塵谷、烈燚原及路線；青色光點標示目前場景。前往各地仍依劇情選項。</dd></div><div><dt>縮放</dt><dd>滑鼠滾輪、右側 ＋／－，或手機雙指縮放。點倍率可恢復全景。</dd></div><div><dt>轉身</dt><dd>右鍵點想面對的方向，或按 Q／R 原地轉身；手機可用 ↶／↷。</dd></div><div><dt>交談</dt><dd>鳴霖議會可與維達利亞、安德烈交談；命脈之泉可與維達利亞交談；流塵谷可與門梅司文托交談；烈燚原可與達索交談；邊境廢墟可與塞特、希拉交談。點擊角色，或靠近後按 E。</dd></div><div><dt>音樂</dt><dd>右上角可播放或關閉背景音樂。</dd></div><div><dt>返回</dt><dd>按 Esc 關閉對話、地圖與說明。</dd></div></dl>
               <button type="button" onClick={() => setHelpOpen(false)}>繼續探索</button>
             </section>
           </div>

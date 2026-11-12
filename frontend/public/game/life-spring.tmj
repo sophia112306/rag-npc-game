@@ -10,7 +10,7 @@
   "tileheight": 64,
   "infinite": false,
   "nextlayerid": 4,
-  "nextobjectid": 4,
+  "nextobjectid": 5,
   "layers": [
     {
       "id": 1,
@@ -115,6 +115,18 @@
               "value": "調查泉眼"
             }
           ]
+        },
+        {
+          "id": 4,
+          "name": "vidalia",
+          "type": "npc",
+          "point": true,
+          "x": 960,
+          "y": 620,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true
         }
       ]
     }

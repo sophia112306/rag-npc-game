@@ -17,6 +17,7 @@ from backend.orchestration.game_orchestrator import (
     StateVersionConflictError,
     StoryChoiceMismatchError,
     StoryChoiceUnavailableError,
+    NpcUnavailableError,
 )
 from backend.schemas.api_response import GameTurnResponse
 from backend.schemas.player_action import PlayerAction
@@ -108,6 +109,11 @@ async def submit_player_action(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "STORY_CHOICE_UNAVAILABLE", "message": str(exc)},
         ) from exc
+    except NpcUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "NPC_UNAVAILABLE", "message": str(exc)},
+        ) from exc
     except StoryChoiceMismatchError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -133,7 +139,7 @@ async def submit_player_action(
 )
 async def get_player_choices(
     session_id: str,
-    npc_id: Literal["vidalia", "andre", "menmesvento"] = "vidalia",
+    npc_id: Literal["vidalia", "andre", "menmesvento", "dasso", "seth", "syra"] = "vidalia",
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> list[PlayerChoice]:
     """Return clickable choices derived from the current public session state."""

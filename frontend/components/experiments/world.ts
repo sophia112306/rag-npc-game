@@ -3,7 +3,7 @@ import { COUNCIL_LAKE } from "./sanctuary-layout";
 
 export const EYE_HEIGHT = 1.68;
 export type PlayerPose = { x: number; z: number; yaw: number; pitch: number };
-export type GroundTarget = { x: number; z: number; interaction?: boolean };
+export type GroundTarget = { x: number; z: number; interaction?: boolean; npcId?: string };
 export type TrialDriver = {
   pickGround: (clientX: number, clientY: number) => GroundTarget | null;
   setWorld: (world: WorldScene) => Promise<void>;
