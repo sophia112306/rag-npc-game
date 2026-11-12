@@ -119,9 +119,13 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
           // realistic proportions remain unchanged; only fine detail is reduced.
           const background = this.textures.createCanvas("game-background", 836, 471);
           if (background) {
-            background.getContext().drawImage(this.textures.get("minglin-forest").getSourceImage() as HTMLImageElement, 0, 0, 836, 471);
+            const context = background.getContext();
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = "high";
+            context.filter = "blur(0.55px)";
+            context.drawImage(this.textures.get("minglin-forest").getSourceImage() as HTMLImageElement, 0, 0, 836, 471);
             background.refresh();
-            background.setFilter(PhaserEngine.Textures.FilterMode.NEAREST);
+            background.setFilter(PhaserEngine.Textures.FilterMode.LINEAR);
           }
           this.add.image(0, 0, background ? "game-background" : "minglin-forest").setOrigin(0).setDisplaySize(1672, 941).setDepth(0);
 
