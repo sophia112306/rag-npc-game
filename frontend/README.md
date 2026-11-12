@@ -1,59 +1,47 @@
-# 前端導覽｜Phaser 2D 與 Babylon 3D
+# Phaser 2D 主遊戲
 
-更新：2026-11-12。整個專案的世界設定、故事線、架構、API 與缺口以 [根目錄 README](../README.md) 為準；本文件只補前端入口與編輯位置。
+更新：2026-11-12。玩法採固定寫實場景圖庫，依故事選項驗證、保存後換場。保留原人物、比例、末世寫實與奇幻遺跡風格，只以較低背景取樣呈現顆粒，沒有改用可愛素材。
 
-## 啟動
+完整設定、架構及缺口見 [根目錄 README](../README.md)。
 
-先依根目錄 README 啟動 FastAPI（8300），再於本目錄執行：
+## 啟動與入口
 
-```bash
-npm ci
-npm run dev
-```
+先在根目錄啟動 FastAPI（8300），再於本目錄執行 `npm ci`、`npm run dev`。展示用 `npm run build` 後執行 `npm run start`，皆在 3200；不要同時占用該埠。
 
-展示可用 `npm run build` 後執行 `npm run start`，皆在 3200；不要同時占用該埠。API 預設 `http://localhost:8300`，可將 `.env.example` 複製為 `.env.local` 設定 `NEXT_PUBLIC_API_URL`。
+- `/`：主遊戲。
+- `/experiments`、`/experiments/babylon`：轉到同一個 2D 主頁。
+- `/preview/veta`：獨立美術預覽，未接主故事。
 
-## 頁面與目前功能
+API 預設 8300，可用 `.env.local` 的 `NEXT_PUBLIC_API_URL` 修改。不需 GPU、VPN、SSH tunnel 才能遊玩。
 
-| 路徑 | 入口／功能 |
+## 操作
+
+WASD／方向鍵、點地面移動，右鍵或 Q／R 轉身。點人物／地標先走近互動，或靠近按 E。M 看地圖與合法路線，J 看手記／回報，滾輪或雙指縮放，Esc 關閉面板。NPC 交談保留瀏覽器 STT／TTS。
+
+重整保留目前場景、故事與線索，步行座標暫回入口。遠處追蹤路線／回報先靠近正確互動點，抵達後確認行動。切圖由後端的正式回合結果決定。
+
+## 程式位置
+
+| 內容 | 位置 |
 | --- | --- |
-| `/` | `app/page.tsx`＋`components/MinglinGame.tsx`：Phaser 2D、人物、對話、後端回合、瀏覽器 STT／TTS。 |
-| `/experiments/babylon` | `app/experiments/babylon/page.tsx` 掛載 `components/experiments/TrialExperience.tsx`：自由第一人稱、後端故事、M 地圖、J 手記、Tab 世界指令與 GLB 工作輪詢。 |
-| `/experiments` | 轉向 Babylon 頁。 |
-| `/preview/veta` | 維塔獨立預覽，尚非主遊戲章節。 |
+| UI、Session、回合、選項、地圖／手記、語音 | `app/page.tsx` |
+| 人物、地標、Tiled、實體鍵碼、移動、相機與背景取樣 | `components/MinglinGame.tsx` |
+| 共用地圖 | `components/WorldMap.tsx` |
+| 共用手記 | `components/InvestigationJournal.tsx` 與 `.module.css` |
+| API 型別、請求與 Session key | `lib/game-api.ts` |
+| 音樂 | `lib/scene-music.ts`、`lib/use-scene-music.ts` |
+| 主遊戲樣式 | `app/globals.css` |
+| 原始圖庫／人物／配樂 | `public/game/`、`public/images/`、`public/audio/` |
+| 歷史 3D 原型（停用） | `components/experiments/`，不由主遊戲載入 |
 
-3D 使用 WASD／方向鍵移動、Shift 奔跑、點地面步行、拖曳環視、近距離 E 互動。它已接入 FastAPI／SQLite，舊版固定路線與「WASD 無效、未接後端」的描述已失效。人物目前仍是肖像 billboard，非完整骨架人物模型。
+五份 `.tmj` 是 `minglin.tmj`、`life-spring.tmj`、`rune-grove.tmj`、`liuchen.tmj`、`lieyi-plains.tmj`。Actors 定義玩家、人物或 landmark 點，Walkable 定義安全範圍；URL 由後端 Scene Registry 的 `tilemap_url` 提供。改背景構圖時需同步校正這些點。
 
-2D 可左鍵點地面／人物、WASD／方向鍵移動、右鍵或 Q／R 轉身、滾輪／按鈕縮放，靠近人物按 E。語音依瀏覽器能力、權限與 localhost／HTTPS 支援；3D 尚未加入同等語音 UI。
+背景載入後取樣為 836×471，再顯示於 1672×941 世界；原圖片不修改。角色、地標與 UI 分層呈現，不降低文字可讀性，也不需要重新生圖。
 
-## 編輯位置
-
-| 範圍 | 位置 |
-| --- | --- |
-| 3D UI、Session 同步、正式回合送出與模型輪詢 | `components/experiments/TrialExperience.tsx` |
-| 共用第一人稱控制 | `components/experiments/first-person.ts` |
-| Babylon 模型、材質、光照、地形與碰撞 | `components/experiments/babylon-driver.ts` |
-| 地形高度與 driver 介面 | `components/experiments/world.ts` |
-| 原版森林主景、樹葉與水池 | `forest-sanctuary.ts`、`sanctuary-layout.ts`、`water-material.ts`，均位於 `components/experiments/` |
-| 生成模型尺寸檢查、調查手記 | 同目錄 `asset-layout.ts`、`InvestigationJournal.tsx` |
-| 共用地圖 | `components/WorldMap.tsx`；合法路線由後端提供，3D 可追蹤／確認旅行，2D 目前沒有傳入旅行 callback |
-| 2D UI／語音與 Phaser 移動／碰撞 | `app/page.tsx`、`components/MinglinGame.tsx` |
-| 共用 API 型別、請求、Session key | `lib/game-api.ts` |
-| 場景音樂與播放 | `lib/scene-music.ts`、`lib/use-scene-music.ts` |
-| 全域／2D、3D 樣式 | `app/globals.css`、`components/experiments/TrialExperience.module.css` |
-
-`public/game/minglin.tmj` 與 `liuchen.tmj` 的 Actors／Walkable 圖層定義 2D 角色點與可走區。泉眼、符石林、烈燚原尚未有各自的 Tiled 地圖。背景構圖變更時需一起校正角色點和可走區。
-
-`public/game/scenes/` 保存版本化插畫，`models/` 保存預設 GLB／參考圖／manifest，`materials/` 是地表材質；`public/images/` 是肖像，`public/audio/` 是配樂。動態 GLB 由 FastAPI 下載，不把本機生成檔寫進前端原始碼。
-
-故事內容與事件合法性由後端負責：不要在前端另寫分支判定、直接增加物品或硬切場景。兩頁共用 Session 與 API 契約，但語音、手記、世界指令仍有功能差異。重整保留場景／故事，步行座標暫回入口。
+本版不呼叫 scene-image 或 scene-assets；模型／圖片服務保留介面供後續選用。正式故事 LLM／RAG 未接入，目前仍為規則分支。
 
 ## 驗證
 
-從專案根目錄執行：
+在本目錄執行 `npm run build`。後端地圖測試檢查五地圖檔、背景一致性、出生點與互動點可達性，以及舊回合 map URL 相容。
 
-```bash
-node --experimental-strip-types --test tests/frontend/*.test.ts
-```
-
-需使用支援該旗標的 Node。production build 在本目錄執行 `npm run build`；最新瀏覽器操作證據見 [故事與場景 QA](../docs/qa/story-consequences/README.md)。
+[最新 2D 瀏覽器驗收](../docs/qa/2d-exploration/README.md)。歷史 Node 控制測試仍保留於 `tests/frontend/`，不將它們當成完整的 2D UI 驗收。

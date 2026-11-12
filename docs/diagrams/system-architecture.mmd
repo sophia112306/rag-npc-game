@@ -20,8 +20,8 @@ config:
     wrappingWidth: 340
 ---
 flowchart TB
-  subgraph CLIENT["A｜玩家介面：Next.js／React"]
-    UI["部分｜玩家介面\nBabylon 3D／Phaser 2D\n探索、對話、地圖、手記、語音"]
+  subgraph CLIENT["A｜目前主遊戲：Next.js／Phaser 2D"]
+    UI["已｜Phaser 2D 探索\n固定寫實圖庫、對話、地圖、手記、語音"]
   end
 
   subgraph API["D｜FastAPI 與 Session 邊界"]
@@ -33,7 +33,6 @@ flowchart TB
   subgraph CORE["D 協調，B 生成，C 判定｜回合 Orchestrator"]
     ROUTE{"已｜狀態快照與行動分流"}
     DEMO["已｜Demo Story Director\n既有調查分支與合法選項"]
-    EDIT["已｜世界指令解析\n日夜／天氣／地形／三類物件"]
     CONTEXT["部分｜NPC 授權背景\n設定、狀態、記憶、目標、承諾"]
     GATE["部分｜StoryPlanner／ModelGateway\nStoryProposal、預算、逾時重試"]
     RULE{"部分｜事件與規則是否成立？\n人物、知識、所有權、路線、能力"}
@@ -61,9 +60,9 @@ flowchart TB
     PUBLISH["待｜內容審閱與版本發布\n角色卡、世界觀、秘密授權、正式規則"]
   end
 
-  subgraph ASSET["A／D｜提交成功後非同步生成資產"]
+  subgraph ASSET["歷史／選用資產擴充：本版固定圖庫，不啟用生成"]
     WORKER["部分｜資產排程／Worker\n去重、版本、有限重試、恢復與快取"]
-    GPU["已｜私有 Hunyuan3D Docker\nSSH tunnel／GPU：參考圖 → GLB"]
+    GPU["停用｜歷史 Hunyuan3D 原型\nDocker／SSH／GPU：參考圖 → GLB"]
     IMAGE["待｜即時 ImageGateway provider\n現在使用版本化插畫"]
     CHECK["部分｜產物驗收\nGLB 格式／面數；圖片品質待補"]
     FILES[("部分｜資產檔案與版本\n本機 GLB／圖片；物件儲存待接")]
@@ -72,14 +71,14 @@ flowchart TB
 
   OBS["部分｜追蹤與品質評測\n事件稽核已有；延遲／成本／品質待補"]
 
-  RESULT["玩家收到核准結果與畫面更新"]
+  LIBRARY[("已｜固定 2D 圖庫與 Tiled 地圖\nScene Registry：scene_id → 圖片與互動配置")]
+  RESULT["玩家收到核准結果與 2D 畫面更新"]
 
   UI --> ENTRY --> IDEM
   IDEM -->|已處理或衝突| REPLAY --> RESULT
   IDEM -->|新行動| ROUTE
   ROUTE -.->|查詢快照與歷史| STATE
   ROUTE -->|固定調查選項| DEMO --> RULE
-  ROUTE -->|受限世界編輯| EDIT --> RULE
   ROUTE -->|一般互動／生成事件| CONTEXT --> GATE --> RULE
   CONTEXT -.->|查詢核心設定| CANON
   CONTEXT -.->|查詢 NPC 記憶| MEMORY
@@ -90,7 +89,7 @@ flowchart TB
   RULE -->|不合法| REJECT --> NARRATE
   RULE -->|核准並計算效果| CLOCK --> NARRATE
   NARRATE --> TX
-  TX -->|成功提交| VIEW --> RESULT
+  TX -->|成功提交| VIEW --> LIBRARY --> RESULT
   TX -->|版本競爭／已提交重送| REPLAY
   TX --> STATE
   TX --> MEMORY
@@ -108,6 +107,8 @@ flowchart TB
   classDef done fill:#e2f4e9,stroke:#2a8062,stroke-width:1.6px,color:#173b2f
   classDef partial fill:#fff2d8,stroke:#b98329,stroke-width:1.6px,color:#503815
   classDef planned fill:#eee8f7,stroke:#8b73ad,stroke-width:1.6px,stroke-dasharray:5 3,color:#37274c
-  class UI,ENTRY,CONTEXT,GATE,RULE,CLOCK,NARRATE,TX,CANON,MEMORY,JOBS,WORKER,CHECK,FILES,APPLY,OBS partial
-  class IDEM,REPLAY,ROUTE,DEMO,EDIT,REJECT,VIEW,STATE,GPU,RESULT done
+  class ENTRY,CONTEXT,GATE,RULE,CLOCK,NARRATE,TX,CANON,MEMORY,JOBS,WORKER,CHECK,FILES,APPLY,OBS partial
+  class IDEM,REPLAY,ROUTE,DEMO,REJECT,VIEW,STATE,RESULT,UI,LIBRARY done
   class RAG,VECTOR,LLM,PUBLISH,IMAGE planned
+  classDef legacy fill:#e9e9e9,stroke:#888,color:#555,stroke-dasharray:4 3
+  class GPU legacy

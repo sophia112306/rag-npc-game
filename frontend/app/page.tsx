@@ -192,6 +192,13 @@ export default function Home() {
   const visibleChoices = activeLandmark ? playerChoices : activeNpcId === "andre" ? andreChoices
     : activeNpcId === "menmesvento" ? [...menmesventoChoices, ...playerChoices]
       : playerChoices;
+  const reportChoice = playerChoices.find(choice => choice.choice_id === "review_demo_findings");
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 6000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     if (scene.scene_id === "liuchen_valley") {
@@ -476,13 +483,13 @@ export default function Home() {
         window.localStorage.setItem(conversationKey(sessionId), JSON.stringify({ turn_number: turn.turn_number, updated_at: turn.state.updated_at, messages: nextMessages }));
       } catch { /* The current conversation still works when browser storage is unavailable. */ }
     } catch (cause) {
-      if (cause instanceof ApiRequestError && cause.code === "STATE_VERSION_CONFLICT") {
+      if (cause instanceof ApiRequestError && ["STATE_VERSION_CONFLICT", "STORY_CHOICE_UNAVAILABLE", "STORY_CHOICE_MISMATCH"].includes(cause.code ?? "")) {
         pendingActionRef.current = null;
         try {
           const latest = await requestJson<GameStateSummary>(`/api/game/${sessionId}/state`);
           setGameState(latest);
           setPlayerChoices(await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`));
-          setError("遊戲進度已在其他請求中更新，請確認內容後重新送出。");
+          setError("進度或選項已更新，已同步目前內容；請確認後重新選擇。");
         } catch {
           setError("遊戲進度版本衝突，且無法重新取得最新狀態。請稍後重試。");
         }
@@ -594,15 +601,14 @@ export default function Home() {
           <div className="dialogue-main">
             <div className="dialogue-heading">
               <div><h1>{activeLandmark ? scene.display_name : profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 互動" : "規則式劇情"}</span></div>
-              {dialogueOpen && <button type="button" className="close-dialogue" onClick={() => setDialogueOpen(false)} aria-label="關閉對話">✕</button>}
+              <button type="button" className="close-dialogue" onClick={() => setDialogueOpen(false)} aria-label="關閉對話">✕</button>
             </div>
 
-            {dialogueOpen ? (
               <>
                 <div className="dialogue-history" aria-live="polite">
                   {visibleMessages.length === 0 && <p className="line-npc">{activeLandmark ? scene.description : profile.greeting}</p>}
                   {visibleMessages.map((message) => <p key={message.id} className={`line-${message.kind}`}><span>{message.speaker}：</span>{message.text}</p>)}
-                  {busy && ready && <p className="thinking">{profile.name}正在思索……</p>}
+                  {busy && ready && <p className="thinking">{activeLandmark ? "正在整理調查結果……" : `${profile.name}正在思索……`}</p>}
                   <div ref={endRef} />
                 </div>
                 <p className="dialogue-next">{navigation?.objective}</p>
@@ -624,13 +630,10 @@ export default function Home() {
                   <button type="submit" disabled={!ready || busy || !input.trim()}>送出 ↗</button>
                 </form>}
               </>
-            ) : (
-              null
-            )}
           </div>
         </section>}
 
-        {journalOpen && <InvestigationJournal findings={findings} objective={navigation?.objective ?? "走近地標開始調查。"} onClose={()=>setJournalOpen(false)} near={nearTarget===primaryTarget} onReport={playerChoices.find(choice=>choice.choice_id==="review_demo_findings") ? ()=>requestChoice(playerChoices.find(choice=>choice.choice_id==="review_demo_findings")!) : undefined} />}
+        {journalOpen && <InvestigationJournal findings={findings} objective={navigation?.objective ?? "走近地標開始調查。"} onClose={()=>setJournalOpen(false)} near={nearTarget===primaryTarget} onReport={reportChoice ? ()=>requestChoice(reportChoice) : undefined} />}
 
         {initializing && (
           <div className="game-overlay" role="status" aria-live="polite">

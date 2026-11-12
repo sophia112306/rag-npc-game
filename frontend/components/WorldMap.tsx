@@ -131,7 +131,7 @@ export default function WorldMap({ sceneId, sceneName, expanded, onExpandedChang
                       </button>
                     )}
                     {selected.travel_choice && onTravel && !near && <p className="world-map-detail-hint">先走近人物／地標，抵達後確認出發。</p>}
-                    <p className="world-map-detail-hint">預覽為地點概念圖，3D 地形依目前場景配置呈現。</p>
+                    <p className="world-map-detail-hint">旅行後切換對應場景；調查結果保留在手記中。</p>
                   </div>
                 </aside>
               )}

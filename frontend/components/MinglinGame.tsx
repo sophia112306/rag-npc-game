@@ -107,7 +107,9 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
         }
 
         create() {
-          this.cameras.main.setBounds(0, 0, 1672, 941);
+          this.updateCameraBounds();
+          const resized = () => { this.updateCameraBounds(); this.keepPlayerVisible(); };
+          this.scale.on("resize", resized);
           zoomRef.current(MIN_MAP_ZOOM);
           // Sample the original art at half resolution. Composition, palette and
           // realistic proportions remain unchanged; only fine detail is reduced.
@@ -263,6 +265,7 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
           window.addEventListener("minglin:interact", talk);
           window.addEventListener("minglin:approach", approach);
           this.events.once("shutdown", () => {
+            this.scale.off("resize", resized);
             window.removeEventListener("keydown", keydown);
             window.removeEventListener("keyup", keyup);
             window.removeEventListener("blur", blur);
@@ -292,6 +295,22 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
           };
         }
 
+        private visibleSize() {
+          // ENVELOP crops a landscape canvas on portrait screens. Follow the
+          // actually visible region, rather than the hidden canvas edges.
+          return {
+            width: Math.min(1672, 1672 * this.scale.parentSize.width / this.scale.displaySize.width),
+            height: Math.min(941, 941 * this.scale.parentSize.height / this.scale.displaySize.height),
+          };
+        }
+
+        private updateCameraBounds() {
+          const visible = this.visibleSize();
+          const hiddenX = (1672 - visible.width) / 2;
+          const hiddenY = (941 - visible.height) / 2;
+          this.cameras.main.setBounds(-hiddenX, -hiddenY, 1672 + hiddenX * 2, 941 + hiddenY * 2);
+        }
+
         private setMapZoom(value: number, x = this.cameras.main.width / 2, y = this.cameras.main.height / 2) {
           const camera = this.cameras.main;
           const next = Math.round(PhaserEngine.Math.Clamp(value, MIN_MAP_ZOOM, MAX_MAP_ZOOM) * 100) / 100;
@@ -309,13 +328,15 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
         private keepPlayerVisible() {
           if (!this.player) return;
           const camera = this.cameras.main;
-          if (camera.zoom <= MIN_MAP_ZOOM) return;
-          const halfWidth = camera.width / (2 * camera.zoom);
-          const halfHeight = camera.height / (2 * camera.zoom);
+          const visible = this.visibleSize();
+          if (camera.zoom <= MIN_MAP_ZOOM && visible.width >= 1672 && visible.height >= 941) return;
+          const halfWidth = visible.width / (2 * camera.zoom);
+          const halfHeight = visible.height / (2 * camera.zoom);
           const centerX = camera.scrollX + camera.width / 2;
           const centerY = camera.scrollY + camera.height / 2;
-          const left = centerX - halfWidth + 150 / camera.zoom;
-          const right = centerX + halfWidth - 150 / camera.zoom;
+          const marginX = Math.min(150, visible.width * .18) / camera.zoom;
+          const left = centerX - halfWidth + marginX;
+          const right = centerX + halfWidth - marginX;
           const top = centerY - halfHeight + 100 + 40 / camera.zoom;
           const bottom = centerY + halfHeight - 230 / camera.zoom;
           const shiftX = this.player.x < left ? this.player.x - left : this.player.x > right ? this.player.x - right : 0;

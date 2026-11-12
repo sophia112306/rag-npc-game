@@ -1,5 +1,7 @@
 # 平台完整目標架構與實作對照
 
+**2D 方向更新：主遊戲已改為固定寫實場景圖庫，由故事選項驗證、保存後切換背景與 Tiled 地圖。3D／Hunyuan 與即時圖片生成不在當前主流程中，相關管線僅保留為歷史／選用擴充。**
+
 更新：2026-11-12（Asia/Taipei）。這是平台應有的完整設計，不代表圖中每個功能都已完成。採現有 Next.js＋FastAPI 的模組化架構，模型與生成服務可替換；目前不需要先拆成大量微服務。
 
 **綠色／「已」**：核心能力已有並驗收；**黃色／「部分」**：已有基礎，圖中的完整責任尚待補齊；**紫色／「待」**：尚未接入。箭頭表示目標資料／呼叫流程，虛線表示查詢、記錄或非同步觸發，不代表已完成的連接；查詢箭頭指向資料來源，結果由同一查詢回傳。
@@ -10,9 +12,9 @@
 
 [SVG 向量圖，可放大或放入簡報](diagrams/system-architecture.svg) · [Mermaid 可編輯原始碼](diagrams/system-architecture.mmd)
 
-平台分成六個責任區：玩家介面、API／Session、回合協調與判斷、模型／RAG、資料保存、非同步資產生成。團隊維護的角色／世界資料另經審閱與版本發布，不由一般生成直接覆寫。
+平台分成六個責任區：玩家介面、固定場景圖庫、API／Session、回合協調與判斷、模型／RAG、資料保存；非同步生成另為選用擴充。團隊維護的角色／世界資料另經審閱與版本發布，不由一般生成直接覆寫。
 
-最重要的界線：**LLM 只能產生 StoryProposal；後端規則決定事實；SQL 保存權威結果；前端只呈現玩家可見資訊。** 向量資料庫是檢索索引，圖片／GLB 是呈現資產，兩者都不能替代權威遊戲狀態。
+最重要的界線：**LLM 只能產生 StoryProposal；後端規則決定事實；SQL 保存權威結果；前端只呈現玩家可見資訊。** 向量資料庫是檢索索引，固定圖片／歷史 GLB 是呈現資產，兩者都不能替代權威遊戲狀態。
 
 ## 2. 每回合的完整判斷流程
 
@@ -32,9 +34,6 @@ flowchart TD
     F -->|Demo 選項| G{目前可用且內容未被竄改？}
     G -->|否| CONFLICT
     G -->|是| PROPOSAL[建立 StoryProposal，尚未成立]
-    F -->|世界指令| H{句型、數量與範圍支援？}
-    H -->|否| BAD
-    H -->|是| PROPOSAL
     F -->|一般互動／生成故事| CONTEXT[組合該 NPC 的授權設定、記憶與 RAG]
     CONTEXT --> GEN[ModelGateway：受限輸出與共用呼叫預算]
     GEN --> VALID{逾時內取得合法格式？}
@@ -114,7 +113,7 @@ flowchart TD
 
 目前可用 `context_repository.py` 做 SQL 知識／記憶授權查詢；真正 embedding、向量索引與 B 的正式檢索服務仍未接入。模型 adapter 已有，正式 LLM 尚未就緒。
 
-## 5. 場景／圖片／3D 的判斷與生成
+## 5. 歷史／選用的非同步生成（本版不啟用）
 
 ```mermaid
 flowchart TD
@@ -146,7 +145,7 @@ flowchart TD
 
 | 區域 | 主要程式 | 負責與狀態 |
 | --- | --- | --- |
-| 玩家 UI | `frontend/app/`、`components/experiments/`、`WorldMap.tsx`、`MinglinGame.tsx` | A：兩種畫面可玩；語音、手記、世界指令尚未完全對齊。 |
+| 玩家 UI | `frontend/app/page.tsx`、`WorldMap.tsx`、`MinglinGame.tsx`、`InvestigationJournal.tsx` | A：2D 主頁、固定圖庫、五地互動、語音與手記；舊 3D 路徑導回首頁。 |
 | API／回合 | `backend/main.py`、`api/`、`orchestration/game_orchestrator.py` | D：正式回合、去重與版本已有；完整身分權限待補。 |
 | 故事／世界指令 | `content/demo_story.py`、`demo_story_director.py`、`world_commands.py` | A／D：現有分支與受限指令已驗收。 |
 | 設定／授權背景 | `content/characters.py`、`context_repository.py`、`schemas/content.py` | B／D／作者：SQL 邊界已有，完整內容、索引與維護介面待補。 |
@@ -157,6 +156,8 @@ flowchart TD
 | 資產生成 | `generation/scene_assets.py`、`scene_image_jobs.py`、`infra/hunyuan3d/` | A／D：Hunyuan 已通；即時插畫 provider、正式美術與部署 worker 尚缺。 |
 
 補齊順序：**完整角色／規則與知識資料 → 接 B 的模型／RAG → 一個可跨回合承接的新生成事件 → 正式章節／死亡／結局 → 自主發展與資產部署強化**。可繼續以現有選項與版本化美術驗收，不把模型端點接通當成整個平台完成。
+
+目前固定場景由 `current_scene.background_url`／`tilemap_url` 指向版本化檔案，前端不排生成工作。未來若另外啟用資產生成，再補上述 outbox、worker 與版本驗收，不能把它們當作這版 2D 遊戲的依賴。
 
 ## 7. 圖檔與閱讀入口
 

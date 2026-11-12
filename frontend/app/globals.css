@@ -123,11 +123,8 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
 .generation-badge { padding: 2px 7px; border: 1px solid #806f48; border-radius: 999px; color: #c8b98e; background: #302b1dbd; font-size: 10px; line-height: 1.2; letter-spacing: .08em; white-space: nowrap; }
 .generation-badge.mode-rule_based { border-color: #c5a860; color: #ffedbd; background: #443817c9; }
 .generation-badge.mode-external_model { border-color: #7fa46e; color: #d9f0cc; background: #203521c9; }
-.dialogue-preview { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.dialogue-preview p { margin: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: #f9f4e9; font-size: clamp(17px, 1.5vw, 24px); line-height: 1.6; letter-spacing: .05em; text-shadow: 0 2px 3px #000; }
-.talk-button, .dialogue-form button { flex: 0 0 auto; min-width: 182px; padding: 9px 18px; border: 1px solid #efcf82; border-radius: 5px; color: #fff1c7; background: linear-gradient(180deg, #74602e, #362a15); box-shadow: inset 0 0 0 2px #a3854c68, 0 2px 8px #0008; font-size: 19px; letter-spacing: .2em; text-shadow: 0 1px 3px #000; }
-.talk-button span { margin-left: 10px; font-size: 16px; }
-.talk-button:hover, .dialogue-form button:hover:not(:disabled) { background: linear-gradient(180deg, #a1833e, #51401e); }
+.dialogue-form button { flex: 0 0 auto; min-width: 182px; padding: 9px 18px; border: 1px solid #efcf82; border-radius: 5px; color: #fff1c7; background: linear-gradient(180deg, #74602e, #362a15); box-shadow: inset 0 0 0 2px #a3854c68, 0 2px 8px #0008; font-size: 19px; letter-spacing: .2em; text-shadow: 0 1px 3px #000; }
+.dialogue-form button:hover:not(:disabled) { background: linear-gradient(180deg, #a1833e, #51401e); }
 .dialogue-panel.is-open { min-height: 260px; }
 .close-dialogue { border: 0; color: #d8c99d; background: none; font-size: 18px; padding: 2px 6px; }
 .close-dialogue:hover { color: #fff; }
@@ -227,10 +224,7 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
   .dialogue-heading h1 { font-size: 18px; }
   .turn-indicator { display: none; }
   .generation-badge { font-size: 9px; }
-  .dialogue-preview { align-items: flex-start; flex-direction: column; gap: 6px; justify-content: center; }
-  .dialogue-preview p { font-size: 15px; }
   .talk-button { min-width: 108px; padding: 5px 11px; font-size: 15px; align-self: flex-end; }
-  .talk-button span { margin-left: 3px; }
   .dialogue-history { max-height: 145px; }
   .dialogue-history p { font-size: 12px; }
   .dialogue-form { gap: 4px; }
@@ -252,7 +246,9 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
 .exploration-status p { margin:0 0 5px;color:#e9dec5;font-size:14px;line-height:1.7; }
 .exploration-status small { color:#afa997;font-size:11px;line-height:1.6; }
 .near-prompt { top:auto;bottom:125px;left:50%;font-size:14px; }
+.dialogue-panel.is-landmark { min-height:180px; }
 .dialogue-panel.is-landmark .dialogue-main { margin-left:0; }
+.dialogue-panel.is-landmark .dialogue-history { min-height:40px;max-height:110px; }
 .dialogue-next { margin:3px 0 9px;color:#b9c4ab;font-size:12px;line-height:1.65; }
 .dialogue-choices button.is-tracked { outline:2px solid #d2b473;outline-offset:2px; }
 @media(max-width:640px) {
@@ -260,6 +256,7 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
   .game-toolbar .music-toggle { min-width:72px;font-size:10px;padding:7px; }
   .journal-toggle { font-size:10px;padding:6px 8px; }
   .journal-toggle kbd { display:none; }
+  .world-map-preview { width:145px; }
   .quest-banner strong { font-size:12px; }
   .quest-banner small { font-size:8px;margin-bottom:3px; }
   .exploration-status { bottom:14px;left:10px;max-width:calc(100vw - 20px);padding:9px 11px; }
