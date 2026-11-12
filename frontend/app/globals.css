@@ -239,3 +239,34 @@ kbd { display: inline-block; min-width: 21px; margin-right: 7px; padding: 1px 4p
   .game-overlay-card { padding: 23px 19px; }
   .game-overlay-card h2 { font-size: 21px; }
 }
+
+/* Preserve the realistic source art; background sampling reduces microdetail. */
+.game-toolbar { position:absolute;z-index:3;top:2.2%;right:1.5%;display:flex;gap:8px; }
+.game-toolbar .music-toggle { position:static; }
+.journal-toggle { padding:7px 12px;border:1px solid #a28e62;border-radius:3px;background:#111c18eb;color:#e0cf9e;font-size:12px; }
+.journal-toggle kbd { margin:0 0 0 6px;font-size:10px;min-width:17px; }
+.quest-banner small,.quest-banner strong { display:block;font-weight:400; }
+.quest-banner small { color:#b7aa88;font-size:10px;letter-spacing:.06em;margin-bottom:5px; }
+.quest-banner strong { font-size:17px;letter-spacing:.08em; }
+.exploration-status { position:absolute;z-index:2;bottom:24px;left:24px;max-width:min(610px,calc(100vw - 170px));padding:12px 17px;border-left:2px solid #b8a073;background:#101b19d9;pointer-events:none; }
+.exploration-status p { margin:0 0 5px;color:#e9dec5;font-size:14px;line-height:1.7; }
+.exploration-status small { color:#afa997;font-size:11px;line-height:1.6; }
+.near-prompt { top:auto;bottom:125px;left:50%;font-size:14px; }
+.dialogue-panel.is-landmark .dialogue-main { margin-left:0; }
+.dialogue-next { margin:3px 0 9px;color:#b9c4ab;font-size:12px;line-height:1.65; }
+.dialogue-choices button.is-tracked { outline:2px solid #d2b473;outline-offset:2px; }
+@media(max-width:640px) {
+  .game-toolbar { top:13px;right:10px;gap:5px; }
+  .game-toolbar .music-toggle { min-width:72px;font-size:10px;padding:7px; }
+  .journal-toggle { font-size:10px;padding:6px 8px; }
+  .journal-toggle kbd { display:none; }
+  .quest-banner strong { font-size:12px; }
+  .quest-banner small { font-size:8px;margin-bottom:3px; }
+  .exploration-status { bottom:14px;left:10px;max-width:calc(100vw - 20px);padding:9px 11px; }
+  .exploration-status p { font-size:11px; }
+  .exploration-status small { font-size:9px; }
+  .touch-controls { bottom:120px; }
+  .near-prompt { top:auto;bottom:125px;left:65%;font-size:11px; }
+  .dialogue-panel.is-landmark .dialogue-main { padding:14px; }
+  .game-page:has(.dialogue-panel) .touch-controls { display:none; }
+}

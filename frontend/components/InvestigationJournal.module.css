@@ -1,0 +1,18 @@
+.modal { position:fixed;inset:0;z-index:12;display:grid;place-items:center;padding:22px;background:#070e12c9;backdrop-filter:blur(5px); }
+.journal { position:relative;width:min(820px,100%);max-height:90svh;overflow:auto;padding:30px;border:1px solid #a89469;background:#142126;color:#e1ddce;box-shadow:0 20px 70px #0009; }
+.journal > small { color:#bfa77a;font-size:11px;letter-spacing:.12em; }
+.journal h2 { font-size:25px;font-weight:400;margin:14px 0; }
+.journal p { font-size:13px;line-height:1.9; }
+.close { position:absolute;right:14px;top:12px;padding:5px 8px;border:0;background:none;color:#ddd2b7;font-size:20px;cursor:pointer; }
+.findingsGrid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;max-height:52svh;overflow:auto;margin:22px 0; }
+.findingsGrid article { padding:17px 19px;border:1px solid #7f9d8c55;border-top:2px solid #92b49c;background:#102326; }
+.findingsGrid article:only-child { grid-column:1/-1; }
+.findingsGrid article[data-signal="ember"] { border-top-color:#d6a75c; }
+.findingsGrid article[data-signal="dust"] { border-top-color:#89b5c0; }
+.findingsGrid small { color:#a7c0ae;font-size:10px;letter-spacing:.08em; }
+.findingsGrid h3 { color:#e8ddbb;font-weight:400;font-size:17px;margin:10px 0; }
+.findingsGrid p { margin:0; }
+.reportButton { width:100%;padding:13px;border:1px solid #bfa573;background:#a48c5c;color:#132b27;cursor:pointer; }
+.emptyFindings { margin:30px 0;padding:24px;border:1px dashed #7d9c8b55; }
+.journal .hint { color:#8ba29f;font-size:11px;margin-bottom:0; }
+@media(max-width:640px) { .modal{padding:12px}.journal{padding:25px 18px}.journal h2{font-size:21px}.findingsGrid{grid-template-columns:1fr;max-height:48svh}.findingsGrid article{padding:13px 15px} }

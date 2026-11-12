@@ -1,0 +1,123 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.12.2",
+  "orientation": "isometric",
+  "renderorder": "right-down",
+  "width": 13,
+  "height": 15,
+  "tilewidth": 128,
+  "tileheight": 64,
+  "infinite": false,
+  "nextlayerid": 4,
+  "nextobjectid": 4,
+  "layers": [
+    {
+      "id": 1,
+      "name": "Background",
+      "type": "imagelayer",
+      "image": "scenes/minglin-rune-grove-v1.png",
+      "x": 0,
+      "y": 0,
+      "opacity": 1,
+      "visible": true
+    },
+    {
+      "id": 2,
+      "name": "Walkable",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {
+          "id": 1,
+          "name": "safe_approach",
+          "type": "walkable",
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "polygon": [
+            {
+              "x": 610,
+              "y": 941
+            },
+            {
+              "x": 1170,
+              "y": 941
+            },
+            {
+              "x": 1400,
+              "y": 660
+            },
+            {
+              "x": 1250,
+              "y": 545
+            },
+            {
+              "x": 1070,
+              "y": 500
+            },
+            {
+              "x": 930,
+              "y": 530
+            },
+            {
+              "x": 830,
+              "y": 610
+            },
+            {
+              "x": 600,
+              "y": 600
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Actors",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {
+          "id": 2,
+          "name": "player_spawn",
+          "type": "spawn",
+          "point": true,
+          "x": 840,
+          "y": 800,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true
+        },
+        {
+          "id": 3,
+          "name": "landmark",
+          "type": "landmark",
+          "point": true,
+          "x": 1000,
+          "y": 550,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "properties": [
+            {
+              "name": "label",
+              "type": "string",
+              "value": "調查符石"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tilesets": []
+}

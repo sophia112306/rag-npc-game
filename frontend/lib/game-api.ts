@@ -64,6 +64,7 @@ export type PlayerScene = {
   description: string;
   background_url: string;
   horizon_url: string;
+  tilemap_url: string;
   visual_profile: SceneVisualProfile;
   canon_status: "confirmed" | "provisional";
 };

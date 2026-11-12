@@ -1,0 +1,123 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.12.2",
+  "orientation": "isometric",
+  "renderorder": "right-down",
+  "width": 13,
+  "height": 15,
+  "tilewidth": 128,
+  "tileheight": 64,
+  "infinite": false,
+  "nextlayerid": 4,
+  "nextobjectid": 4,
+  "layers": [
+    {
+      "id": 1,
+      "name": "Background",
+      "type": "imagelayer",
+      "image": "scenes/minglin-life-spring-v1.png",
+      "x": 0,
+      "y": 0,
+      "opacity": 1,
+      "visible": true
+    },
+    {
+      "id": 2,
+      "name": "Walkable",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {
+          "id": 1,
+          "name": "safe_approach",
+          "type": "walkable",
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "polygon": [
+            {
+              "x": 420,
+              "y": 941
+            },
+            {
+              "x": 1300,
+              "y": 941
+            },
+            {
+              "x": 1270,
+              "y": 700
+            },
+            {
+              "x": 1050,
+              "y": 560
+            },
+            {
+              "x": 990,
+              "y": 535
+            },
+            {
+              "x": 730,
+              "y": 535
+            },
+            {
+              "x": 640,
+              "y": 600
+            },
+            {
+              "x": 510,
+              "y": 730
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Actors",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {
+          "id": 2,
+          "name": "player_spawn",
+          "type": "spawn",
+          "point": true,
+          "x": 835,
+          "y": 810,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true
+        },
+        {
+          "id": 3,
+          "name": "landmark",
+          "type": "landmark",
+          "point": true,
+          "x": 842,
+          "y": 590,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "properties": [
+            {
+              "name": "label",
+              "type": "string",
+              "value": "調查泉眼"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tilesets": []
+}

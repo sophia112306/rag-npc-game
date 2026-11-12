@@ -17,7 +17,7 @@ import { getSceneMusic } from "../../lib/scene-music";
 import { useSceneMusic } from "../../lib/use-scene-music";
 import { createFirstPerson, type MoveDirection } from "./first-person";
 import WorldMap from "../WorldMap";
-import InvestigationJournal from "./InvestigationJournal";
+import InvestigationJournal from "../InvestigationJournal";
 import type { TrialDriver } from "./world";
 import styles from "./TrialExperience.module.css";
 

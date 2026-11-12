@@ -50,6 +50,7 @@ class SceneDefinition(BaseModel):
     description: str
     background_url: str
     horizon_url: str
+    tilemap_url: str
     visual_profile: SceneVisualProfile
     canon_status: Literal["confirmed", "provisional"]
     allowed_destinations: tuple[str, ...]
@@ -65,6 +66,7 @@ SCENES: dict[str, SceneDefinition] = {
         description="維達利亞接見旅人、確認現況的林間議會庭。",
         background_url="/game/forest-council.png",
         horizon_url="/game/forest-eye-backdrop.png",
+        tilemap_url="/game/minglin.tmj",
         visual_profile=SceneVisualProfile(
             profile_id="minglin_council",
             clear_color="#142e38",
@@ -105,6 +107,7 @@ SCENES: dict[str, SceneDefinition] = {
         description="維達利亞守護的泉眼；場景細節仍待團隊世界觀資料確認。",
         background_url="/game/scenes/minglin-life-spring-v1.png",
         horizon_url="/game/scenes/minglin-life-spring-v1.png",
+        tilemap_url="/game/life-spring.tmj",
         visual_profile=SceneVisualProfile(
             profile_id="minglin_life_spring",
             clear_color="#102b31",
@@ -148,6 +151,7 @@ SCENES: dict[str, SceneDefinition] = {
         description="用於驗證動態探索流程的暫定符石場景，尚未列為正式世界設定。",
         background_url="/game/scenes/minglin-rune-grove-v1.png",
         horizon_url="/game/scenes/minglin-rune-grove-v1.png",
+        tilemap_url="/game/rune-grove.tmj",
         visual_profile=SceneVisualProfile(
             profile_id="minglin_rune_grove",
             clear_color="#141c2c",
@@ -190,6 +194,7 @@ SCENES: dict[str, SceneDefinition] = {
         description="遍布龜裂道路、墓葬遺跡與復生者足跡的風沙峽谷。",
         background_url="/game/scenes/liuchen-valley-v1.png",
         horizon_url="/game/scenes/liuchen-valley-v1.png",
+        tilemap_url="/game/liuchen.tmj",
         visual_profile=SceneVisualProfile(
             profile_id="liuchen_dust_valley",
             clear_color="#5b4430",
@@ -230,6 +235,7 @@ SCENES: dict[str, SceneDefinition] = {
         description="依使用者參考設計建立的火柱、祭壇與熔流原野；正式世界設定仍待團隊確認。",
         background_url="/game/scenes/lieyi-plains-v1.png",
         horizon_url="/game/scenes/lieyi-plains-v1.png",
+        tilemap_url="/game/lieyi-plains.tmj",
         visual_profile=SceneVisualProfile(
             profile_id="lieyi_sacred_fire",
             clear_color="#33110d",

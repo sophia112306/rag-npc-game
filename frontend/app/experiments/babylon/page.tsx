@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import TrialExperience from "../../../components/experiments/TrialExperience";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Babylon.js 3D 試玩｜鳴霖" };
+export const metadata: Metadata = { title: "鳴霖｜2D 世界探索" };
 
 export default function BabylonTrialPage() {
-  return <TrialExperience />;
+  redirect("/");
 }

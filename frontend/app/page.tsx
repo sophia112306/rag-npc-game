@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import MinglinGame, { interactWithNpc, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP, type NpcId } from "../components/MinglinGame";
+import MinglinGame, { approachTarget, interactWithTarget, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP, type NpcId, type InteractionTarget } from "../components/MinglinGame";
 import WorldMap from "../components/WorldMap";
+import InvestigationJournal from "../components/InvestigationJournal";
 import { getSceneMusic } from "../lib/scene-music";
 import { useSceneMusic } from "../lib/use-scene-music";
 import {
@@ -11,13 +12,11 @@ import {
   DEFAULT_SCENE_VISUAL_PROFILE,
   GAME_SESSION_STORAGE_KEY,
   requestJson,
-  resolveSceneImage,
   type Capabilities,
   type GameStateSummary,
   type GameTurnResponse,
   type PlayerChoice,
   type PlayerScene,
-  type PlayerNavigation,
 } from "../lib/game-api";
 
 type CharacterProfile = {
@@ -37,6 +36,8 @@ type ChatMessage = {
   text: string;
   kind: "npc" | "player";
   npcId?: NpcId;
+  targetId?: InteractionTarget;
+  sceneId?: string;
 };
 
 type PendingAction = {
@@ -132,6 +133,7 @@ const previewScene: PlayerScene = {
   description: "維達利亞接見旅人的林間議會庭。",
   background_url: "/game/forest-council.png",
   horizon_url: "/game/forest-eye-backdrop.png",
+  tilemap_url: "/game/minglin.tmj",
   visual_profile: DEFAULT_SCENE_VISUAL_PROFILE,
   canon_status: "confirmed",
 };
@@ -141,7 +143,8 @@ export default function Home() {
   const [activeNpcId, setActiveNpcId] = useState<NpcId>("vidalia");
   const [sessionId, setSessionId] = useState("");
   const [dialogueOpen, setDialogueOpen] = useState(false);
-  const [nearNpcId, setNearNpcId] = useState<NpcId | null>(null);
+  const [nearTarget, setNearTarget] = useState<InteractionTarget | null>(null);
+  const [activeLandmark, setActiveLandmark] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [inputType, setInputType] = useState<"text" | "speech_transcript">("text");
@@ -156,15 +159,19 @@ export default function Home() {
   const [error, setError] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
+  const [journalOpen, setJournalOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [trackedChoice, setTrackedChoice] = useState<string | null>(null);
   const [restartConfirm, setRestartConfirm] = useState(false);
-  const [turnNumber, setTurnNumber] = useState(0);
-  const [stateVersion, setStateVersion] = useState(1);
-  const [scene, setScene] = useState<PlayerScene>(previewScene);
-  const [navigation, setNavigation] = useState<PlayerNavigation | null>(null);
-  const [sceneImageUrl, setSceneImageUrl] = useState(previewScene.background_url);
-  const [sceneImageStatus, setSceneImageStatus] = useState<"queued" | "processing" | "succeeded" | "fallback">("fallback");
+  const [gameState, setGameState] = useState<GameStateSummary | null>(null);
+  const scene = gameState?.current_scene ?? previewScene;
+  const turnNumber = gameState?.turn_count ?? 0;
+  const stateVersion = gameState?.state_version ?? 1;
+  const navigation = gameState?.navigation;
+  const findings = gameState?.story_progress.findings ?? [];
+  const sceneImageUrl = scene.background_url;
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
-  const [questLabel, setQuestLabel] = useState("與維達利亞交談");
+  const questLabel = gameState?.story_progress.chapter_title ?? "鳴霖異象";
   const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
   const [andreChoices, setAndreChoices] = useState<PlayerChoice[]>([]);
   const [menmesventoChoices, setMenmesventoChoices] = useState<PlayerChoice[]>([]);
@@ -172,12 +179,17 @@ export default function Home() {
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const pendingApproach = useRef<string | null>(null);
   const sceneMusic = getSceneMusic(scene.scene_id);
   const music = useSceneMusic(sceneMusic.src, speaking ? 0.07 : dialogueOpen ? 0.11 : 0.2);
-  const displayNpcId = dialogueOpen ? activeNpcId : nearNpcId ?? activeNpcId;
+  const primaryNpc = gameState?.world_scene.npc_id;
+  const primaryTarget: InteractionTarget = primaryNpc === "vidalia" || primaryNpc === "andre" || primaryNpc === "menmesvento" ? primaryNpc : "landmark";
+  const displayNpcId = dialogueOpen ? activeNpcId : nearTarget && nearTarget !== "landmark" ? nearTarget : activeNpcId;
   const profile = profiles[displayNpcId];
-  const visibleMessages = messages.filter((message) => (message.npcId ?? "vidalia") === displayNpcId);
-  const visibleChoices = activeNpcId === "andre" ? andreChoices
+  const visibleMessages = messages.filter(message => activeLandmark
+    ? message.targetId === "landmark" && message.sceneId === scene.scene_id
+    : message.targetId !== "landmark" && (message.npcId ?? "vidalia") === displayNpcId);
+  const visibleChoices = activeLandmark ? playerChoices : activeNpcId === "andre" ? andreChoices
     : activeNpcId === "menmesvento" ? [...menmesventoChoices, ...playerChoices]
       : playerChoices;
 
@@ -188,7 +200,11 @@ export default function Home() {
     } else if (scene.scene_id === "minglin") {
       setActiveNpcId("vidalia");
     }
-    setNearNpcId(null);
+    setNearTarget(null);
+    setActiveLandmark(false);
+    setDialogueOpen(false);
+    pendingApproach.current = null;
+    setTrackedChoice(null);
   }, [scene.scene_id]);
 
   useEffect(() => {
@@ -208,23 +224,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!ready || !sessionId) return;
-    let current = true;
-    setSceneImageUrl(scene.background_url);
-    setSceneImageStatus("queued");
-    void resolveSceneImage(sessionId, stateVersion, () => current)
-      .then((job) => {
-        if (!current || !job || job.scene_id !== scene.scene_id) return;
-        setSceneImageStatus(job.status);
-        if (job.image_url) setSceneImageUrl(job.image_url);
-      })
-      .catch(() => {
-        if (current) setSceneImageStatus("fallback");
-      });
-    return () => { current = false; };
-  }, [ready, scene.background_url, scene.scene_id, sessionId, stateVersion]);
-
-  useEffect(() => {
     if (dialogueOpen) endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, dialogueOpen]);
 
@@ -235,7 +234,12 @@ export default function Home() {
         setWorldMapOpen(false);
         setRestartConfirm(false);
         setDialogueOpen(false);
+        setJournalOpen(false);
       }
+      if (event.target instanceof HTMLElement && event.target.closest("input,textarea,[contenteditable=true]")) return;
+      if (event.repeat) return;
+      if (event.code === "KeyM") { setWorldMapOpen(value => !value); setDialogueOpen(false); setJournalOpen(false); }
+      if (event.code === "KeyJ") { setJournalOpen(value => !value); setDialogueOpen(false); setWorldMapOpen(false); }
     }
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
@@ -266,14 +270,10 @@ export default function Home() {
         requestJson<PlayerChoice[]>(`/api/game/${id}/choices?npc_id=andre`),
         requestJson<PlayerChoice[]>(`/api/game/${id}/choices?npc_id=menmesvento`),
       ]);
-      setQuestLabel(`故事進度：${state.story_progress.chapter_title}`);
       setPlayerChoices(choices);
       setAndreChoices(andreOptions);
       setMenmesventoChoices(menmesventoOptions);
-      setTurnNumber(state.turn_count);
-      setStateVersion(state.state_version);
-      setScene(state.current_scene);
-      setNavigation(state.navigation ?? null);
+      setGameState(state);
       const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: character.name, text: character.greeting, kind: "npc" }];
       let restored = fallback;
       try {
@@ -301,12 +301,36 @@ export default function Home() {
     }
   }
 
-  const openDialogue = useCallback((npcId: NpcId) => {
-    setActiveNpcId(npcId);
-    setLastNpcSpeech(messages.filter((message) => message.kind === "npc" && (message.npcId ?? "vidalia") === npcId).at(-1)?.text ?? profiles[npcId].greeting);
+  const openDialogue = useCallback((targetId: InteractionTarget) => {
+    const landmark = targetId === "landmark";
+    setActiveLandmark(landmark);
+    if (!landmark) {
+      setActiveNpcId(targetId);
+      setLastNpcSpeech(messages.filter(message => message.kind === "npc" && (message.npcId ?? "vidalia") === targetId).at(-1)?.text ?? profiles[targetId].greeting);
+    }
+    if (pendingApproach.current) {
+      setTrackedChoice(pendingApproach.current);
+      pendingApproach.current = null;
+      setNotice("已抵達，請選擇行動繼續。");
+    }
     setHelpOpen(false);
+    setWorldMapOpen(false);
+    setJournalOpen(false);
     setDialogueOpen(true);
   }, [messages, profiles]);
+
+  function requestChoice(choice: PlayerChoice) {
+    setWorldMapOpen(false);
+    setJournalOpen(false);
+    if (nearTarget === primaryTarget) {
+      openDialogue(primaryTarget);
+      selectChoice(choice);
+    } else {
+      pendingApproach.current = choice.choice_id;
+      setNotice("正走向人物或地標，抵達後確認行動。");
+      approachTarget(primaryTarget);
+    }
+  }
 
   function toggleListening() {
     if (listening) {
@@ -410,7 +434,9 @@ export default function Home() {
     setBusy(true);
     setError("");
     const messageNpcId: NpcId = targetNpcId === "andre" || targetNpcId === "menmesvento" ? targetNpcId : activeNpcId;
-    setMessages((current) => [...current, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player", npcId: messageNpcId }]);
+    const messageTarget: InteractionTarget = targetNpcId === "andre" || targetNpcId === "menmesvento" || targetNpcId === "vidalia" ? targetNpcId : primaryTarget;
+    const playerLine: ChatMessage = { id: window.crypto.randomUUID(), speaker:"你", text, kind:"player", npcId:messageNpcId, targetId:messageTarget, sceneId:scene.scene_id };
+    setMessages(current => [...current, playerLine]);
     const pending = pendingActionRef.current;
     const canRetryPending = pending?.text === text && pending.inputType === actionInputType && pending.targetNpcId === targetNpcId && pending.actionMode === actionMode && pending.destinationSceneId === destinationSceneId && pending.storyChoiceId === storyChoiceId && pending.expectedStateVersion === stateVersion;
     const actionId = canRetryPending ? pending.actionId : window.crypto.randomUUID();
@@ -433,17 +459,16 @@ export default function Home() {
         }),
       });
       pendingActionRef.current = null;
-      setTurnNumber(turn.turn_number);
-      setStateVersion(turn.state.state_version);
-      setScene(turn.state.current_scene);
-      setNavigation(turn.state.navigation ?? null);
-      setQuestLabel(`故事進度：${turn.state.story_progress.chapter_title}`);
+      setGameState(turn.state);
+      setTrackedChoice(null);
+      const count = turn.state.story_progress.findings?.length ?? 0;
+      setNotice(count > findings.length ? `新的調查已記錄。按 J 查看 ${count} 項紀錄。` : `故事進度：${turn.state.story_progress.chapter_title}`);
       try {
         const choices = await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`);
         setPlayerChoices(choices);
       } catch { /* The committed turn remains valid if the optional quest refresh fails. */ }
-      const nextMessages: ChatMessage[] = [...messages, { id: window.crypto.randomUUID(), speaker: "你", text, kind: "player", npcId: messageNpcId }, ...turn.story.dialogue.map((line) => ({
-        id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const, npcId: messageNpcId,
+      const nextMessages: ChatMessage[] = [...messages, playerLine, ...turn.story.dialogue.map((line) => ({
+        id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const, npcId: messageNpcId, targetId:messageTarget, sceneId:scene.scene_id,
       }))];
       setMessages(nextMessages);
       setLastNpcSpeech(turn.story.dialogue.filter((line) => line.speaker_name !== "系統").map((line) => line.text).join("\n"));
@@ -455,10 +480,8 @@ export default function Home() {
         pendingActionRef.current = null;
         try {
           const latest = await requestJson<GameStateSummary>(`/api/game/${sessionId}/state`);
-          setTurnNumber(latest.turn_count);
-          setStateVersion(latest.state_version);
-          setScene(latest.current_scene);
-          setNavigation(latest.navigation ?? null);
+          setGameState(latest);
+          setPlayerChoices(await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`));
           setError("遊戲進度已在其他請求中更新，請確認內容後重新送出。");
         } catch {
           setError("遊戲進度版本衝突，且無法重新取得最新狀態。請稍後重試。");
@@ -483,17 +506,16 @@ export default function Home() {
     setRestartConfirm(false);
     setHelpOpen(false);
     setWorldMapOpen(false);
-    setNearNpcId(null);
+    setJournalOpen(false);
+    setNearTarget(null);
+    setActiveLandmark(false);
+    pendingApproach.current = null;
     setActiveNpcId("vidalia");
     setInput("");
     setInputType("text");
     pendingActionRef.current = null;
     void initialize(id);
   }
-
-  const previewLine = displayNpcId === "vidalia" && turnNumber === 0
-    ? "……你來了。"
-    : visibleMessages.filter((message) => message.kind === "npc").at(-1)?.text ?? profile.greeting;
 
   return (
     <main className="game-page">
@@ -507,7 +529,7 @@ export default function Home() {
         onError={music.onError}
       />
       <section className="map-stage" aria-label={`斜俯視的${scene.region_name}遊戲地圖`}>
-        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} sceneName={scene.region_name} paused={dialogueOpen || helpOpen || worldMapOpen || restartConfirm || initializing || !ready} onNearChange={setNearNpcId} onInteract={openDialogue} onZoomChange={setMapZoom} />}
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={{vidalia:profiles.vidalia.name,andre:profiles.andre.name,menmesvento:profiles.menmesvento.name}} paused={dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
 
         <header className="location-banner" aria-label="目前場景">
@@ -517,12 +539,14 @@ export default function Home() {
             <path d="M36 3l6 27 27 6-27 6-6 27-6-27L3 36l27-6L36 3Z" stroke="currentColor" strokeWidth="1.7" />
             <path d="M36 22l4 10 10 4-10 4-4 10-4-10-10-4 10-4 4-10Z" fill="currentColor" />
           </svg>
-          <div className="location-copy"><strong>{scene.region_name}</strong><span>{scene.display_name} · {scene.subtitle} · {sceneImageStatus === "succeeded" ? "生成場景" : sceneImageStatus === "fallback" ? "版本化場景" : "場景生成中"}</span></div>
+          <div className="location-copy"><strong>{scene.display_name}</strong><span>{scene.region_name} · {scene.subtitle} · 2D 探索</span></div>
           <span className="location-ornament" aria-hidden="true">✧</span>
         </header>
 
-        <WorldMap sceneId={scene.scene_id} sceneName={`${scene.region_name}・${scene.display_name}`} expanded={worldMapOpen} onExpandedChange={setWorldMapOpen} navigation={navigation} />
+        <WorldMap sceneId={scene.scene_id} sceneName={`${scene.region_name}・${scene.display_name}`} expanded={worldMapOpen} onExpandedChange={open => {setWorldMapOpen(open);if(open){setDialogueOpen(false);setJournalOpen(false);}}} navigation={navigation} onTravel={requestChoice} near={nearTarget===primaryTarget} busy={busy} />
 
+        <div className="game-toolbar">
+        <button className="journal-toggle" onClick={()=>{setJournalOpen(true);setDialogueOpen(false);setWorldMapOpen(false);}}>手記 {findings.length} <kbd>J</kbd></button>
         <button
           type="button"
           className={`music-toggle ${music.playing ? "is-playing" : ""}`}
@@ -531,17 +555,18 @@ export default function Home() {
           aria-pressed={music.playing}
           title={music.error || (music.playing ? `關閉${sceneMusic.title}背景音樂` : `播放${sceneMusic.title}背景音樂`)}
         >♫ {music.error ? "重試音樂" : music.playing ? "音樂開" : "播放音樂"}</button>
+        </div>
 
         <aside className="quest-banner" aria-label="目前任務">
           <span className="quest-emblem" aria-hidden="true">◇</span>
-          <span>{questLabel}</span>
+          <span><small>第 {turnNumber} 回合 · {generationMode === "external_model" ? "AI 互動" : "規則式劇情"}</small><strong>{questLabel}</strong></span>
           <button type="button" className="help-button" onClick={() => setHelpOpen(true)} aria-label="查看操作說明" title="操作說明">?</button>
           <button type="button" className="restart-button" onClick={() => setRestartConfirm(true)} disabled={busy} aria-label="重新開始遊戲" title="重新開始">↺</button>
         </aside>
 
-        {!dialogueOpen && nearNpcId && (
-          <button type="button" className="near-prompt" onClick={interactWithNpc}>
-            <kbd>E</kbd> 與{profiles[nearNpcId].name}交談
+        {!dialogueOpen && nearTarget && (
+          <button type="button" className="near-prompt" onClick={interactWithTarget}>
+            <kbd>E</kbd> {nearTarget === "landmark" ? gameState?.world_scene.interaction_label ?? "調查地標" : `與${profiles[nearTarget].name}交談`}
           </button>
         )}
 
@@ -551,7 +576,7 @@ export default function Home() {
           <button type="button" onClick={() => zoomMap({ kind: "step", amount: -MAP_ZOOM_STEP })} disabled={!ready || mapZoom <= MIN_MAP_ZOOM} aria-label="縮小地圖" title="縮小地圖">−</button>
         </div>
 
-        {!dialogueOpen && <p className="control-hint">左鍵移動　·　右鍵轉向　·　Q／R 轉身　·　滾輪縮放</p>}
+        {!dialogueOpen && <div className="exploration-status"><p>{navigation?.objective ?? "走近維達利亞，開始調查。"}</p><small>{notice || "WASD／點地面移動 · E 互動 · M 地圖 · J 手記 · 滾輪縮放"}</small></div>}
 
         <div className="touch-controls" aria-label="移動控制">
           <button type="button" className="touch-turn-left" onClick={() => turnPlayer(-1)} aria-label="向左轉身">↶</button>
@@ -562,50 +587,50 @@ export default function Home() {
           <button type="button" className="touch-right" onClick={() => movePlayer({ dx: 1, dy: 0 })} aria-label="向右移動">▶</button>
         </div>
 
-        <section className={`dialogue-panel ${dialogueOpen ? "is-open" : "is-preview"}`} aria-label={`與${profile.name}對話`}>
-          <div className="dialogue-portrait">
+        {dialogueOpen && <section className={`dialogue-panel is-open ${activeLandmark ? "is-landmark" : ""}`} aria-label={activeLandmark ? scene.display_name : `與${profile.name}對話`}>
+          {!activeLandmark && <div className="dialogue-portrait">
             <Image src={profile.portrait_url} alt={`${profile.name}肖像`} fill sizes="(max-width: 640px) 90px, 175px" />
-          </div>
+          </div>}
           <div className="dialogue-main">
             <div className="dialogue-heading">
-              <div><h1>{profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 動態" : "規則動態"}</span></div>
+              <div><h1>{activeLandmark ? scene.display_name : profile.name}</h1><span className="turn-indicator">第 {String(turnNumber).padStart(2, "0")} 回合</span><span className={`generation-badge mode-${generationMode}`}>{generationMode === "external_model" ? "AI 互動" : "規則式劇情"}</span></div>
               {dialogueOpen && <button type="button" className="close-dialogue" onClick={() => setDialogueOpen(false)} aria-label="關閉對話">✕</button>}
             </div>
 
             {dialogueOpen ? (
               <>
                 <div className="dialogue-history" aria-live="polite">
-                  {visibleMessages.length === 0 && <p className="line-npc"><span>{profile.name}：</span>{profile.greeting}</p>}
+                  {visibleMessages.length === 0 && <p className="line-npc">{activeLandmark ? scene.description : profile.greeting}</p>}
                   {visibleMessages.map((message) => <p key={message.id} className={`line-${message.kind}`}><span>{message.speaker}：</span>{message.text}</p>)}
                   {busy && ready && <p className="thinking">{profile.name}正在思索……</p>}
                   <div ref={endRef} />
                 </div>
+                <p className="dialogue-next">{navigation?.objective}</p>
                 {visibleChoices.length > 0 && (
                   <div className="dialogue-choices" aria-label="可選行動">
                     {visibleChoices.map((choice) => (
-                      <button key={choice.choice_id} type="button" disabled={!ready || busy} onClick={() => selectChoice(choice)}>
+                      <button key={choice.choice_id} className={trackedChoice===choice.choice_id ? "is-tracked" : ""} type="button" disabled={!ready || busy} onClick={() => selectChoice(choice)}>
                         {choice.label}
                       </button>
                     ))}
                   </div>
                 )}
                 {error && <p className="dialogue-error" role="alert">{error}</p>}
-                <form className="dialogue-form" onSubmit={submit}>
+                {!activeLandmark && <form className="dialogue-form" onSubmit={submit}>
                   <label htmlFor="dialogue-input" className="sr-only">對{profile.name}說話</label>
                   <input id="dialogue-input" value={input} onChange={(event) => { setInput(event.target.value); setInputType("text"); }} placeholder={ready ? (listening ? "正在聆聽……" : "說出你的想法……") : "等待後端連線……"} disabled={!ready || busy || listening} maxLength={2000} />
                   <button type="button" className={`voice-button ${listening ? "is-listening" : ""}`} onClick={toggleListening} disabled={!ready || busy || !voiceSupported} aria-label={listening ? "停止語音辨識" : "使用麥克風輸入"} title={voiceSupported ? "語音轉文字" : "瀏覽器不支援語音辨識"}>{listening ? "■" : "🎙"}</button>
                   <button type="button" className={`voice-button ${speaking ? "is-speaking" : ""}`} onClick={speakLastResponse} disabled={!ttsSupported || !lastNpcSpeech} aria-label={speaking ? "停止播放 NPC 回覆" : "播放 NPC 最近回覆"} title={speaking ? "停止播放" : "播放 NPC 最近回覆"}>{speaking ? "■" : "🔊"}</button>
                   <button type="submit" disabled={!ready || busy || !input.trim()}>送出 ↗</button>
-                </form>
+                </form>}
               </>
             ) : (
-              <div className="dialogue-preview">
-                <p>{previewLine}</p>
-                <button type="button" className="talk-button" onClick={() => openDialogue(displayNpcId)}>對話 <span aria-hidden="true">❯</span></button>
-              </div>
+              null
             )}
           </div>
-        </section>
+        </section>}
+
+        {journalOpen && <InvestigationJournal findings={findings} objective={navigation?.objective ?? "走近地標開始調查。"} onClose={()=>setJournalOpen(false)} near={nearTarget===primaryTarget} onReport={playerChoices.find(choice=>choice.choice_id==="review_demo_findings") ? ()=>requestChoice(playerChoices.find(choice=>choice.choice_id==="review_demo_findings")!) : undefined} />}
 
         {initializing && (
           <div className="game-overlay" role="status" aria-live="polite">

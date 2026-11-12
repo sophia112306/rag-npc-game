@@ -1,5 +1,5 @@
-import type { StoryFinding } from "../../lib/game-api";
-import styles from "./TrialExperience.module.css";
+import type { StoryFinding } from "../lib/game-api";
+import styles from "./InvestigationJournal.module.css";
 
 type Props = {
   findings: StoryFinding[];
@@ -11,7 +11,7 @@ type Props = {
 
 export default function InvestigationJournal({findings,objective,onClose,onReport,near}:Props) {
   return <div className={styles.modal} onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
-    <section className={`${styles.journal} ${styles.investigationJournal}`} role="dialog" aria-modal="true" aria-label="調查紀錄"
+    <section className={styles.journal} role="dialog" aria-modal="true" aria-label="調查紀錄"
       onKeyDown={event=>{
         if(event.key!=="Tab")return;
         const buttons=event.currentTarget.querySelectorAll<HTMLButtonElement>("button");

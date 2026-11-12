@@ -4,7 +4,7 @@ from datetime import datetime
 from dataclasses import asdict
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.content.reveal_policy import is_demo_first_stage, public_chapter_title, public_clue_ids
 from backend.content.scenes import SCENES, SceneVisualProfile, require_scene
@@ -103,8 +103,16 @@ class PlayerSceneView(BaseModel):
     description: str
     background_url: str
     horizon_url: str
+    tilemap_url: str = ""
     visual_profile: SceneVisualProfile
     canon_status: Literal["confirmed", "provisional"]
+
+    @model_validator(mode="after")
+    def restore_legacy_tilemap(self):
+        # Persisted responses from before the 2D map contract have no URL.
+        if not self.tilemap_url:
+            self.tilemap_url = require_scene(self.scene_id).tilemap_url
+        return self
 
 
 class PlayerFindingView(BaseModel):
@@ -177,6 +185,7 @@ def project_player_view(state: GameState) -> PlayerViewState:
             description=scene.description,
             background_url=scene.background_url,
             horizon_url=scene.horizon_url,
+            tilemap_url=scene.tilemap_url,
             visual_profile=scene.visual_profile,
             canon_status=scene.canon_status,
         ),
