@@ -115,6 +115,40 @@ def test_menmesvento_appears_on_dust_route_without_revealing_later_truths(client
     assert reply.json()["state"]["npc_states"]["menmesvento"]["met"] is True
 
 
+@pytest.mark.parametrize(
+    ("npc_id", "name", "portrait", "expected_text"),
+    (
+        ("dasso", "達索", "/images/dasso.jpg", "聖火"),
+        ("seth", "塞特", "/images/seth.jpg", "方向"),
+        ("syra", "希拉", "/images/syra.jpg", "記錄"),
+    ),
+)
+def test_new_npc_profile_choice_and_dialogue(
+    client: TestClient, npc_id: str, name: str, portrait: str, expected_text: str
+) -> None:
+    profile = client.get(f"/api/characters/{npc_id}")
+    assert profile.status_code == 200
+    assert profile.json()["name"] == name
+    assert profile.json()["portrait_url"] == portrait
+    assert "private_profile" not in profile.json()
+
+    session_id = f"{npc_id}-session"
+    state = start_session(client, session_id)
+    choices = client.get(f"/api/game/{session_id}/choices?npc_id={npc_id}")
+    assert choices.status_code == 200
+    assert len(choices.json()) == 2
+    assert all(choice["target_npc_id"] == npc_id for choice in choices.json())
+
+    action = action_payload(session_id, expected_state_version=state["state_version"])
+    action.update(message=choices.json()[0]["message"], target_npc_id=npc_id)
+    response = client.post("/api/game/turn", json=action)
+    assert response.status_code == 200, response.text
+    dialogue = response.json()["story"]["dialogue"][0]
+    assert dialogue["speaker_name"] == name
+    assert expected_text in dialogue["text"]
+    assert response.json()["state"]["npc_states"][npc_id]["met"] is True
+
+
 def test_default_capabilities_identify_rule_based_generation(client: TestClient) -> None:
     response = client.get("/api/capabilities")
 

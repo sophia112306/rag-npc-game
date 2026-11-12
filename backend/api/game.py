@@ -130,7 +130,7 @@ async def submit_player_action(
 )
 async def get_player_choices(
     session_id: str,
-    npc_id: Literal["vidalia", "andre", "menmesvento"] = "vidalia",
+    npc_id: Literal["vidalia", "andre", "menmesvento", "dasso", "seth", "syra"] = "vidalia",
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> list[PlayerChoice]:
     """Return clickable choices derived from the current public session state."""

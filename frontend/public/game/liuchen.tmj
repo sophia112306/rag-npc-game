@@ -10,7 +10,7 @@
   "tileheight": 64,
   "infinite": false,
   "nextlayerid": 4,
-  "nextobjectid": 4,
+  "nextobjectid": 6,
   "layers": [
     {
       "id": 1,
@@ -61,7 +61,9 @@
       "visible": true,
       "objects": [
         {"id": 2, "name": "player_spawn", "type": "spawn", "point": true, "x": 760, "y": 645, "width": 0, "height": 0, "rotation": 0, "visible": true},
-        {"id": 3, "name": "menmesvento", "type": "npc", "point": true, "x": 1125, "y": 505, "width": 0, "height": 0, "rotation": 0, "visible": true}
+        {"id": 3, "name": "menmesvento", "type": "npc", "point": true, "x": 1125, "y": 505, "width": 0, "height": 0, "rotation": 0, "visible": true},
+        {"id": 4, "name": "seth", "type": "npc", "point": true, "x": 845, "y": 555, "width": 0, "height": 0, "rotation": 0, "visible": true},
+        {"id": 5, "name": "syra", "type": "npc", "point": true, "x": 1360, "y": 555, "width": 0, "height": 0, "rotation": 0, "visible": true}
       ]
     }
   ],

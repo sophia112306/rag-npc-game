@@ -84,12 +84,15 @@ class GameState(BaseModel):
     usurp: int = Field(default=0, ge=0, le=100)       # 篡奪值 (0 ~ 100)
     truth_level: int = Field(default=0, ge=0, le=3)   # 真相度 (0 ~ 3)
     
-    # NPC 關係狀態集合 (預設初始值：安德烈 20, 維達利亞 30, 門梅司文托 30)
+    # NPC 關係狀態集合；安德烈初始 20，其餘已登錄角色初始 30。
     npc_states: Dict[str, NPCState] = Field(
         default_factory=lambda: {
             "andre": NPCState(npc_id="andre", name="安德烈", relation=20),
             "vidalia": NPCState(npc_id="vidalia", name="維達利亞", relation=30),
-            "menmesvento": NPCState(npc_id="menmesvento", name="門梅司文托", relation=30)
+            "menmesvento": NPCState(npc_id="menmesvento", name="門梅司文托", relation=30),
+            "dasso": NPCState(npc_id="dasso", name="達索", relation=30),
+            "seth": NPCState(npc_id="seth", name="塞特", relation=30),
+            "syra": NPCState(npc_id="syra", name="希拉", relation=30),
         }
     )
     

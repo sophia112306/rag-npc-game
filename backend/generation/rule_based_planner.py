@@ -131,6 +131,18 @@ class RuleBasedStoryPlanner:
             else:
                 text = "林地邊緣的地脈最近有幾次不尋常的震顫，泉水也久未向外延伸。我正在核對兩者是否相關。"
             emotion = "focused"
+        elif npc_id == "dasso" and self._contains_any(normalized, ("聖火", "長老會", "調查")):
+            intent_summary = "達索僅依公開的烈燚原現況回應。"
+            text = "聖火與長老會的事，得依現場證據談。你看見了什麼異常？"
+            emotion = "measured"
+        elif npc_id == "seth" and self._contains_any(normalized, ("去向", "方向", "風沙", "流塵谷")):
+            intent_summary = "塞特保留尚未公開的個人目的。"
+            text = "風把每條路都吹得模糊。我還在找能走出去的方向。"
+            emotion = "wary"
+        elif npc_id == "syra" and self._contains_any(normalized, ("記錄盒", "旅途", "流塵谷")):
+            intent_summary = "希拉僅談可見的記錄與旅途。"
+            text = "這只盒子裝著我不想遺失的記錄。其他事，等我確定能信任你再說。"
+            emotion = "guarded"
         elif parsed_action.action_type == ActionType.INSPECT or self._contains_any(
             normalized,
             ("查看", "觀察", "調查", "這裡", "哪裡"),

@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type Phaser from "phaser";
 
 export type GameCommand = { dx: number; dy: number };
-export type NpcId = "vidalia" | "andre" | "menmesvento";
+export type NpcId = "vidalia" | "andre" | "menmesvento" | "dasso" | "seth" | "syra";
 export const MIN_MAP_ZOOM = 1;
 export const MAX_MAP_ZOOM = 2.2;
 export const MAP_ZOOM_STEP = 0.2;
@@ -72,7 +72,10 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, paused,
         private player?: Phaser.GameObjects.Image;
         private playerShadow?: Phaser.GameObjects.Ellipse;
         private npcs: Partial<Record<NpcId, Phaser.GameObjects.Image>> = {};
-        private visibleNpcIds: NpcId[] = sceneId === "liuchen_valley" ? ["menmesvento"] : sceneId === "minglin" ? ["vidalia", "andre"] : [];
+        private visibleNpcIds: NpcId[] = sceneId === "liuchen_valley"
+          ? ["menmesvento", "seth", "syra"]
+          : sceneId === "lieyi_plains" ? ["dasso"]
+            : sceneId === "minglin" ? ["vidalia", "andre"] : [];
         private walkable?: Phaser.Geom.Polygon;
         private destination?: Destination;
         private cursorKeys?: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -87,16 +90,18 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, paused,
         constructor() { super("minglin"); }
 
         preload() {
-          this.load.tilemapTiledJSON("scene-map", sceneId === "liuchen_valley" ? "/game/liuchen.tmj" : "/game/minglin.tmj");
+          const tilemapUrl = sceneId === "liuchen_valley" ? "/game/liuchen.tmj"
+            : sceneId === "lieyi_plains" ? "/game/lieyi.tmj" : "/game/minglin.tmj";
+          this.load.tilemapTiledJSON("scene-map", tilemapUrl);
           this.load.image("minglin-forest", backgroundUrl);
           this.load.image("traveler", "/game/traveler.png");
           this.load.image("traveler-back", "/game/traveler-back.png");
           this.load.image("traveler-front", "/game/traveler-front.png");
           this.load.image("traveler-front-quarter", "/game/traveler-front-quarter.png");
           this.load.image("traveler-side", "/game/traveler-side.png");
-          this.load.image("vidalia", "/game/vidalia-cutout.png");
-          this.load.image("andre", "/game/andre-cutout.png");
-          this.load.image("menmesvento", "/game/menmesvento-cutout.png");
+          for (const npcId of this.visibleNpcIds) {
+            this.load.image(npcId, `/game/${npcId}-cutout.png`);
+          }
         }
 
         create() {
@@ -123,8 +128,11 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, paused,
             const npcX = actor.x ?? 0;
             const npcY = actor.y ?? 0;
             this.add.ellipse(npcX, npcY + 4, 40, 12, 0x232119, 0.35).setDepth(npcY - 1);
+            const spriteWidth: Partial<Record<NpcId, number>> = {
+              vidalia: 52, andre: 70, menmesvento: 70, dasso: 135, seth: 115, syra: 95,
+            };
             this.npcs[npcId] = this.add.image(npcX, npcY, npcId).setOrigin(0.5, 1)
-              .setDisplaySize(npcId === "vidalia" ? 52 : 70, npcId === "vidalia" ? 132 : 137).setDepth(npcY);
+              .setDisplaySize(spriteWidth[npcId] ?? 70, npcId === "vidalia" ? 132 : 137).setDepth(npcY);
             const marker = this.add.text(npcX, npcY - 149, "◇", {
               color: "#ffe496", fontSize: "31px", fontFamily: "Georgia, serif",
               stroke: "#3f3519", strokeThickness: 4,

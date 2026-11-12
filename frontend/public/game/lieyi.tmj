@@ -1,0 +1,42 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.12.2",
+  "orientation": "isometric",
+  "renderorder": "right-down",
+  "width": 13,
+  "height": 15,
+  "tilewidth": 128,
+  "tileheight": 64,
+  "infinite": false,
+  "nextlayerid": 4,
+  "nextobjectid": 3,
+  "layers": [
+    {"id": 1, "name": "Background", "type": "imagelayer", "image": "scenes/lieyi-plains-v1.png", "x": 0, "y": 0, "opacity": 1, "visible": true},
+    {
+      "id": 2,
+      "name": "Walkable",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {"id": 1, "name": "plains_path", "type": "walkable", "x": 0, "y": 0, "width": 0, "height": 0, "rotation": 0, "visible": true,
+          "polygon": [{"x": 180, "y": 941}, {"x": 1390, "y": 941}, {"x": 1360, "y": 760}, {"x": 1140, "y": 630}, {"x": 980, "y": 570}, {"x": 800, "y": 580}, {"x": 580, "y": 680}, {"x": 300, "y": 790}]}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Actors",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {"id": 2, "name": "player_spawn", "type": "spawn", "point": true, "x": 720, "y": 765, "width": 0, "height": 0, "rotation": 0, "visible": true},
+        {"id": 3, "name": "dasso", "type": "npc", "point": true, "x": 1000, "y": 575, "width": 0, "height": 0, "rotation": 0, "visible": true}
+      ]
+    }
+  ],
+  "tilesets": []
+}
