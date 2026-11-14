@@ -22,3 +22,5 @@ data/generated_assets/
 
 # NPC 微調模型輸出
 training/outputs/
+
+.venv_train/
