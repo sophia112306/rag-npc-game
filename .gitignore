@@ -19,3 +19,6 @@ test_pipeline.py
 *.db-shm
 *.db-wal
 data/generated_assets/
+
+# NPC 微調模型輸出
+training/outputs/
