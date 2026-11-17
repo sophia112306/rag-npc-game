@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import MinglinGame, { approachTarget, isNpcId, interactWithTarget, movePlayer, turnPlayer, zoomMap, MIN_MAP_ZOOM, MAX_MAP_ZOOM, MAP_ZOOM_STEP, type NpcId, type InteractionTarget } from "../components/MinglinGame";
 import WorldMap from "../components/WorldMap";
 import InvestigationJournal from "../components/InvestigationJournal";
+import StoryIntro from "../components/StoryIntro";
 import { getSceneMusic } from "../lib/scene-music";
 import { useSceneMusic } from "../lib/use-scene-music";
 import {
@@ -181,6 +182,8 @@ const previewScene: PlayerScene = {
 };
 
 export default function Home() {
+  const [introOpen, setIntroOpen] = useState(true);
+  const closeIntro = useCallback(() => setIntroOpen(false), []);
   const [profiles, setProfiles] = useState<Record<NpcId, CharacterProfile>>({
     vidalia: previewProfile, andre: previewAndreProfile, menmesvento: previewMenmesventoProfile,
     dasso: previewDassoProfile, seth: previewSethProfile, syra: previewSyraProfile,
@@ -581,6 +584,7 @@ export default function Home() {
     setActiveNpcId("vidalia");
     setInput("");
     setInputType("text");
+    setIntroOpen(true);
     pendingActionRef.current = null;
     void initialize(id);
   }
@@ -597,7 +601,7 @@ export default function Home() {
         onError={music.onError}
       />
       <section className="map-stage" aria-label={`斜俯視的${scene.region_name}遊戲地圖`}>
-        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, profile.name])) as Record<NpcId, string>} paused={dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onZoomChange={setMapZoom} />}
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, profile.name])) as Record<NpcId, string>} paused={introOpen || dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
 
         <header className="location-banner" aria-label="目前場景">
@@ -714,7 +718,7 @@ export default function Home() {
               <button type="button" className="overlay-close" onClick={() => setHelpOpen(false)} aria-label="關閉說明">✕</button>
               <span className="overlay-rune">✧</span><h2>旅人指南</h2>
               <dl><div><dt>移動</dt><dd>左鍵點道路，或使用 WASD／方向鍵。角色會朝移動方向轉身。</dd></div><div><dt>旅途地圖</dt><dd>點左上角地圖可查看鳴霖、流塵谷、烈燚原及路線；青色光點標示目前場景。前往各地仍依劇情選項。</dd></div><div><dt>縮放</dt><dd>滑鼠滾輪、右側 ＋／－，或手機雙指縮放。點倍率可恢復全景。</dd></div><div><dt>轉身</dt><dd>右鍵點想面對的方向，或按 Q／R 原地轉身；手機可用 ↶／↷。</dd></div><div><dt>交談</dt><dd>鳴霖議會可與維達利亞、安德烈交談；命脈之泉可與維達利亞交談；流塵谷可與門梅司文托交談；烈燚原可與達索交談；邊境廢墟可與塞特、希拉交談。點擊角色，或靠近後按 E。</dd></div><div><dt>音樂</dt><dd>右上角可播放或關閉背景音樂。</dd></div><div><dt>返回</dt><dd>按 Esc 關閉對話、地圖與說明。</dd></div></dl>
-              <button type="button" onClick={() => setHelpOpen(false)}>繼續探索</button>
+              <div className="overlay-actions"><button type="button" className="secondary-button" onClick={() => { setHelpOpen(false); setIntroOpen(true); }}>重看序章</button><button type="button" onClick={() => setHelpOpen(false)}>繼續探索</button></div>
             </section>
           </div>
         )}
@@ -727,6 +731,8 @@ export default function Home() {
             </section>
           </div>
         )}
+
+        {introOpen && <StoryIntro onComplete={closeIntro} />}
       </section>
     </main>
   );
