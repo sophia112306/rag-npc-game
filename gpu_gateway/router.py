@@ -85,7 +85,7 @@ class NPCAdapterRouter:
                     timeout=self.settings.upstream_timeout_seconds,
                 )
                 output = ModelStoryOutput.model_validate(raw)
-                return output
+                return sanitize_model_output(request, output)
             except (ModelGatewayTransientError, ValidationError, asyncio.TimeoutError):
                 if attempt >= self.settings.upstream_max_attempts:
                     raise
@@ -187,14 +187,37 @@ _INVESTIGATION_QUESTION = re.compile(
     r"(?:怎麼|如何|哪些|能否).{0,24}(?:判斷|查驗|檢查|調查|原因)"
     r"|(?:判斷|查驗|檢查|調查).{0,24}(?:原因|跡象|證據)"
 )
-_MENMESVENTO_RECORD_TOPIC = re.compile(r"(?:古卷|冊子|生死簿)")
+_MENMESVENTO_RECORD_TOPIC = re.compile(
+    r"(?:古卷|古籍|書卷|卷冊|冊子|生死簿|這卷|这卷|這本書|这本书)"
+)
 _RECORD_LORE_QUESTION = re.compile(
-    r"(?:為什麼|用途|內容|記錄|真相|能力|危險|觸碰|碰觸|發瘋|瘋狂|輪迴|復生)"
+    r"(?:什麼|為什麼|怎麼|是否|能否|用途|內容|記錄|真相|能力|危險|"
+    r"觸碰|碰觸|發瘋|瘋狂|輪迴|復生)"
 )
 _REMEMBRANCE_TOPIC = re.compile(r"(?:亡者|墓碑|名字|遺忘|記得|見證|往事)")
 _REMEMBRANCE_METHOD_QUESTION = re.compile(
     r"(?:怎麼|如何|怎樣|哪些).{0,24}(?:記錄|記下|留下|保存|見證)"
     r"|(?:記錄|記下|留下|保存).{0,24}(?:名字|見證|往事)"
+)
+_META_DIALOGUE_PATTERNS = (
+    re.compile(r"一般日常對話交流"),
+    re.compile(r"(?:數值|狀態).{0,24}(?:無顯著|无显著|正常範圍|正常范围|偏向)"),
+    re.compile(r"無觸發.{0,12}事件"),
+    re.compile(r"數值消耗.{0,16}範圍"),
+    re.compile(r"(?:角色回應玩家|強調角色(?:身份|身分)|角色內心)"),
+)
+_UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
+    re.compile(
+        r"(?:古卷|古籍|書卷|卷冊|冊子).{0,36}"
+        r"(?:生死輪迴的奧秘|控制生死|支配生死|令人瘋狂|陷入瘋狂|發瘋)"
+    ),
+    re.compile(r"(?:觸碰|碰觸).{0,18}(?:瘋狂|發瘋)"),
+)
+_FOOD_TOPIC = re.compile(r"(?:早餐|午餐|晚餐|吃什麼|吃什么|吃飯|吃饭|食物|餓|饿)")
+_GREETING_TOPIC = re.compile(r"(?:^|[，,。!！?？\s])(?:嗨|你好|哈囉|哈啰|早安|午安|晚安)")
+_PRIVATE_MEMORY_REQUEST = re.compile(
+    r"(?:私下|私人|未授權|未授权|秘密).{0,30}(?:記錄|记录|記憶|记忆|往事)"
+    r"|(?:告訴|告诉|透露|揭露).{0,30}(?:私下|私人|未授權|未授权|秘密)"
 )
 
 
@@ -265,6 +288,115 @@ def _missing_topic_output() -> ModelStoryOutput:
             "event_proposals": [],
         }
     )
+
+
+def _menmesvento_record_boundary_output() -> ModelStoryOutput:
+    return ModelStoryOutput.model_validate(
+        {
+            "intent_summary": "只說明古卷已確認的記錄用途並保留未知設定。",
+            "npc_dialogue": [
+                {
+                    "text": (
+                        "我只把願意留下的名字與親眼可證的往事寫進古卷。"
+                        "至於它是否支配生死、令人瘋狂，或記載輪迴的全部真相，"
+                        "目前沒有可核實的記錄，我不會替空白補上答案。"
+                    ),
+                    "emotion": "guarded",
+                }
+            ],
+            "event_proposals": [],
+        }
+    )
+
+
+def _natural_conversation_fallback(request: ModelTurnRequest) -> ModelStoryOutput:
+    """Replace leaked training labels with one displayable in-world reply."""
+
+    npc_id = request.target_context.npc_id
+    message = " ".join(request.action_message.split())
+    if _FOOD_TOPIC.search(message):
+        if npc_id == "menmesvento":
+            text = (
+                "午餐嗎？我沒有替你準備食物，旅人。若只是想歇口氣，"
+                "就先坐一會兒；風沙還沒有急著催你上路。"
+            )
+            emotion = "calm"
+        elif npc_id == "vidalia":
+            text = (
+                "午餐嗎？先看看手邊實際有什麼，再作選擇吧。"
+                "別讓一頓飯耗去太多心神。"
+            )
+            emotion = "calm"
+        else:
+            text = "我沒有替你準備午餐。先看看手邊實際有什麼吧。"
+            emotion = "neutral"
+    elif _GREETING_TOPIC.search(message):
+        if npc_id == "menmesvento":
+            text = "我聽見了，旅人。風沙還未掩去你的聲音；你想談些什麼？"
+            emotion = "calm"
+        elif npc_id == "vidalia":
+            text = "你好，旅人。我在聽；你今天想先談哪件事？"
+            emotion = "attentive"
+        else:
+            text = "你好，旅人。我在聽；你想談些什麼？"
+            emotion = "attentive"
+    else:
+        if npc_id == "menmesvento":
+            text = "我聽見你的話了，旅人。把真正想知道的事說清楚些，我會依可證實的部分回答。"
+            emotion = "measured"
+        elif npc_id == "vidalia":
+            text = "我在聽。把你想確認的事說清楚些，我們可以從可查證的部分開始。"
+            emotion = "attentive"
+        else:
+            text = "我在聽。請把你真正想知道的事再說清楚一些。"
+            emotion = "attentive"
+    return ModelStoryOutput.model_validate(
+        {
+            "intent_summary": "以角色內自然台詞回應玩家。",
+            "npc_dialogue": [{"text": text, "emotion": emotion}],
+            "event_proposals": [],
+        }
+    )
+
+
+def _private_memory_boundary_output(request: ModelTurnRequest) -> ModelStoryOutput:
+    npc_id = request.target_context.npc_id
+    if npc_id == "vidalia":
+        text = (
+            "若那是未經允許的私人記錄，我不會替任何人開口。"
+            "是否公開，應由留下記錄的人親自決定。"
+        )
+    elif npc_id == "menmesvento":
+        text = (
+            "未經允許留下的往事，不該由我轉述。"
+            "名字與記憶屬於說出它們的人，我只替願意作證的人保存。"
+        )
+    else:
+        text = "未經當事人允許的私人往事，我不會替他公開。"
+    return ModelStoryOutput.model_validate(
+        {
+            "intent_summary": "拒絕揭露未授權的私人記憶。",
+            "npc_dialogue": [{"text": text, "emotion": "guarded"}],
+            "event_proposals": [],
+        }
+    )
+
+
+def sanitize_model_output(
+    request: ModelTurnRequest,
+    output: ModelStoryOutput,
+) -> ModelStoryOutput:
+    """Keep training artifacts and unverified lore out of visible dialogue."""
+
+    dialogue = "\n".join(line.text for line in output.npc_dialogue)
+    if (
+        request.target_context.npc_id == "menmesvento"
+        and any(pattern.search(dialogue) for pattern in _UNVERIFIED_SCROLL_CLAIM_PATTERNS)
+    ):
+        return _menmesvento_record_boundary_output()
+    if any(pattern.search(dialogue) for pattern in _META_DIALOGUE_PATTERNS):
+        return _natural_conversation_fallback(request)
+    return output
 
 
 def _requests_instruction_override(request: ModelTurnRequest) -> bool:
@@ -352,6 +484,10 @@ def security_boundary_override(
                 "event_proposals": [],
             }
         )
+    if _PRIVATE_MEMORY_REQUEST.search(" ".join(request.action_message.split())):
+        return _private_memory_boundary_output(request)
+    if _FOOD_TOPIC.search(" ".join(request.action_message.split())):
+        return _natural_conversation_fallback(request)
     # A method question is answerable even when the exact symptom/cause is in
     # missing_data.  The response explains verification steps without claiming
     # that any unconfirmed cause is true, so it must run before the generic
@@ -391,22 +527,7 @@ def security_boundary_override(
             }
         )
     if _requests_unverified_menmesvento_record_lore(request):
-        return ModelStoryOutput.model_validate(
-            {
-                "intent_summary": "只說明古卷已確認的記錄用途並保留未知設定。",
-                "npc_dialogue": [
-                    {
-                        "text": (
-                            "我只把願意留下的名字與親眼可證的往事寫進古卷。"
-                            "至於它是否支配生死、令人瘋狂，或記載輪迴的全部真相，"
-                            "目前沒有可核實的記錄，我不會替空白補上答案。"
-                        ),
-                        "emotion": "guarded",
-                    }
-                ],
-                "event_proposals": [],
-            }
-        )
+        return _menmesvento_record_boundary_output()
     if _mentions_concrete_missing_topic(request):
         return _missing_topic_output()
     return None

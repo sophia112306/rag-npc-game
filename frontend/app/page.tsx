@@ -65,7 +65,12 @@ type BrowserSpeechRecognition = {
 type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
 const conversationKey = (id: string) => `vidalia-conversation:${id}`;
-const CONVERSATION_FORMAT_VERSION = 2;
+const CONVERSATION_FORMAT_VERSION = 3;
+const legacyInvalidNpcDialogue = [
+  "一般日常對話交流，數值與狀態無顯著偏向",
+  "這卷古籍記錄了生死輪迴的奧秘",
+  "觸碰它的人往往會陷入瘋狂",
+];
 const legacyNpcDialogue: Record<string, string> = {
   "這裡是鳴霖的平衡議會。泉水在第一次入侵後停止擴張，而現在出現的失序值得重新調查。": "這裡是鳴霖的平衡議會。命脈之泉已經很久沒有向外延伸；最近又出現異象，我還不知道兩者是否相關。",
   "人族長老害怕失去輪迴，木乃伊則害怕被世界遺忘。他們都可能注意到唯一連著維塔意識的外來者。": "人族長老與流塵谷的居民都在留意這場異象。各自為何而來，還需要查證。",
@@ -78,7 +83,10 @@ const legacyNpcDialogue: Record<string, string> = {
 };
 
 function migrateRecordedDialogue(messages: ChatMessage[]): ChatMessage[] {
-  return messages.map((message) => {
+  return messages.filter((message) => (
+    message.speaker !== "系統"
+    && !legacyInvalidNpcDialogue.some((phrase) => message.kind === "npc" && message.text.includes(phrase))
+  )).map((message) => {
     if (message.kind === "player" && message.text === "我把符石間的風沙軌跡拼成一張路線圖。") {
       return { ...message, text: "我從符石間的風沙軌跡辨認流塵谷的方向。" };
     }
@@ -222,9 +230,9 @@ export default function Home() {
   const primaryTarget: InteractionTarget = isNpcId(primaryNpc) ? primaryNpc : "landmark";
   const displayNpcId = dialogueOpen ? activeNpcId : nearTarget && nearTarget !== "landmark" ? nearTarget : activeNpcId;
   const profile = profiles[displayNpcId];
-  const visibleMessages = messages.filter(message => activeLandmark
+  const visibleMessages = messages.filter(message => message.speaker !== "系統" && (activeLandmark
     ? message.targetId === "landmark" && message.sceneId === scene.scene_id
-    : message.targetId !== "landmark" && (message.npcId ?? "vidalia") === displayNpcId);
+    : message.targetId !== "landmark" && (message.npcId ?? "vidalia") === displayNpcId));
   const sceneChoices = gameState?.world_scene.npc_id === activeNpcId
     ? playerChoices : playerChoices.filter(choice => choice.action_mode === "movement" || choice.target_npc_id === activeNpcId);
   const npcChoices = npcChoiceSet?.npcId === activeNpcId ? npcChoiceSet.choices : [];
@@ -526,11 +534,12 @@ export default function Home() {
         const choices = await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`);
         setPlayerChoices(choices);
       } catch { /* The committed turn remains valid if the optional quest refresh fails. */ }
-      const nextMessages: ChatMessage[] = [...messages, playerLine, ...turn.story.dialogue.map((line) => ({
+      const playerVisibleDialogue = turn.story.dialogue.filter((line) => line.speaker_name !== "系統");
+      const nextMessages: ChatMessage[] = [...messages, playerLine, ...playerVisibleDialogue.map((line) => ({
         id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const, npcId: messageNpcId, targetId:messageTarget, sceneId:scene.scene_id,
       }))];
       setMessages(nextMessages);
-      setLastNpcSpeech(turn.story.dialogue.filter((line) => line.speaker_name !== "系統").map((line) => line.text).join("\n"));
+      setLastNpcSpeech(playerVisibleDialogue.map((line) => line.text).join("\n"));
       try {
         window.localStorage.setItem(conversationKey(sessionId), JSON.stringify({ format_version: CONVERSATION_FORMAT_VERSION, turn_number: turn.turn_number, updated_at: turn.state.updated_at, messages: nextMessages }));
       } catch { /* The current conversation still works when browser storage is unavailable. */ }

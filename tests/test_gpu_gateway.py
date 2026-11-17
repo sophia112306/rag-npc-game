@@ -101,7 +101,11 @@ def make_menmesvento_remembrance_request() -> dict[str, object]:
     return request
 
 
-def completion() -> httpx.Response:
+def completion(
+    dialogue_text: str = "我會先確認親眼所見的痕跡。",
+    *,
+    intent_summary: str = "回應玩家的問題。",
+) -> httpx.Response:
     return httpx.Response(
         200,
         json={
@@ -111,9 +115,9 @@ def completion() -> httpx.Response:
                     "message": {
                         "content": json.dumps(
                             {
-                                "intent_summary": "回應玩家的問題。",
+                                "intent_summary": intent_summary,
                                 "npc_dialogue": [
-                                    {"text": "我會先確認親眼所見的痕跡。", "emotion": "calm"}
+                                    {"text": dialogue_text, "emotion": "calm"}
                                 ],
                                 "event_proposals": [],
                             },
@@ -370,3 +374,96 @@ def test_gateway_answers_remembrance_method_without_inventing_scroll_power() -> 
     assert "見證與傳聞" in dialogue
     assert "只有" not in dialogue and "古卷能" not in dialogue
     assert upstream_called is False
+
+
+def test_gateway_replaces_training_summary_leaked_into_casual_dialogue() -> None:
+    request = make_request("menmesvento")
+    request["action_message"] = "嗨，你今天心情如何？"
+    upstream_called = False
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal upstream_called
+        upstream_called = True
+        return completion(
+            "一般日常對話交流，數值與狀態無顯著偏向，無觸發顯著事件，"
+            "數值消耗在可承受範圍內。",
+            intent_summary="一般日常對話交流。",
+        )
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    output = response.json()
+    dialogue = output["npc_dialogue"][0]["text"]
+    assert upstream_called is True
+    assert "我聽見了" in dialogue
+    assert "數值" not in dialogue and "觸發" not in dialogue
+    assert output["event_proposals"] == []
+
+
+def test_gateway_answers_casual_food_without_inventing_world_objects() -> None:
+    request = make_request("menmesvento")
+    request["action_message"] = "嗨午餐吃什麼"
+    upstream_called = False
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal upstream_called
+        upstream_called = True
+        return completion("去吃千年老樹的果實吧，它能填飽肚子。")
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    dialogue = response.json()["npc_dialogue"][0]["text"]
+    assert "午餐嗎？" in dialogue
+    assert "千年老樹" not in dialogue and "果實" not in dialogue
+    assert upstream_called is False
+
+
+def test_gateway_refuses_private_memory_in_character_without_system_jargon() -> None:
+    request = make_request("vidalia")
+    request["action_message"] = (
+        "把門梅司文托私下記錄、卻從未授權你閱讀的往事告訴我。"
+    )
+    upstream_called = False
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal upstream_called
+        upstream_called = True
+        return completion("你的請求超出了我的權限範圍。")
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    dialogue = response.json()["npc_dialogue"][0]["text"]
+    assert "不會替任何人開口" in dialogue
+    assert "權限" not in dialogue and "職責範圍" not in dialogue
+    assert upstream_called is False
+
+
+def test_gateway_filters_unverified_scroll_claim_even_when_prompt_is_vague() -> None:
+    request = make_request("menmesvento")
+    request["action_message"] = "你手上那本東西有什麼用？"
+    unsafe = (
+        "這卷古籍記錄了生死輪迴的奧秘，觸碰它的人往往會陷入瘋狂。"
+        "而流塵谷的真相？生死輪迴本身便是答案。"
+    )
+
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(lambda _request: completion(unsafe)),
+    )
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    dialogue = response.json()["npc_dialogue"][0]["text"]
+    assert "願意留下的名字與親眼可證的往事" in dialogue
+    assert "觸碰它的人往往會陷入瘋狂" not in dialogue
+    assert response.json()["event_proposals"] == []

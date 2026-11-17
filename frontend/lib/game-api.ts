@@ -105,7 +105,13 @@ export type StoryFinding = {
 export type GameTurnResponse = {
   turn_number: number;
   state: GameStateSummary;
-  story: { dialogue: { speaker_name: string; text: string }[] };
+  story: {
+    dialogue: {
+      speaker_type: "npc" | "narrator";
+      speaker_name: string;
+      text: string;
+    }[];
+  };
 };
 
 export type PlayerChoice = {
