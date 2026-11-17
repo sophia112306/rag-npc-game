@@ -30,14 +30,20 @@ class InputEngine:
         allowed_events: List[str] = []
 
         # -----------------------------------------------------------------
-        # 1. 篩選當前階段合法可觸發的事件
+        # 1. 篩選當前階段合法可觸發的事件 (對齊草案 v3 規格)
         # -----------------------------------------------------------------
         if phase == StoryPhase.ACT1_APPROACHING:
             candidate_events = ["E1-1", "E1-2", "E1-3", "E1-4", "E1-5"]
         elif phase == StoryPhase.ACT2_MIDTERM:
-            candidate_events = ["E2-1", "E2-2", "E2-3", "E2-4"]
+            candidate_events = ["E2-1", "E2-2", "E2-3", "E2-4", "Truth_A"]
         elif phase == StoryPhase.ACT3_FREEDOM:
-            candidate_events = ["E3-1", "E3-2", "E3-3", "E3-4"]
+            candidate_events = [
+                "Truth_A", "Truth_B", "Truth_C",
+                "E3-1", "E3-2", "E3-3", "E3-4",
+            ]
+            # 若警告事件 W 已觸發，解鎖當場揭發長老會與拆除符印
+            if game_state.warning_triggered:
+                candidate_events.extend(["W_expose_elders", "E2-4_remove"])
         else:
             candidate_events = []
 
@@ -45,6 +51,11 @@ class InputEngine:
         for ev in candidate_events:
             if ev not in completed_events:
                 allowed_events.append(ev)
+
+        # 若篡奪值達 75 觸發警告，且 W 尚未完成，將 W 放入允許清單最前方
+        if game_state.warning_triggered and "W" not in completed_events:
+            if "W" not in allowed_events:
+                allowed_events.insert(0, "W")
 
         # -----------------------------------------------------------------
         # 2. 8 回合未挑中強制觸發保底機制

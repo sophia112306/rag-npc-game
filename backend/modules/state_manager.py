@@ -46,6 +46,9 @@ class StateManager:
         game_state.phase_turns += 1
 
         # 若在篡夢倒數中，倒數回合減 1
+        if game_state.warning_cooldown_turns > 0:
+            game_state.warning_cooldown_turns -= 1
+
         if game_state.story_phase == StoryPhase.USURP_COUNTDOWN:
             game_state.usurp_countdown_turns -= 1
             if game_state.usurp_countdown_turns <= 0:
@@ -99,6 +102,11 @@ class StateManager:
             relation_deltas=relation_deltas,
             is_event=is_event
         )
+
+        # [修改處 2：第 95 行] 檢查門梅司文托閉門回頭路（安德烈 >= 60 引薦恢復至 20）
+        recovered, recovery_msg = EventRules.check_menmesvento_recovery(game_state)
+        if recovered:
+            system_message = recovery_msg
 
         # -----------------------------------------------------------------
         # 3. 檢查並更新 story_phase 狀態與真相保底
