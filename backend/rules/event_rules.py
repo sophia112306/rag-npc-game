@@ -29,11 +29,13 @@ class EventRules:
 
         "E2-4_place": {"axis": 0, "usurp": 15, "relation": {}, "flags": {}},
         "E2-4_refuse": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
+        "E2-4_remove": {"axis": 0, "usurp": -10, "relation": {}, "flags": {}},  # [新增] 拆除符印 (每處 -10)
 
         # 真相事件
         "Truth_A": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"truth_a_unlocked": True}, "truth_delta": 1},
         "Truth_B": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"truth_b_unlocked": True}, "truth_delta": 1},
-        "Truth_C": {"axis": 0, "usurp": 0, "relation": {-10: "alan"}, "flags": {"truth_c_unlocked": True}, "truth_delta": 1},
+        "Truth_C": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"truth_c_unlocked": True}, "truth_delta": 1},  # [修正] 移除寫反的 {-10: "alan"}
+        "Truth_C_reject_alan": {"axis": 0, "usurp": -10, "relation": {}, "flags": {"rejected_alan": True}},  # [新增] 真相C後明確拒絕艾倫
 
         # 警告事件 W
         "W": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"warning_triggered": True}},
@@ -62,24 +64,14 @@ class EventRules:
     ) -> Tuple[bool, str]:
         """
         判定玩家在危險事件中是否脫身成功。
-
-        :param game_state: 當前遊戲狀態
-        :param event_id: 'E2-2' 或 'E3-1'
-        :param player_action_args: 包含玩家選擇的脫身方式參數 (如 choice='call_name', help_npc='andre')
-        :return: (是否存活, 原因描述)
         """
         # (1) E2-2 百年審判危險判定
         if event_id == "E2-2":
-            # 脫身方式選項：
-            # 1. 叫出被唱出的名字 (call_name)
-            # 2. 持有裂隙地圖 (has_fissure_map)
-            # 3. 安德烈關係值 >= 40 在場援助
             has_name = player_action_args.get("called_soul_name", False)
             has_map = game_state.flags.get("fissure_map", False)
             andre_rel = game_state.npc_states.get("andre").relation if "andre" in game_state.npc_states else 0
             andre_help = andre_rel >= 40
 
-            # 滿足任意一種脫身方式即算成功
             if has_name or has_map or andre_help:
                 return True, "成功脫身：通過審判考驗或獲得援助。"
             else:
@@ -87,10 +79,6 @@ class EventRules:
 
         # (2) E3-1 長老會的提議 (灰燼之根追殺)
         elif event_id == "E3-1":
-            # 脫身方式選項：
-            # 1. 安德烈關係值 >= 40 編織隱匿結界
-            # 2. 持有裂隙地圖逃入流塵谷
-            # 3. 維達利亞關係值 >= 60 躲進鳴霖
             andre_rel = game_state.npc_states.get("andre").relation if "andre" in game_state.npc_states else 0
             vidalia_rel = game_state.npc_states.get("vidalia").relation if "vidalia" in game_state.npc_states else 0
             has_map = game_state.flags.get("fissure_map", False)
@@ -101,3 +89,23 @@ class EventRules:
                 return False, "脫身失敗：遭灰燼之根部隊包圍，主角死亡並觸發轉化程序。"
 
         return True, "非危險事件，預設安全。"
+
+    # -----------------------------------------------------------------
+    # 3. [新增] 門梅司文托閉門不見與安德烈引薦恢復邏輯
+    # -----------------------------------------------------------------
+    @staticmethod
+    def check_menmesvento_recovery(game_state: GameState) -> Tuple[bool, str]:
+        """
+        規則：門梅司文托 < 10 會閉門不見；若安德烈 >= 60 引薦，可恢復至 20。
+        """
+        if "menmesvento" not in game_state.npc_states or "andre" not in game_state.npc_states:
+            return False, ""
+
+        men_npc = game_state.npc_states["menmesvento"]
+        andre_rel = game_state.npc_states["andre"].relation
+
+        if men_npc.relation < 10 and andre_rel >= 60:
+            men_npc.relation = 20
+            return True, "安德烈出面引薦，門梅司文托重新敞開大門（關係值恢復至 20）。"
+
+        return False, ""
