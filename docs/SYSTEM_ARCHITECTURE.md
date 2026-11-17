@@ -113,7 +113,7 @@ flowchart TD
 5. 模型只取得必要背景與操作白名單，產出結構化提案；不能直接改狀態、執行 SQL 或透過玩家文字解鎖秘密。
 6. 規則驗證後，只有目擊者／收到回報者取得對應事件記憶；世界事實與 NPC 的主觀相信分開保存。
 
-目前可用 `context_repository.py` 做 SQL 知識／記憶授權查詢；真正 embedding、向量索引與 B 的正式檢索服務仍未接入。模型 adapter 已有，正式 LLM 尚未就緒。
+目前 `context_repository.py` 會合併 SQL 知識／記憶與 `rag/corpus/npc_knowledge.jsonl` 中通過 NPC、版本、公開範圍及回合檢查的核心片段。兩名 NPC 的正式 LoRA 與 GPU Gateway 已接通；embedding、向量索引與外部檢索服務仍未接入，因此 capabilities 仍標示 RAG pending。
 
 ## 5. 歷史／選用的非同步生成（本版不啟用）
 

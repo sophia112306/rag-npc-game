@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Install only on the CUDA inference host. vLLM owns model and LoRA loading;
+# the game backend itself does not import CUDA, Torch, Transformers, or Unsloth.
+vllm==0.31.0

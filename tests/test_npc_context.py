@@ -98,9 +98,15 @@ async def test_context_only_contains_authorized_npc_knowledge(context_repository
 
     context = await repository.get_generation_context("context-session", "vidalia", 1)
 
-    assert [item.subject_key for item in context.knowledge] == ["observed_player_greeting"]
+    assert [item.subject_key for item in context.knowledge] == [
+        "vidalia.profile",
+        "vidalia.life_spring",
+        "vidalia.investigation",
+        "observed_player_greeting",
+    ]
     assert "character_definition_incomplete" in context.missing_data
-    assert "private_character_profile_missing" in context.missing_data
+    assert "private_character_profile_missing" not in context.missing_data
+    assert any("命脈之泉" in topic for topic in context.missing_data)
 
 
 @pytest.mark.asyncio
@@ -148,6 +154,47 @@ async def test_context_only_contains_active_memories_for_the_target_npc(context_
 async def test_unregistered_character_cannot_receive_generation_context(context_repository) -> None:
     with pytest.raises(CharacterDefinitionNotFoundError):
         await context_repository.get_generation_context("context-session", "unknown", 1)
+
+
+@pytest.mark.asyncio
+async def test_newer_reviewed_character_definition_replaces_old_seed(tmp_path) -> None:
+    engine = create_database_engine(f"sqlite+aiosqlite:///{tmp_path / 'upgrade.db'}")
+    await create_schema(engine)
+    session_factory = create_async_session_factory(engine)
+    game_repository = SqlAlchemyGameRepository(session_factory)
+    await game_repository.create_or_get_session(GameState(session_id="upgrade-session"))
+    repository = NPCContextRepository(session_factory)
+    reviewed = CHARACTER_DEFINITIONS["menmesvento"]
+    legacy = reviewed.model_copy(
+        update={
+            "private_profile": {},
+            "sources": [],
+            "setting_version": 1,
+            "completeness_status": "incomplete",
+        }
+    )
+
+    await repository.ensure_character_definition(legacy)
+    await repository.ensure_character_definition(reviewed)
+    context = await repository.get_generation_context(
+        "upgrade-session", "menmesvento", 0
+    )
+
+    assert context.setting_version == 2
+    assert context.private_profile["core_personality"] == [
+        "沉穩",
+        "莊重",
+        "重視名字、記憶與見證",
+    ]
+    assert [item.subject_key for item in context.knowledge] == [
+        "menmesvento.profile",
+        "menmesvento.names",
+        "menmesvento.scroll",
+    ]
+    assert "private_character_profile_missing" not in context.missing_data
+    assert any("古卷" in topic for topic in context.missing_data)
+    assert all("喚醒維塔" not in item.content for item in context.knowledge)
+    await engine.dispose()
 
 
 @pytest.mark.asyncio

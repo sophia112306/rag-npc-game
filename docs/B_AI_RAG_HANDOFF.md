@@ -4,11 +4,15 @@
 
 這份文件是 B 組的獨立交接清單。目標是讓目前的遊戲從「規則動態回覆」升級成真實模型動態生成，之後再接入有 NPC 知識權限控制的 RAG。
 
+**2026-11-17 串接更新：** 遊戲端與 GPU 端程式已接好，架構與啟動命令見 [多 NPC LoRA GPU Gateway](GPU_MODEL_GATEWAY.md)。舊權重已保留，兩個 NPC 另以目前 `ModelStoryOutput` 契約重訓；repo 目前資料共 100 筆（門梅司文托 45、維達利亞 55），正式服務載入已驗收的門梅司文托新版與維達利亞 v2，主角不訓練也不會選 adapter。七題真實 Gateway 評測已通過合法 JSON、人格直接回答、prompt injection、假道具、具體 `missing_data`、跨 NPC 私密資料與古卷知識邊界；完整遊戲後端的兩個 NPC 終端回合也已成功。
+
+**2026-11-17 知識邊界更新：** 維達利亞與門梅司文托已建立版本 2 的經審核核心角色卡；公開知識片段位於 `rag/corpus/npc_knowledge.jsonl`，每筆含 NPC、來源、版本、可見性與解鎖 metadata，並由後端加入該 NPC 的授權 context。這是可供後續 embedding／Qdrant 匯入的 starter corpus，不代表向量服務已完成。蒙梅司文托的古卷只確認「記錄願意留下的名字與親眼可證的往事」；能力、危險、觸碰後果及輪迴真相仍是未知項目，gateway 會 fail closed，不再讓模型補出「碰觸會發瘋」等設定。
+
 ## 目前專案狀態
 
 固定情境及 E2-3 三種結果現已可在不呼叫模型時遊玩，含裂隙地圖、真實背包與重啟承接。後續 B／D 要替換的是「候選發展與答案的產生」，資產與成立判斷仍由後端負責。候選評分維度、權重與拒絕條件尚未實作，見 [固定情境與評分設計](PRESET_STORY_FLOW.md)。
 
-進度：`█████████░ 90%`（模型串接程式已完成，真實服務與 RAG 尚未驗收）
+進度：`█████████▌ 95%`（真實服務、兩個 NPC 人格與 JSON／安全邊界已驗收；RAG 與正式常駐部署尚未完成）
 
 A／D 已完成：
 
@@ -22,9 +26,11 @@ A／D 已完成：
 - B 自訂 HTTP ModelGateway adapter。
 - Strict JSON Schema 與 JSON object fallback。
 
-目前尚未取得真實模型服務的 URL、model ID、認證方式，因此遊戲預設顯示「規則式劇情」。它已能依回合、記憶、承諾、任務與物品產生並保存不同結果，但不等同 LLM 自由生成。
+真實模型服務已完成 GPU 權重與完整終端回合驗收；未設定 `MODEL_GATEWAY_URL` 時，遊戲仍安全退回規則式劇情。GPU gateway 的 endpoint 固定為 `/generate`，model ID 由 gateway 依 NPC 選擇，遊戲端不用再填 `MODEL_GATEWAY_MODEL`。
 
 ## P0：請 B 先提供以下資訊
+
+P0 已完成：程式採 `contract_http`，SSH alias 為 `nccu-gpu`，兩個 LoRA 絕對路徑已確認，loopback gateway 目前未啟用 bearer token，透過 SSH tunnel 使用。
 
 只要先交付本節資料，A／D 就能開始無 RAG 的真實模型 live 驗收。
 
