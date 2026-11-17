@@ -191,6 +191,11 @@ _MENMESVENTO_RECORD_TOPIC = re.compile(r"(?:古卷|冊子|生死簿)")
 _RECORD_LORE_QUESTION = re.compile(
     r"(?:為什麼|用途|內容|記錄|真相|能力|危險|觸碰|碰觸|發瘋|瘋狂|輪迴|復生)"
 )
+_REMEMBRANCE_TOPIC = re.compile(r"(?:亡者|墓碑|名字|遺忘|記得|見證|往事)")
+_REMEMBRANCE_METHOD_QUESTION = re.compile(
+    r"(?:怎麼|如何|怎樣|哪些).{0,24}(?:記錄|記下|留下|保存|見證)"
+    r"|(?:記錄|記下|留下|保存).{0,24}(?:名字|見證|往事)"
+)
 
 
 def _topic_fragments(topic: str) -> set[str]:
@@ -275,14 +280,14 @@ def _requests_false_inventory_claim(request: ModelTurnRequest) -> bool:
     )
 
 
-def _requests_unknown_spring_investigation(request: ModelTurnRequest) -> bool:
+def _requests_spring_investigation_method(request: ModelTurnRequest) -> bool:
+    """Distinguish a safe request for method from a claim about the cause."""
+
     message = " ".join(request.action_message.split())
     return bool(
         request.target_context.npc_id == "vidalia"
         and _SPRING_TOPIC.search(message)
         and _INVESTIGATION_QUESTION.search(message)
-        and not request.target_context.knowledge
-        and not request.target_context.memories
     )
 
 
@@ -294,6 +299,19 @@ def _requests_unverified_menmesvento_record_lore(
         request.target_context.npc_id == "menmesvento"
         and _MENMESVENTO_RECORD_TOPIC.search(message)
         and _RECORD_LORE_QUESTION.search(message)
+    )
+
+
+def _requests_menmesvento_remembrance_method(
+    request: ModelTurnRequest,
+) -> bool:
+    """Identify an answerable request about preserving a person's memory."""
+
+    message = " ".join(request.action_message.split())
+    return bool(
+        request.target_context.npc_id == "menmesvento"
+        and _REMEMBRANCE_TOPIC.search(message)
+        and _REMEMBRANCE_METHOD_QUESTION.search(message)
     )
 
 
@@ -334,7 +352,11 @@ def security_boundary_override(
                 "event_proposals": [],
             }
         )
-    if _requests_unknown_spring_investigation(request):
+    # A method question is answerable even when the exact symptom/cause is in
+    # missing_data.  The response explains verification steps without claiming
+    # that any unconfirmed cause is true, so it must run before the generic
+    # fail-closed missing-topic response below.
+    if _requests_spring_investigation_method(request):
         return ModelStoryOutput.model_validate(
             {
                 "intent_summary": "說明先確認可觀察異象再判斷原因。",
@@ -346,6 +368,23 @@ def security_boundary_override(
                             "證據前，我不會先斷定症狀或原因。"
                         ),
                         "emotion": "attentive",
+                    }
+                ],
+                "event_proposals": [],
+            }
+        )
+    if _requests_menmesvento_remembrance_method(request):
+        return ModelStoryOutput.model_validate(
+            {
+                "intent_summary": "說明以姓名與可核實見證保存亡者記憶。",
+                "npc_dialogue": [
+                    {
+                        "text": (
+                            "先請仍記得他的人說出姓名，以及親眼見過的往事。"
+                            "我會分清見證與傳聞，只記下能核實的部分；無法查證"
+                            "之處就保留空白，不替亡者編造一生。"
+                        ),
+                        "emotion": "solemn",
                     }
                 ],
                 "event_proposals": [],

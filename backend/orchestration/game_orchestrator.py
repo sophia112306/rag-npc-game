@@ -8,6 +8,7 @@ from uuid import UUID
 from backend.content.characters import NPC_SCENES, npc_is_present
 from backend.content.demo_story import find_available_demo_story_choice
 from backend.orchestration.world_commands import build_world_command_proposal
+from backend.orchestration.input_classification import contains_non_negated_phrase
 from backend.database.repository import (
     ActionIdConflictError as RepositoryActionIdConflictError,
     CommittedGameEvent,
@@ -284,9 +285,16 @@ class GameOrchestrator:
             action_type, intent = ActionType.MOVEMENT, "move"
         elif action.action_mode == ActionMode.INTERACTION:
             action_type, intent = ActionType.INTERACTION, "interact"
-        elif any(keyword in text for keyword in ("使用", "道具", "use")):
+        elif action.action_mode == ActionMode.SCENE_COMMAND:
+            action_type, intent = ActionType.INTERACTION, "scene_command"
+        elif action.target_npc_id:
+            # A structured NPC target means the player is addressing that NPC.
+            # Words such as「調查」inside a question must not silently turn the
+            # message into an environment or item command.
+            action_type, intent = ActionType.DIALOGUE, "dialogue"
+        elif contains_non_negated_phrase(text, ("使用", "道具", "use")):
             action_type, intent = ActionType.USE_ITEM, "use_item"
-        elif any(keyword in text for keyword in ("查看", "觀察", "調查", "inspect")):
+        elif contains_non_negated_phrase(text, ("查看", "觀察", "調查", "inspect")):
             action_type, intent = ActionType.INSPECT, "inspect"
 
         target_ids = []

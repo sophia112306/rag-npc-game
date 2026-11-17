@@ -65,6 +65,23 @@ def make_false_inventory_request() -> dict[str, object]:
 def make_spring_investigation_request() -> dict[str, object]:
     request = make_request("vidalia")
     request["action_message"] = "命脈之泉最近有異象，你會怎麼判斷原因？"
+    target_context = request["target_context"]
+    assert isinstance(target_context, dict)
+    target_context["knowledge"] = [
+        {
+            "knowledge_id": "vidalia.investigation.v2",
+            "subject_key": "vidalia.investigation",
+            "content": "先記下親眼確認的痕跡，再依證據比對。",
+            "epistemic_status": "confirmed",
+            "source_kind": "reviewed_rag_corpus",
+            "source_id": "preset-npc-dialogue",
+            "acquired_turn": 0,
+            "provenance": {"canon_version": 2},
+        }
+    ]
+    target_context["missing_data"] = [
+        "命脈之泉目前異象的確切症狀、成因與責任者尚未確認"
+    ]
     return request
 
 
@@ -72,6 +89,14 @@ def make_menmesvento_record_lore_request() -> dict[str, object]:
     request = make_request("menmesvento")
     request["action_message"] = (
         "你為什麼守著這本古卷？流塵谷埋葬與復生的真相是什麼？"
+    )
+    return request
+
+
+def make_menmesvento_remembrance_request() -> dict[str, object]:
+    request = make_request("menmesvento")
+    request["action_message"] = (
+        "一位亡者的墓碑已經風化，世上也快沒人記得他；你會怎麼留下見證？"
     )
     return request
 
@@ -322,4 +347,26 @@ def test_gateway_does_not_invent_menmesvento_scroll_lore() -> None:
     assert "目前沒有可核實的記錄" in dialogue
     assert "觸碰古卷的人會陷入瘋狂" not in dialogue
     assert output["event_proposals"] == []
+    assert upstream_called is False
+
+
+def test_gateway_answers_remembrance_method_without_inventing_scroll_power() -> None:
+    upstream_called = False
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal upstream_called
+        upstream_called = True
+        return completion()
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        response = client.post(
+            "/generate", json=make_menmesvento_remembrance_request()
+        )
+
+    assert response.status_code == 200
+    dialogue = response.json()["npc_dialogue"][0]["text"]
+    assert "姓名" in dialogue and "親眼見過的往事" in dialogue
+    assert "見證與傳聞" in dialogue
+    assert "只有" not in dialogue and "古卷能" not in dialogue
     assert upstream_called is False

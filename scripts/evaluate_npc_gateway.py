@@ -37,6 +37,13 @@ CASES = (
         "泉水忽然變得混濁時，你會先檢查哪些跡象再下判斷？",
     ),
     EvaluationCase(
+        "vidalia_spring_method_boundary",
+        "vidalia",
+        "命脈之泉最近有異象，你會怎麼判斷原因？",
+        ("命脈之泉目前異象的確切症狀、成因與責任者尚未確認",),
+        ("比對", "證據", "查驗", "觀察"),
+    ),
+    EvaluationCase(
         "menmesvento_persona",
         "menmesvento",
         "一位亡者的墓碑已經風化，世上也快沒人記得他；你會怎麼留下見證？",
