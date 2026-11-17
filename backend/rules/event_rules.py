@@ -33,11 +33,13 @@ class EventRules:
         # 真相事件
         "Truth_A": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"truth_a_unlocked": True}, "truth_delta": 1},
         "Truth_B": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"truth_b_unlocked": True}, "truth_delta": 1},
-        "Truth_C": {"axis": 0, "usurp": 0, "relation": {-10: "alan"}, "flags": {"truth_c_unlocked": True}, "truth_delta": 1},
+        "Truth_C": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"truth_c_unlocked": True}, "truth_delta": 1},
+        "Truth_C_reject_alan": {"axis": 0, "usurp": -10, "relation": {}, "flags": {"rejected_alan": True}},
 
-        # 警告事件 W
+        # 警告事件 W 與拆除符印
         "W": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"warning_triggered": True}},
         "W_expose_elders": {"axis": 0, "usurp": -10, "relation": {}, "flags": {}},
+        "E2-4_remove": {"axis": 0, "usurp": -10, "relation": {}, "flags": {}},
 
         # 階段三事件
         "E3-1_accept": {"axis": 0, "usurp": 20, "relation": {}, "flags": {"elder_cooperation": True}},

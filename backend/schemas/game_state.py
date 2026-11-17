@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from backend.schemas.world_scene import WorldSceneConfig
@@ -65,7 +65,7 @@ class StoryProgressState(BaseModel):
 
 
 class GameState(BaseModel):
-    """遊戲核心狀態模型 (草案 v3 規格)[cite: 53, 55]"""
+    """遊戲核心狀態模型 (草案 v3 規格)"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -75,12 +75,19 @@ class GameState(BaseModel):
     phase_turns: int = 0                 # 當前階段已消耗的回合數
     current_scene_id: str = "fissure"    # 當前場景 ID (初始在屏障裂隙)
     
-    # 流程與階段控制[cite: 53, 56, 57, 59]
+    # 流程與階段控制
     story_phase: StoryPhase = StoryPhase.ACT1_APPROACHING
     usurp_countdown_turns: int = 3       # 篡夢倒數剩餘回合數 (預設 3)
     warning_triggered: bool = False      # 警告事件 W 是否已觸發
+    warning_cooldown_turns: int = 0      # [新增] W 之後的 5 回合冷卻計數 (大於 0 時 usurp 鎖定上限 89)
     
-    # 草案 v3 三大核心結局數值[cite: 53, 55]
+    # [新增] 草案 v3 防刷分計數器（每階段切換時歸零）
+    phase_usurp_dialogue_gain: int = 0   # 本階段靠激怒 NPC 累積的篡奪值 (上限 +10)
+    phase_relation_dialogue_gain: Dict[str, int] = Field(
+        default_factory=lambda: {"andre": 0, "vidalia": 0, "menmesvento": 0}
+    )                                    # 本階段各角色靠對話累積的關係值 (各上限 +40)
+    
+    # 草案 v3 三大核心結局數值
     axis: int = Field(default=0, ge=-100, le=100)    # 主軸傾向值 (-100 ~ +100)
     usurp: int = Field(default=0, ge=0, le=100)       # 篡奪值 (0 ~ 100)
     truth_level: int = Field(default=0, ge=0, le=3)   # 真相度 (0 ~ 3)
@@ -104,7 +111,10 @@ class GameState(BaseModel):
             "library_path": False,        # 圖書館路徑
             "fissure_map": False,         # 裂隙地圖
             "has_dust_token": False,      # 持有塵歸令
-            "is_transformed": False,      # 已轉化
+            "is_transformed": False,      # 已轉化（相容舊布林判斷）
+            "transformed_race": None,     # [新增] 已轉化具體種族 (None / "elf" / "mummy" / "human")
+            "placed_runes": [],           # [新增] 已放置觀測符印的地點清單 (最多 3 處，用於拆除)
+            "epilogue_flags": {},         # [新增] 尾聲旗標 (記錄 E2-2、E2-3 結果與終局第 1、2 題回答)
         }
     )
     
