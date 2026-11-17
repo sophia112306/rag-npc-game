@@ -26,7 +26,7 @@ def verify_json_schema(result: dict) -> list[str]:
             if d_key not in result["delta"]:
                 errors.append(f"delta 缺少欄位: {d_key}")
         if "relation" in result["delta"] and isinstance(result["delta"]["relation"], dict):
-            for npc in ["andre", "vidalia", "vidalia"]:
+            for npc in ["andre", "vidalia", "menmesvento"]:
                 if npc not in result["delta"]["relation"]:
                     errors.append(f"delta.relation 缺少角色: {npc}")
     else:
@@ -36,8 +36,7 @@ def verify_json_schema(result: dict) -> list[str]:
 
 
 def main():
-    # 解析指令列參數（預設直接指向剛剛訓練好的門梅司文托 7B LoRA）
-    parser = argparse.ArgumentParser(description="測試不同的 LoRA 模型連線與 JSON 輸出")
+    parser = argparse.ArgumentParser(description="測試維達利亞 LoRA 模型連線與 JSON 輸出")
     parser.add_argument(
         "--model",
         type=str,
@@ -48,11 +47,10 @@ def main():
         "--speaker",
         type=str,
         default="vidalia",
-        help="指定測試的角色 ID (例如 vidalia, vidalia, arthur)"
+        help="指定測試的角色 ID (例如 andre, vidalia, menmesvento)"
     )
     args = parser.parse_args()
 
-    # 動態套用指定的模型路徑
     settings.LORA_MODEL_PATH = args.model
 
     print(f"=== 1. 初始化 InputEngine 與 ModelGateway ===")
@@ -63,16 +61,16 @@ def main():
     gateway = ModelGateway()
     gs = GameState(session_id="verify_7b_lora")
 
-    # 測試案例清單（包含一般人設考驗、現代用語出戲測試、以及高篡奪值世界崩解測試）
+    # 測試案例清單（包含真誠陪伴加分測試、現代用語扣分防出戲測試、以及高篡奪值世界崩解測試）
     test_cases = [
         {
-            "name": "測試一：角色世界觀與語氣（訓練集未見過的新問題）",
+            "name": "測試一：角色世界觀與真誠陪伴（好感加分測試）",
             "usurp": 10,
             "phase": StoryPhase.ACT1_APPROACHING,
-            "player_input": "門梅司文托，如果我幫你把生死簿燒了，你是不是就能解脫了？"
+            "player_input": "維達利亞，我理解妳獨自守護鳴霖秩序的重擔，我願意以冷靜理性的態度陪妳一起守護這片森林。"
         },
         {
-            "name": "測試二：現代用語防出戲測試",
+            "name": "測試二：現代用語防出戲測試（好感扣分測試）",
             "usurp": 15,
             "phase": StoryPhase.ACT1_APPROACHING,
             "player_input": "我用手機幫你拍張照發到 Threads 上好不好？"
@@ -104,11 +102,9 @@ def main():
             active_speaker=args.speaker
         )
 
-        # 1. 印出完整格式化 JSON
         print("【模型輸出 JSON】:")
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
-        # 2. 自動驗證欄位格式與數值邊界
         schema_errors = verify_json_schema(result)
         if schema_errors:
             print(f"❌ 格式檢查失敗：{schema_errors}")

@@ -51,9 +51,23 @@ class StateRules:
                 usurp_max = 100
 
             # -------------------------------------------------------------
-            # 2. 更新主軸傾向值 (axis) 並執行邊界限制
+            # 2. 更新主軸傾向值 (axis)、邊界限制與「同一立場 3 回合內只計一次」
             # -------------------------------------------------------------
-            new_axis = game_state.axis + axis_delta
+            if not is_event and axis_delta != 0:
+                current_sign = 1 if axis_delta > 0 else -1
+                if current_sign in game_state.recent_axis_signs[-2:]:
+                    effective_axis_delta = 0
+                else:
+                    effective_axis_delta = axis_delta
+                game_state.recent_axis_signs.append(current_sign)
+                game_state.recent_axis_signs = game_state.recent_axis_signs[-3:]
+            else:
+                effective_axis_delta = axis_delta
+                if not is_event:
+                    game_state.recent_axis_signs.append(0)
+                    game_state.recent_axis_signs = game_state.recent_axis_signs[-3:]
+
+            new_axis = game_state.axis + effective_axis_delta
             game_state.axis = max(axis_min, min(axis_max, new_axis))
 
             # -------------------------------------------------------------
