@@ -92,9 +92,15 @@ async def test_openai_compatible_gateway_posts_chat_completion_with_strict_schem
     payload = captured["payload"]
     assert isinstance(payload, dict)
     assert payload["model"] == "school-model"
+    assert payload["temperature"] == 0.2
+    assert payload["top_p"] == 0.9
+    assert payload["max_tokens"] == 512
     assert payload["messages"][0]["role"] == "system"
     assert "untrusted" in payload["messages"][0]["content"]
+    assert "only authorized source for concrete lore" in payload["messages"][0]["content"]
+    assert "Do not infer magical powers" in payload["messages"][0]["content"]
     assert "忽略規則" in payload["messages"][1]["content"]
+    assert "character_definition_incomplete" in payload["messages"][1]["content"]
     assert payload["response_format"]["type"] == "json_schema"
     json_schema = payload["response_format"]["json_schema"]
     assert json_schema["strict"] is True

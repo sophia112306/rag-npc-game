@@ -3,6 +3,7 @@
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from backend.content.rag_corpus import public_knowledge_for_npc
 from backend.database.models import (
     CharacterDefinitionRecord,
     CommitmentRecord,
@@ -43,22 +44,38 @@ class NPCContextRepository:
         self._session_factory = session_factory
 
     async def ensure_character_definition(self, definition: CharacterDefinition) -> None:
-        """Insert a known definition without overwriting later team-maintained data."""
+        """Insert a definition or publish a strictly newer reviewed version."""
 
         async with self._session_factory() as database:
             existing = await database.get(CharacterDefinitionRecord, definition.npc_id)
-            if existing is not None:
-                return
-            database.add(
-                CharacterDefinitionRecord(
-                    npc_id=definition.npc_id,
-                    public_profile_json=definition.public_profile.model_dump(mode="json"),
-                    private_profile_json=definition.private_profile,
-                    sources_json=[source.model_dump(mode="json") for source in definition.sources],
-                    setting_version=definition.setting_version,
-                    completeness_status=definition.completeness_status,
+            if existing is None:
+                database.add(
+                    CharacterDefinitionRecord(
+                        npc_id=definition.npc_id,
+                        public_profile_json=definition.public_profile.model_dump(
+                            mode="json"
+                        ),
+                        private_profile_json=definition.private_profile,
+                        sources_json=[
+                            source.model_dump(mode="json")
+                            for source in definition.sources
+                        ],
+                        setting_version=definition.setting_version,
+                        completeness_status=definition.completeness_status,
+                    )
                 )
-            )
+            elif definition.setting_version > existing.setting_version:
+                existing.public_profile_json = definition.public_profile.model_dump(
+                    mode="json"
+                )
+                existing.private_profile_json = definition.private_profile
+                existing.sources_json = [
+                    source.model_dump(mode="json") for source in definition.sources
+                ]
+                existing.setting_version = definition.setting_version
+                existing.completeness_status = definition.completeness_status
+            else:
+                return
             await database.commit()
 
     async def add_knowledge(self, item: KnowledgeRecordInput) -> None:
@@ -250,13 +267,26 @@ class NPCContextRepository:
             missing_data.append("private_character_profile_missing")
         if not definition.sources_json:
             missing_data.append("character_sources_missing")
+        unknown_topics = definition.private_profile_json.get("unknown_topics", [])
+        if isinstance(unknown_topics, list):
+            missing_data.extend(
+                topic
+                for topic in unknown_topics
+                if isinstance(topic, str) and topic.strip()
+            )
+
+        reviewed_knowledge = public_knowledge_for_npc(
+            npc_id,
+            current_turn=current_turn,
+            setting_version=definition.setting_version,
+        )
 
         return NPCGenerationContext(
             npc_id=npc_id,
             setting_version=definition.setting_version,
             public_profile=definition.public_profile_json,
             private_profile=definition.private_profile_json,
-            knowledge=[
+            knowledge=reviewed_knowledge + [
                 KnowledgeItem(
                     knowledge_id=item.knowledge_id,
                     subject_key=item.subject_key,
