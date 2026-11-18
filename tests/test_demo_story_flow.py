@@ -512,3 +512,28 @@ def test_typed_dialogue_choice_advances_once_without_automatic_travel(tmp_path):
         assert first.json() == replay.json()
         assert first.json()["state"]["story_progress"]["node_id"] == "minglin_briefed"
         assert first.json()["state"]["current_scene_id"] == "minglin"
+
+
+def test_typed_dialogue_choice_accepts_transcript_spacing_and_punctuation(tmp_path):
+    database_url = f"sqlite+aiosqlite:///{tmp_path / 'typed-normalized.db'}"
+    with TestClient(create_app(database_url)) as client:
+        _start(client, "typed-normalized")
+        response = client.post(
+            "/api/game/turn",
+            json={
+                "session_id": "typed-normalized",
+                "action_id": str(uuid4()),
+                "expected_state_version": 1,
+                "message": "  詢問　能幫什麼忙？！ ",
+                "input_type": "speech_transcript",
+                "action_mode": "dialogue",
+                "target_npc_id": "vidalia",
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["state"]["story_progress"]["node_id"] == "minglin_briefed"
+        assert result["state"]["current_scene_id"] == "minglin"
+        event = result["story"]["established_events"][0]
+        assert event["event_type"] == "demo_story_progressed"

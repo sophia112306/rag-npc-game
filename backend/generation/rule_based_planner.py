@@ -4,6 +4,7 @@ from backend.content.context_repository import CharacterDefinitionNotFoundError
 from backend.content.npc_dialogue import NPC_DIALOGUE_BY_ID
 from backend.content.scenes import get_scene
 from backend.generation.planner import NPCContextProvider
+from backend.orchestration.input_classification import contains_non_negated_phrase
 from backend.schemas.content import MemoryItem, NPCGenerationContext
 from backend.schemas.game_state import GameState
 from backend.schemas.parsed_action import ActionType, ParsedAction
@@ -58,7 +59,9 @@ class RuleBasedStoryPlanner:
         emotion = "attentive"
         event_proposals: list[EventProposal] = []
 
-        if self._contains_any(normalized, ("任務", "委託", "幫忙", "需要我", "能做什麼")):
+        if contains_non_negated_phrase(
+            normalized, ("任務", "委託", "幫忙", "需要我", "能做什麼")
+        ):
             if visible_quests:
                 quest = visible_quests[0]
                 intent_summary = "承接已保存的任務提議。"
@@ -79,7 +82,9 @@ class RuleBasedStoryPlanner:
                 )
                 event_proposals.append(event)
                 emotion = "purposeful"
-        elif self._contains_any(normalized, ("答應", "承諾", "我會", "我願意")):
+        elif contains_non_negated_phrase(
+            normalized, ("答應", "承諾", "我會", "我願意")
+        ):
             intent_summary = "辨識玩家主動提出的承諾。"
             existing = self._matching_commitment(visible_commitments, message)
             if existing is not None:
@@ -98,7 +103,9 @@ class RuleBasedStoryPlanner:
                     )
                 )
                 emotion = "serious"
-        elif self._contains_any(normalized, ("給你", "交給你", "贈送", "轉交")):
+        elif contains_non_negated_phrase(
+            normalized, ("給你", "交給你", "贈送", "轉交")
+        ):
             intent_summary = "檢查玩家是否明確提出可驗證的物品移轉。"
             item_id = self._mentioned_owned_item(message, state.player.inventory)
             if item_id is None:
@@ -144,9 +151,8 @@ class RuleBasedStoryPlanner:
             intent_summary = "希拉僅談可見的記錄與旅途。"
             text = NPC_DIALOGUE_BY_ID["syra_ask_1"].response_text
             emotion = "guarded"
-        elif parsed_action.action_type == ActionType.INSPECT or self._contains_any(
-            normalized,
-            ("查看", "觀察", "調查", "這裡", "哪裡"),
+        elif parsed_action.action_type == ActionType.INSPECT or contains_non_negated_phrase(
+            normalized, ("查看", "觀察", "調查", "這裡", "哪裡")
         ):
             scene_name = self._scene_label(state)
             intent_summary = "使用公開角色資料回應場景觀察。"

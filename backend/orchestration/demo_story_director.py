@@ -3,6 +3,7 @@
 from backend.content.characters import CHARACTER_PROFILES
 from backend.content.demo_story import DemoStoryChoiceDefinition, available_demo_story_choices, available_npc_dialogue_choices
 from backend.content.story_findings import finding_report
+from backend.orchestration.input_classification import normalize_authored_choice_text
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import PlayerAction
 from backend.schemas.story import (
@@ -23,12 +24,15 @@ def match_typed_story_dialogue(action: PlayerAction, state: GameState) -> DemoSt
     """
     if action.action_mode != "dialogue" or action.destination_scene_id:
         return None
-    text = action.message.strip(" \t\n。？！!?")
+    text = normalize_authored_choice_text(action.message)
     choices = (*available_demo_story_choices(state), *available_npc_dialogue_choices(state, action.target_npc_id or ""))
     return next((choice for choice in choices
                  if choice.action_mode == "dialogue"
                  and choice.target_npc_id == action.target_npc_id
-                 and text in {choice.label.strip("。？！!?"), choice.message.strip("。？！!?")}), None)
+                 and text in {
+                     normalize_authored_choice_text(choice.label),
+                     normalize_authored_choice_text(choice.message),
+                 }), None)
 
 
 def story_choice_action_matches(

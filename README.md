@@ -1,6 +1,6 @@
 # RAG NPC Game｜夢龍世界探索原型
 
-更新：2026-11-12（Asia/Taipei）。目前主遊戲改為 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。舊 3D 網址導回首頁；3D／Hunyuan 留作歷史原型，不再是遊玩依賴。正式敘事 LLM／RAG、第二幕與五結局尚未完成整合。
+更新：2026-11-17（Asia/Taipei）。目前主遊戲採 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。維達利亞與門梅司文托的 LoRA 已可經 GPU Gateway 回覆自由輸入；兩人的經審核核心角色卡與公開 RAG starter corpus 已接入授權 context。外部 embedding／向量索引、第二幕與五結局仍未完成整合。
 
 美術保留既有末世寫實／奇幻遺跡風格，在遊戲端降低背景取樣解析度並做輕度柔化，沒有換成可愛手繪。六張場景各有 Tiled 可走區與互動點，M 地圖、J 手記和調查選項已接入 2D。人物、場景與存檔均沿用現有成果。固定圖庫由後端 Scene Registry 維護，故事選項決定合法換場，不需 VPN 或 GPU 才能遊玩。
 
@@ -23,7 +23,7 @@
 | 塞特、希拉 | 走訪兩地後在邊境廢墟出場，有固定詢問及協助／通報／不介入三種抉擇；協助兩人可取得裂隙地圖。 |
 | 維塔及其他勢力 | 已有設定或規則草案；維塔另有獨立預覽，尚未形成完整任務與結局流程。 |
 
-已登記 NPC 的初始 `private_profile` 目前都是空的，完整人格、語氣、能力及秘密權限卡尚未匯入。公開職稱與幾句回覆不能代替正式角色設定。
+維達利亞與門梅司文托已有版本 2 的經審核核心角色卡，包含人格、語氣、目標、能力邊界、來源與明確未知項目。其他 NPC 的 `private_profile` 仍未補齊；兩名已整理角色的深層秘密與揭露條件也尚未定案，不能由訓練樣本自行補成正式設定。
 
 <details>
 <summary>作者層世界設定與五種預定結局（含劇透，並非開場玩家已知資訊）</summary>
@@ -104,7 +104,7 @@ flowchart TD
 | --- | --- |
 | 調查主線 | `demo_story.py` 的既有條件與分支，經驗證後推進；目前不是 LLM 即興創作。 |
 | NPC 選項 | 六位角色的可見按鈕使用固定預寫答案，不呼叫模型；相同文字的明確詢問可走相同處理。自由輸入仍走設定的 planner。 |
-| 真正模型／RAG | adapter 與權限資料結構已有；B 的正式服務尚未接入。後續還需將生成的候選選項與事件驗證、保存，才能接續完整故事。 |
+| 真正模型／RAG | 兩個 LoRA、GPU Gateway 與自由對話已接通；`rag/corpus/npc_knowledge.jsonl` 的公開核心片段會依 NPC、版本與回合加入授權 context。外部 embedding／向量索引與候選評分仍待完成。 |
 | 場景圖 | 由已登記的場景 ID 選固定背景、配樂與 Tiled 地圖，前端不呼叫即時圖片或 GLB 工作。 |
 | 過去的 Hunyuan／世界指令 | 留在歷史原型及原分支，主遊戲停用；本輪不再依賴 3D 或 GPU。 |
 
@@ -218,20 +218,20 @@ flowchart TD
 
 | 類別 | 程式／資料表 |
 | --- | --- |
-| 不可由普通生成改寫的設定 | `world_canon`、`character_definitions`。已有格式與表，不代表完整原始設定已匯入；初始公開角色在 `content/characters.py`。 |
+| 不可由普通生成改寫的設定 | `world_canon`、`character_definitions`。兩名已訓練 NPC 的版本 2 核心卡在 `content/characters.py`；其餘完整原始設定仍待匯入。 |
 | 可變世界狀態 | `game_sessions.state_json` 保存 `GameState`：背包、所在場景、故事進度、場景配置；版本供併發檢查。 |
 | 事件、對話、請求紀錄 | `game_events`、`dialogue_records`；`action_records` 保存摘要、結果與私有提案核准／拒絕稽核。 |
 | NPC 知識與記憶 | `knowledge_records`、`memory_records` 含角色、來源與時間；目擊或回報後建立對應記憶。 |
 | 目標、承諾、任務 | `npc_goals`、`commitments`、`quests` 有來源、期限與狀態；已有資料與背景查詢，尚非完整自主世界模擬。 |
 | 圖片／模型工作 | `scene_image_jobs`、`scene_asset_jobs`；GLB 檔另存本機執行目錄。 |
 
-玩家 API 的 `PlayerViewState` 不含 NPC 私人記憶、關係數值、隱藏旗標或作者真相。前端不能直接讀寫資料表或任意 patch `GameState`。世界設計 Markdown 也尚未自動轉成授權 RAG 資料。
+玩家 API 的 `PlayerViewState` 不含 NPC 私人記憶、關係數值、隱藏旗標或作者真相。前端不能直接讀寫資料表或任意 patch `GameState`。目前只把人工審核的 starter corpus 接成授權知識；世界設計 Markdown 不會自動升格為 RAG canon。
 
 ## 5. 尚缺工作與交接責任
 
 | 優先 | 工作 | 負責方 |
 | --- | --- | --- |
-| 1 | 真正故事 LLM／RAG、完整角色與知識來源；將生成事件／候選選項通過驗證、保存並跨回合承接。 | B／D／作者 |
+| 1 | 擴充兩名 NPC 的經審核知識來源，建立 embedding／向量索引；將生成事件／候選選項通過驗證、保存並跨回合承接。 | B／D／作者 |
 | 2 | 其餘第二／三幕、危險事件、死亡即結束、五結局；修正舊死後轉化規則再整合。 | C／D／A |
 | 3 | 擴充固定場景圖庫與地圖，按事件狀態選合適版本；每張圖需校正可走區、角色、調查點，維持末世寫實與一致比例。 | A／D／作者／美術 |
 | 4 | NPC 自主行動、任務完整生命週期、連續座標保存與正式多人存取權。 | B／C／D |
@@ -241,7 +241,7 @@ flowchart TD
 
 ## 6. 本機啟動與設定
 
-需要 Python 3.12、Node.js 20.9+。以下依賴裝在本機專案環境；GPU 主機依賴一律放 Docker，不直接在主機執行 apt／pip／npm 安裝。
+需要 Python 3.12、Node.js 20.9+。以下依賴裝在本機專案環境；歷史 Hunyuan GPU 仍使用 Docker，NPC LoRA 推論則使用獨立的 `.venv-gpu` 與 vLLM，兩者不混裝進遊戲後端環境。
 
 後端（專案根目錄）：
 
@@ -269,17 +269,17 @@ production 展示：`npm run build` 後執行 `npm run start`，仍在 3200；�
 
 ### 接 B 的敘事模型
 
-目前尚無正式端點，以下只表示設定介面，值由 B 提供，不代表已接通：
+專案已有 GPU-side 多 NPC LoRA gateway：維達利亞與門梅司文托分別選自己的 adapter，其他已登記 NPC 暫時走 base model；玩家／主角不會選 adapter。遊戲後端不載入 CUDA，只需要一個完整 `/generate` URL：
 
 ```bash
-export MODEL_GATEWAY_PROVIDER=openai_compatible
-export MODEL_GATEWAY_URL='<B 的 OpenAI 相容服務基底 URL>'
-export MODEL_GATEWAY_MODEL='<B 提供的模型名稱>'
-# 若需要金鑰，以本機安全方式設定 MODEL_GATEWAY_API_KEY，勿提交。
-./.venv/bin/uvicorn backend.main:app --reload --port 8300
+MODEL_GATEWAY_URL=http://127.0.0.1:8800/generate \
+  ./.venv/bin/uvicorn backend.main:app --reload --port 8300
+
+# 不開前端，直接在另一個終端互動：
+./.venv/bin/python scripts/chat_backend.py --npc vidalia
 ```
 
-也支援 `contract_http` 自訂契約；URL 未設定採規則 planner，錯誤端點不會當成生成成功。預設呼叫逾時 15 秒、最多兩次嘗試；見 [MODEL_GATEWAY_CONTRACT](docs/MODEL_GATEWAY_CONTRACT.md)。
+完整的權重取得、vLLM、SSH tunnel、gateway health check 與模型 smoke test 見 [GPU Model Gateway](docs/GPU_MODEL_GATEWAY.md)。URL 未設定仍採規則 planner，錯誤端點不會當成生成成功。預設呼叫逾時 15 秒、最多兩次嘗試；供應商中立契約見 [MODEL_GATEWAY_CONTRACT](docs/MODEL_GATEWAY_CONTRACT.md)。
 
 ## 7. API 與驗收
 

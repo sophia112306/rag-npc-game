@@ -401,7 +401,10 @@ export default function TrialExperience() {
       if((turn.state.story_progress.findings?.length ?? 0) > (snapshot.story_progress.findings?.length ?? 0)) {
         setMilestone(`新的線索已記錄 · 按 J 查看 ${turn.state.story_progress.findings?.length} 項紀錄`);
       }
-      const result = turn.story.dialogue.map((l) => l.text).join(" ");
+      const result = turn.story.dialogue
+        .filter((line) => line.speaker_name !== "系統")
+        .map((line) => line.text)
+        .join(" ");
       setLine(result);
       setNotice(result);
       setCommand("");

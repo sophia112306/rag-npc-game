@@ -243,3 +243,24 @@ async def test_item_transfer_requires_an_owned_item_to_be_named() -> None:
     assert operation.item_id == "map_fragment"
     assert operation.from_entity_id == "rule-player"
     assert operation.to_entity_id == "vidalia"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message",
+    (
+        "我不答應會回來報告",
+        "我不承諾替你調查",
+        "我不要把 map_fragment 交給你",
+        "我不會給你 map_fragment",
+    ),
+)
+async def test_negated_commitment_or_transfer_never_proposes_state_change(
+    message,
+) -> None:
+    planner = RuleBasedStoryPlanner(FixedContextProvider(make_context()))
+    action, parsed, state = make_inputs(message, inventory=["map_fragment"])
+
+    proposal = await planner.propose(action, parsed, state)
+
+    assert proposal.event_proposals == []

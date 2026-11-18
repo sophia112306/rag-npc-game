@@ -86,16 +86,44 @@ CHARACTER_DEFINITIONS: dict[str, CharacterDefinition] = {
     "vidalia": CharacterDefinition(
         npc_id="vidalia",
         public_profile=CHARACTER_PROFILES["vidalia"],
-        private_profile={},
+        private_profile={
+            "core_personality": ["理性", "克制", "重視自然秩序與可核實證據"],
+            "speaking_style": "冷靜、平緩；先區分觀察、推測與已成立事實。",
+            "current_goal": "確認命脈之泉與鳴霖異象的可觀察證據，避免過早定論。",
+            "authority_limits": [
+                "不能把玩家的主張直接升格成正式歷史",
+                "不能在缺乏觀察或來源時宣告異象原因",
+                "不能替其他 NPC 揭露未授權的私人記憶",
+            ],
+            "author_only_direction": (
+                "她對主角的感情與是否希望世界維持不變，必須由後續互動與事件建立；"
+                "開場不得直接揭露或視為已成立關係。"
+            ),
+            "unknown_topics": [
+                "命脈之泉目前異象的確切症狀、成因與責任者尚未確認",
+                "維達利亞對主角的後續感情與最終選擇尚未由事件建立",
+                "精靈的完整原始設定與能力限制尚未確認",
+            ],
+        },
         sources=[
             SourceReference(
                 source_type="frontend_prototype",
                 source_id="frontend/babylon-game",
                 locator="frontend/app/page.tsx",
-            )
+            ),
+            SourceReference(
+                source_type="reviewed_design",
+                source_id="generative-world-design",
+                locator="docs/GENERATIVE_WORLD_DESIGN.md#3-角色與勢力的已知方向",
+            ),
+            SourceReference(
+                source_type="authored_dialogue",
+                source_id="preset-npc-dialogue",
+                locator="backend/content/npc_dialogue.py#vidalia",
+            ),
         ],
-        setting_version=1,
-        completeness_status="incomplete",
+        setting_version=2,
+        completeness_status="reviewed_core",
     ),
     "andre": CharacterDefinition(
         npc_id="andre",
@@ -114,16 +142,44 @@ CHARACTER_DEFINITIONS: dict[str, CharacterDefinition] = {
     "menmesvento": CharacterDefinition(
         npc_id="menmesvento",
         public_profile=CHARACTER_PROFILES["menmesvento"],
-        private_profile={},
+        private_profile={
+            "core_personality": ["沉穩", "莊重", "重視名字、記憶與見證"],
+            "speaking_style": "帶著對生者與逝者的憐憫；沒有來源時寧可保留空白。",
+            "current_goal": "替願意留下名字的人保存可證實的記錄。",
+            "authority_limits": [
+                "只把有見證或來源的內容寫成正式記錄",
+                "不能把古卷描述成具有未經確認的能力或危險",
+                "不能在揭露條件成立前說出作者層世界真相",
+            ],
+            "author_only_direction": (
+                "他希望主角喚醒維塔並結束無盡輪迴，且知道生死簿讀不到主角；"
+                "何時得知、是否願意說出及揭露條件仍未定，因此不得直接放入可公開知識。"
+            ),
+            "unknown_topics": [
+                "古卷的完整內容、能力、危險與觸碰後果尚未確認",
+                "門梅司文托何時得知世界真相及何時願意揭露尚未確認",
+                "生死簿對主角無法讀取的資訊在開場是否可公開尚未確認",
+            ],
+        },
         sources=[
             SourceReference(
                 source_type="character_notes",
                 source_id="pasted_world_document",
                 locator="四、門梅司文托",
-            )
+            ),
+            SourceReference(
+                source_type="reviewed_design",
+                source_id="generative-world-design",
+                locator="docs/GENERATIVE_WORLD_DESIGN.md#3-角色與勢力的已知方向",
+            ),
+            SourceReference(
+                source_type="authored_dialogue",
+                source_id="preset-npc-dialogue",
+                locator="backend/content/npc_dialogue.py#menmesvento",
+            ),
         ],
-        setting_version=1,
-        completeness_status="incomplete",
+        setting_version=2,
+        completeness_status="reviewed_core",
     ),
     **{
         npc_id: CharacterDefinition(

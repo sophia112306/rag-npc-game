@@ -24,5 +24,6 @@ data/generated_assets/
 training/outputs/
 
 .venv_train/
+.venv-gpu/
 
 unsloth_compiled_cache/
