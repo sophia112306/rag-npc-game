@@ -20,7 +20,7 @@ load_in_4bit = True # 16GB VRAM（如免費 Colab T4）務必開啓；若為 24G
 ROOT_DIR = Path(__file__).resolve().parents[2]
 dataset_filename = os.getenv(
     "TRAINING_DATA_FILE",
-    str(ROOT_DIR / "training" / "data" / "vidalia_data.jsonl"),
+    str(ROOT_DIR / "training" / "data" / "vidalia_train.jsonl"),
 )
 checkpoint_dir = os.getenv(
     "TRAINING_CHECKPOINT_DIR",
