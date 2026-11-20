@@ -9,7 +9,7 @@ from backend.generation.gateway import ModelTurnRequest
 from backend.schemas.content import NPCGenerationContext
 from backend.schemas.parsed_action import ParsedAction
 from gpu_gateway.app import create_app
-from gpu_gateway.config import GatewaySettings
+from gpu_gateway.config import DEFAULT_NPC_MODEL_MAP, GatewaySettings
 
 
 def make_request(npc_id: str) -> dict[str, object]:
@@ -140,6 +140,17 @@ def settings(*, inbound_api_key: str | None = None) -> GatewaySettings:
         },
         fallback_model="Qwen/Qwen2.5-7B-Instruct-AWQ",
     )
+
+
+def test_default_routes_cover_every_npc_on_the_current_game_map() -> None:
+    assert DEFAULT_NPC_MODEL_MAP == {
+        "andre": "andre-lora",
+        "dasso": "dasso-lora",
+        "menmesvento": "menmesvento-lora",
+        "seth": "seth-lora",
+        "syra": "syra-lora",
+        "vidalia": "vidalia-lora",
+    }
 
 
 def test_gateway_routes_each_npc_to_its_adapter_or_registered_fallback() -> None:
@@ -401,6 +412,34 @@ def test_gateway_replaces_training_summary_leaked_into_casual_dialogue() -> None
     assert "我聽見了" in dialogue
     assert "數值" not in dialogue and "觸發" not in dialogue
     assert output["event_proposals"] == []
+
+
+def test_gateway_replaces_hostile_or_evasive_intro_with_public_identity() -> None:
+    request = make_request("dasso")
+    request["action_message"] = "請簡短自我介紹，並說明你所在的地方。"
+    target_context = request["target_context"]
+    assert isinstance(target_context, dict)
+    target_context["public_profile"] = {
+        "name": "達索",
+        "title": "首席長老・火焰長老會",
+        "scene_name": "烈燚原",
+    }
+
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion("我聽不懂你的問題。想知道什麼，自己說清楚。")
+        ),
+    )
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    dialogue = response.json()["npc_dialogue"][0]["text"]
+    assert "我是達索" in dialogue
+    assert "烈燚原" in dialogue
+    assert "閉嘴" not in dialogue
+    assert response.json()["event_proposals"] == []
 
 
 def test_gateway_answers_casual_food_without_inventing_world_objects() -> None:

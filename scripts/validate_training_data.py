@@ -9,7 +9,14 @@ import sys
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-TRAINING_NPCS = ("menmesvento", "vidalia")
+TRAINING_DATASETS = {
+    "andre": "npc_train_andre.jsonl",
+    "dasso": "npc_train_dhaso.jsonl",
+    "menmesvento": "menmesvento_data.jsonl",
+    "seth": "npc_train_seth.jsonl",
+    "syra": "npc_train_syra.jsonl",
+    "vidalia": "vidalia_train.jsonl",
+}
 sys.path.insert(0, str(ROOT_DIR))
 
 from backend.generation.gateway import ModelStoryOutput  # noqa: E402
@@ -17,8 +24,8 @@ from backend.generation.gateway import ModelStoryOutput  # noqa: E402
 
 def main() -> int:
     total = 0
-    for npc_id in TRAINING_NPCS:
-        path = ROOT_DIR / "training" / "data" / f"{npc_id}_data.jsonl"
+    for npc_id, filename in TRAINING_DATASETS.items():
+        path = ROOT_DIR / "training" / "data" / filename
         count = 0
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if not line.strip():

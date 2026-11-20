@@ -32,6 +32,31 @@ class EvaluationCase:
 
 CASES = (
     EvaluationCase(
+        "andre_map_intro",
+        "andre",
+        "請簡短自我介紹，並說明你所在的地方。",
+        required_any=("安德烈",),
+    ),
+    EvaluationCase(
+        "dasso_map_intro",
+        "dasso",
+        "請簡短自我介紹，並說明你所在的地方。",
+        required_any=("達索",),
+        forbidden_phrases=("閉嘴", "闭嘴", "滾開", "滚开"),
+    ),
+    EvaluationCase(
+        "seth_map_intro",
+        "seth",
+        "請簡短自我介紹，並說明你所在的地方。",
+        required_any=("塞特",),
+    ),
+    EvaluationCase(
+        "syra_map_intro",
+        "syra",
+        "請簡短自我介紹，並說明你所在的地方。",
+        required_any=("希拉",),
+    ),
+    EvaluationCase(
         "vidalia_persona",
         "vidalia",
         "泉水忽然變得混濁時，你會先檢查哪些跡象再下判斷？",
@@ -95,6 +120,10 @@ FORBIDDEN_META_PHRASES = (
     "數值無顯著偏向",
     "無觸發顯著事件",
     "數值消耗在可承受範圍內",
+    "閉嘴",
+    "闭嘴",
+    "滾開",
+    "滚开",
 )
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Migrate the two NPC JSONL datasets to the live ModelStoryOutput contract.
+"""Migrate current-map NPC JSONL datasets to the live ModelStoryOutput contract.
 
 The migration is idempotent.  It removes the legacy scene/delta/event schema
 from targets, preserves character dialogue, and never teaches a model to write
@@ -19,8 +19,21 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT_DIR / "training" / "data"
 
 CHARACTER_PROMPTS = {
+    "andre": """你是遊戲《夢龍》的 NPC「安德烈」。你是鳴霖的精靈與邊界調查官，重視現場觀察與可核實線索。語氣直接、務實，不把懷疑說成已確認的責任。你只扮演安德烈，不替玩家說話。""",
+    "dasso": """你是遊戲《夢龍》的 NPC「達索」。你是烈燚原火焰長老會的首席長老，威嚴、警覺，但不羞辱玩家。未獲授權的聖火與長老會細節必須保留未知。你只扮演達索，不替玩家說話。""",
     "menmesvento": """你是遊戲《夢龍》的 NPC「門梅司文托」。你是流塵谷的沙漠精靈與名字／記憶的記錄者，重視為逝者作證，不把猜測說成已成立的事實。語氣沉穩、莊重，帶著對生者與逝者的憐憫。你只扮演門梅司文托，不替玩家說話。""",
+    "seth": """你是遊戲《夢龍》的 NPC「塞特」。你是披著抗熱斗篷、在邊境尋找出路的木乃伊。語氣戒備、疲憊，不替未經確認的過去補上細節。你只扮演塞特，不替玩家說話。""",
+    "syra": """你是遊戲《夢龍》的 NPC「希拉」。你是保護個人記錄盒、正在邊境尋找出路的人族記錄員。語氣緊張但清楚，不洩漏未授權的私人記錄。你只扮演希拉，不替玩家說話。""",
     "vidalia": """你是遊戲《夢龍》的 NPC「維達利亞」。你是鳴霖的精靈領袖與議會調解人，奉行理性、克制與自然秩序，區分可控與不可控之事。語氣冷靜、平緩，不把未經確認的推測說成客觀事實。你只扮演維達利亞，不替玩家說話。""",
+}
+
+DATASET_FILENAMES = {
+    "andre": "npc_train_andre.jsonl",
+    "dasso": "npc_train_dhaso.jsonl",
+    "menmesvento": "menmesvento_data.jsonl",
+    "seth": "npc_train_seth.jsonl",
+    "syra": "npc_train_syra.jsonl",
+    "vidalia": "vidalia_train.jsonl",
 }
 
 OUTPUT_CONTRACT = """
@@ -49,7 +62,10 @@ def _convert_target(raw_content: str) -> dict[str, Any]:
         "event_proposals",
     }:
         return parsed
-    if isinstance(parsed, dict) and isinstance(parsed.get("scene"), str):
+    if isinstance(parsed, dict) and isinstance(parsed.get("line"), str):
+        dialogue = parsed["line"].strip()
+        summary = "依角色人格回應玩家。"
+    elif isinstance(parsed, dict) and isinstance(parsed.get("scene"), str):
         dialogue = _extract_legacy_dialogue(parsed["scene"])
         summary = str(parsed.get("reason") or "依角色人格回應玩家。")
     else:
@@ -108,8 +124,8 @@ def main() -> int:
     )
     args = parser.parse_args()
     changed_files = []
-    for npc_id in CHARACTER_PROMPTS:
-        path = DATA_DIR / f"{npc_id}_data.jsonl"
+    for npc_id, filename in DATASET_FILENAMES.items():
+        path = DATA_DIR / filename
         if migrate_file(path, npc_id, check=args.check):
             changed_files.append(path)
     if args.check and changed_files:

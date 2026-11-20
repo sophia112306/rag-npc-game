@@ -1,6 +1,6 @@
 # RAG NPC Game｜夢龍世界探索原型
 
-更新：2026-11-17（Asia/Taipei）。目前主遊戲採 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。維達利亞與門梅司文托的 LoRA 已可經 GPU Gateway 回覆自由輸入；兩人的經審核核心角色卡與公開 RAG starter corpus 已接入授權 context。外部 embedding／向量索引、第二幕與五結局仍未完成整合。
+更新：2026-11-20（Asia/Taipei）。目前主遊戲採 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。地圖上的維達利亞、安德烈、門梅司文托、達索、塞特與希拉都已可依 NPC ID 路由到各自 LoRA，並通過真機結構與完整地圖路線串接；其中只有維達利亞與門梅司文托已有經審核核心角色卡與公開 RAG starter corpus。新四位模型及 11 月 18 日新版權重仍需資料契約遷移、設定邊界與內容品質驗收，外部 embedding／向量索引、第二幕與五結局也尚未完成。
 
 美術保留既有末世寫實／奇幻遺跡風格，在遊戲端降低背景取樣解析度並做輕度柔化，沒有換成可愛手繪。六張場景各有 Tiled 可走區與互動點，M 地圖、J 手記和調查選項已接入 2D。人物、場景與存檔均沿用現有成果。固定圖庫由後端 Scene Registry 維護，故事選項決定合法換場，不需 VPN 或 GPU 才能遊玩。
 
@@ -104,7 +104,7 @@ flowchart TD
 | --- | --- |
 | 調查主線 | `demo_story.py` 的既有條件與分支，經驗證後推進；目前不是 LLM 即興創作。 |
 | NPC 選項 | 六位角色的可見按鈕使用固定預寫答案，不呼叫模型；相同文字的明確詢問可走相同處理。自由輸入仍走設定的 planner。 |
-| 真正模型／RAG | 兩個 LoRA、GPU Gateway 與自由對話已接通；`rag/corpus/npc_knowledge.jsonl` 的公開核心片段會依 NPC、版本與回合加入授權 context。外部 embedding／向量索引與候選評分仍待完成。 |
+| 真正模型／RAG | 六個地圖 LoRA、GPU Gateway 與自由對話路由已接通；`rag/corpus/npc_knowledge.jsonl` 的公開核心片段會依 NPC、版本與回合加入授權 context。新四位角色卡、資料契約與內容邊界仍待驗收，外部 embedding／向量索引與候選評分也未完成。 |
 | 場景圖 | 由已登記的場景 ID 選固定背景、配樂與 Tiled 地圖，前端不呼叫即時圖片或 GLB 工作。 |
 | 過去的 Hunyuan／世界指令 | 留在歷史原型及原分支，主遊戲停用；本輪不再依賴 3D 或 GPU。 |
 
@@ -269,7 +269,7 @@ production 展示：`npm run build` 後執行 `npm run start`，仍在 3200；�
 
 ### 接 B 的敘事模型
 
-專案已有 GPU-side 多 NPC LoRA gateway：維達利亞與門梅司文托分別選自己的 adapter，其他已登記 NPC 暫時走 base model；玩家／主角不會選 adapter。遊戲後端不載入 CUDA，只需要一個完整 `/generate` URL：
+專案已有 GPU-side 多 NPC LoRA gateway：地圖上的維達利亞、安德烈、門梅司文托、達索、塞特與希拉各自選自己的 adapter；其他已登記 NPC 才走 base model，玩家／主角不會選 adapter。六條路由已通過真機與完整遊戲回合，但新權重的角色內容與未知設定邊界仍須人工驗收。遊戲後端不載入 CUDA，只需要一個完整 `/generate` URL：
 
 ```bash
 MODEL_GATEWAY_URL=http://127.0.0.1:8800/generate \
@@ -290,13 +290,13 @@ MODEL_GATEWAY_URL=http://127.0.0.1:8800/generate \
 | `POST /api/game/start` | 建立／恢復 Session。 |
 | `POST /api/game/turn` | 提交 action_id、預期版本與行動模式。 |
 | `GET /api/game/{session_id}/state` | 公開狀態、場景、手記、地圖及下一步。 |
-| `GET /api/game/{session_id}/choices` | 情境選項；npc_id 可為 vidalia／andre／menmesvento。 |
+| `GET /api/game/{session_id}/choices` | 情境選項；`npc_id` 可使用目前地圖上的六位 NPC。 |
 | `GET /api/game/{session_id}/quests` | 玩家可見的未結束任務。 |
 | `POST /api/game/{session_id}/scene-image`、`GET .../scene-image/{job_id}` | 2D 圖片工作；未設定 provider 使用版本化場景。 |
 | `POST /api/game/{session_id}/scene-assets`、`GET .../scene-assets/{job_id}` | 3D 工作建立、輪詢；POST 要帶 expected_state_version。 |
 | `GET /api/game/{session_id}/scene-assets/{job_id}/model` | 取得該 Session 成功工作的 GLB。 |
 
-最近一次功能驗收（2026-11-12）：**137 個後端測試、既有 12 個前端邏輯測試、Next.js production build 通過**。Chrome 實際走兩條 2D 分支、四項紀錄與回報、重整／重啟承接、中文輸入法、地圖與手記，以及邊境選項、取得地圖、背包圖片與手機排版；另以 API 測試替身驗證固定選項不呼叫模型，三種結果、去重與重啟承接通過。2D 的操作另由瀏覽器驗收，既有 Node 控制測試仍包含歷史 3D 測試；這些不代表正式 LLM／結局完成。
+最新自動回歸（2026-11-20）：**169 個後端測試與 12 個前端邏輯測試通過**；`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最近一次 Chrome／production build 視覺驗收仍是 2026-11-12：實際走兩條 2D 分支、四項紀錄與回報、重整／重啟承接、中文輸入法、地圖與手記，以及邊境選項、取得地圖、背包圖片與手機排版。2D 操作另由瀏覽器驗收，既有 Node 控制測試仍包含歷史 3D 測試；這些不代表六個 LLM 的內容品質或結局已完成。
 
 ```bash
 # 專案根目錄：後端與前端邏輯測試

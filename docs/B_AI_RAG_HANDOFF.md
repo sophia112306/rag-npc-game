@@ -4,7 +4,7 @@
 
 ## 目前專案狀態
 
-進度：`█████████░ 90%`（模型串接程式已完成，真實服務與 RAG 尚未驗收）
+進度：模型服務、六位地圖 NPC 路由與完整遊戲回合已真機接通；新四位角色的設定／資料／內容品質，以及外部 RAG 仍未驗收。
 
 A／D 已完成：
 
@@ -18,11 +18,11 @@ A／D 已完成：
 - B 自訂 HTTP ModelGateway adapter。
 - Strict JSON Schema 與 JSON object fallback。
 
-目前尚未取得真實模型服務的 URL、model ID、認證方式，因此遊戲預設仍顯示「開發替身」。
+2026-11-20 已取得校機 loopback 服務：遊戲端經 SSH tunnel 呼叫 `contract_http` `/generate`，GPU gateway 再呼叫 vLLM 0.31.0。六個地圖 model ID 為 `vidalia-lora`、`andre-lora`、`menmesvento-lora`、`dasso-lora`、`seth-lora`、`syra-lora`；服務未對校外直接公開。URL 未設定時遊戲仍安全退回規則 planner。
 
-## P0：請 B 先提供以下資訊ㄋ
+## P0：已交付的服務資訊
 
-只要先交付本節資料，A／D 就能開始無 RAG 的真實模型 live 驗收。
+本節欄位已由目前校機部署補齊；若更換 provider、主機或模型版本，仍須按相同欄位重新交接。
 
 ### 1. 模型服務類型
 

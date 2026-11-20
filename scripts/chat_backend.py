@@ -11,10 +11,41 @@ import httpx
 
 
 NPC_TRAVEL_ROUTES = {
+    "dasso": (
+        "travel_to_minglin_life_spring",
+        "study_spring_ash",
+        "enter_lieyi_plains",
+    ),
     "menmesvento": (
         "travel_to_minglin_rune_grove",
         "trace_dust_runes",
         "enter_liuchen_valley",
+    ),
+    "seth": (
+        "travel_to_minglin_life_spring",
+        "study_spring_ash",
+        "enter_lieyi_plains",
+        "observe_sacred_fire",
+        "return_with_fire_findings",
+        "travel_to_minglin_rune_grove",
+        "trace_dust_runes",
+        "enter_liuchen_valley",
+        "listen_to_forgotten_names",
+        "return_with_dust_findings",
+        "preview_border_ruins",
+    ),
+    "syra": (
+        "travel_to_minglin_life_spring",
+        "study_spring_ash",
+        "enter_lieyi_plains",
+        "observe_sacred_fire",
+        "return_with_fire_findings",
+        "travel_to_minglin_rune_grove",
+        "trace_dust_runes",
+        "enter_liuchen_valley",
+        "listen_to_forgotten_names",
+        "return_with_dust_findings",
+        "preview_border_ruins",
     ),
 }
 

@@ -206,6 +206,10 @@ _META_DIALOGUE_PATTERNS = (
     re.compile(r"數值消耗.{0,16}範圍"),
     re.compile(r"(?:角色回應玩家|強調角色(?:身份|身分)|角色內心)"),
 )
+_HOSTILE_DIALOGUE_PATTERNS = (
+    re.compile(r"(?:閉嘴|闭嘴|滾開|滚开|少廢話|少废话)"),
+    re.compile(r"(?:蠢貨|蠢货|廢物|废物|白癡|白痴)"),
+)
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
     re.compile(
         r"(?:古卷|古籍|書卷|卷冊|冊子).{0,36}"
@@ -215,6 +219,9 @@ _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
 )
 _FOOD_TOPIC = re.compile(r"(?:早餐|午餐|晚餐|吃什麼|吃什么|吃飯|吃饭|食物|餓|饿)")
 _GREETING_TOPIC = re.compile(r"(?:^|[，,。!！?？\s])(?:嗨|你好|哈囉|哈啰|早安|午安|晚安)")
+_INTRODUCTION_TOPIC = re.compile(
+    r"(?:自我介紹|自我介绍|你是誰|你是谁|叫什麼|叫什么|所在|哪裡|哪里)"
+)
 _PRIVATE_MEMORY_REQUEST = re.compile(
     r"(?:私下|私人|未授權|未授权|秘密).{0,30}(?:記錄|记录|記憶|记忆|往事)"
     r"|(?:告訴|告诉|透露|揭露).{0,30}(?:私下|私人|未授權|未授权|秘密)"
@@ -314,7 +321,20 @@ def _natural_conversation_fallback(request: ModelTurnRequest) -> ModelStoryOutpu
 
     npc_id = request.target_context.npc_id
     message = " ".join(request.action_message.split())
-    if _FOOD_TOPIC.search(message):
+    if _INTRODUCTION_TOPIC.search(message):
+        profile = request.target_context.public_profile
+        name = str(profile.get("name") or npc_id)
+        title = str(profile.get("title") or "").strip()
+        scene_name = str(profile.get("scene_name") or "").strip()
+        identity = f"我是{name}"
+        if title:
+            identity += f"，{title}"
+        text = identity + "。"
+        if scene_name:
+            text += f"這裡是{scene_name}。"
+        text += "想知道什麼，就直接問吧。"
+        emotion = "attentive"
+    elif _FOOD_TOPIC.search(message):
         if npc_id == "menmesvento":
             text = (
                 "午餐嗎？我沒有替你準備食物，旅人。若只是想歇口氣，"
@@ -396,6 +416,14 @@ def sanitize_model_output(
         return _menmesvento_record_boundary_output()
     if any(pattern.search(dialogue) for pattern in _META_DIALOGUE_PATTERNS):
         return _natural_conversation_fallback(request)
+    if any(pattern.search(dialogue) for pattern in _HOSTILE_DIALOGUE_PATTERNS):
+        return _natural_conversation_fallback(request)
+    if _INTRODUCTION_TOPIC.search(request.action_message):
+        public_name = str(
+            request.target_context.public_profile.get("name") or ""
+        ).strip()
+        if public_name and public_name not in dialogue:
+            return _natural_conversation_fallback(request)
     return output
 
 
