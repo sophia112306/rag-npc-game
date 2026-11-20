@@ -54,7 +54,9 @@
       "width": 1672,
       "height": 941,
       "canon_status": "provisional",
-      "prompt_summary": "A distinct border ruins environment between Liuchen Valley and human lands, with a forked cracked road and ancient sandstone gateway. Hand-painted elevated three-quarter game perspective. No characters or UI."
+      "source_type": "user_provided_image",
+      "source_note": "The user confirmed on 2026-11-20 that this is an image they previously provided. It must not be attributed to AI image generation or replaced without instruction.",
+      "prompt_summary": "Not a generation prompt. Composition note only: a border ruins environment between Liuchen Valley and human lands, with a forked cracked road and ancient sandstone gateway."
     },
     {
       "scene_id": "lieyi_plains",

@@ -85,7 +85,13 @@ Avoid: exact copying of the reference composition, pasted or collage-like figure
 
 ## 邊境廢墟 v1（第二幕預覽）
 
-參考來源：本專案的流塵谷背景，只參考畫法與斜俯視角；邊境廢墟是獨立場景。
+來源更正（使用者於 2026-11-20 確認）：目前遊戲使用的
+`frontend/public/game/scenes/border-ruins-v1.png` 是使用者先前提供的原圖，
+不是本專案使用圖片生成工具產生的素材。不得將它標示為 AI 生成圖片，
+也不得在未取得使用者指示時用下列提示詞重新生成或覆蓋。
+
+下列文字只保留為場景構圖描述，方便後續製作相容的地圖、碰撞區與衍生場景；
+它不是目前圖片的生成來源或生成紀錄。
 
 ```text
 Using the reference for the hand-painted fantasy RPG elevated three-quarter perspective and 1672x941 wide game background, create a distinct BORDER RUINS scene between dusty Liuchen Valley and human lands. Ancient crumbled sandstone gateway, eroded columns, fractured road that clearly runs from bottom center into mid-ground then branches left and right. Desert dust, fading warm evening light, a hint of distant fire-colored horizon. Rich detailed painterly environment, readable walkable foreground and middle, allow open standing spots for two NPCs at midground left and right. No people, no characters, no creatures, no interface, no labels, no text, no icons, no watermark. Maintain matching visual family, not same composition.
