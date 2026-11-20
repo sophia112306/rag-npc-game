@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from backend.content.demo_story import DEMO_STORY_CHOICES
 from backend.content.reveal_policy import LEGACY_PUBLIC_CLUE_ALIASES, normalize_legacy_demo_state
 from backend.database.models import ActionRecord
 from backend.database.repository import SqlAlchemyGameRepository
@@ -52,6 +53,134 @@ def _submit_choice(
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
+    """Keep every authored branch connected to a playable route through the API."""
+
+    paths = {
+        "council-dialogue-and-border-help": (
+            "ask_location",
+            "ask_about_factions",
+            "ask_about_fire_elder",
+            "ask_about_mummies",
+            "travel_to_minglin_life_spring",
+            "return_to_council",
+            "travel_to_minglin_rune_grove",
+            "return_to_council",
+            "travel_to_minglin_life_spring",
+            "study_spring_ash",
+            "enter_lieyi_plains",
+            "observe_sacred_fire",
+            "return_with_fire_findings",
+            "review_demo_findings",
+            "travel_to_minglin_rune_grove",
+            "trace_dust_runes",
+            "enter_liuchen_valley",
+            "listen_to_forgotten_names",
+            "return_with_dust_findings",
+            "preview_border_ruins",
+            "return_from_border_ruins",
+            "preview_border_ruins",
+            "border_help_both",
+            "return_after_border_choice",
+        ),
+        "direct-briefing-and-border-report": (
+            "ask_for_task",
+            "travel_to_minglin_rune_grove",
+            "read_ember_runes",
+            "enter_lieyi_plains",
+            "question_fire_elder_motive",
+            "return_with_fire_findings",
+            "travel_to_minglin_life_spring",
+            "study_spring_echo",
+            "enter_liuchen_valley",
+            "study_burial_cycle",
+            "return_with_dust_findings",
+            "preview_border_ruins",
+            "border_report",
+            "return_after_border_choice",
+        ),
+        "orientation-life-spring-and-border-ignore": (
+            "ask_location",
+            "travel_to_minglin_life_spring",
+            "study_spring_echo",
+            "enter_liuchen_valley",
+            "listen_to_forgotten_names",
+            "return_with_dust_findings",
+            "travel_to_minglin_rune_grove",
+            "read_ember_runes",
+            "enter_lieyi_plains",
+            "observe_sacred_fire",
+            "return_with_fire_findings",
+            "preview_border_ruins",
+            "border_ignore",
+            "return_after_border_choice",
+        ),
+        "orientation-rune-grove": (
+            "ask_location",
+            "travel_to_minglin_rune_grove",
+            "read_ember_runes",
+            "enter_lieyi_plains",
+            "observe_sacred_fire",
+            "return_with_fire_findings",
+        ),
+        "orientation-briefing": (
+            "ask_location",
+            "ask_for_task",
+            "travel_to_minglin_life_spring",
+            "study_spring_ash",
+            "enter_lieyi_plains",
+            "observe_sacred_fire",
+            "return_with_fire_findings",
+        ),
+        "arrival-life-spring": (
+            "travel_to_minglin_life_spring",
+            "study_spring_ash",
+            "enter_lieyi_plains",
+            "observe_sacred_fire",
+            "return_with_fire_findings",
+        ),
+        "arrival-rune-grove": (
+            "travel_to_minglin_rune_grove",
+            "trace_dust_runes",
+            "enter_liuchen_valley",
+            "listen_to_forgotten_names",
+            "return_with_dust_findings",
+        ),
+    }
+    expected_edges = {
+        (choice.choice_id, choice.source_node_id, choice.source_scene_id)
+        for choice in DEMO_STORY_CHOICES
+    }
+    visited_edges: set[tuple[str, str, str]] = set()
+
+    with TestClient(
+        create_app(f"sqlite+aiosqlite:///{tmp_path / 'story-connectivity.db'}")
+    ) as client:
+        for route_name, choice_ids in paths.items():
+            state = _start(client, route_name)
+            for choice_id in choice_ids:
+                edge = (
+                    choice_id,
+                    state["story_progress"]["node_id"],
+                    state["current_scene_id"],
+                )
+                assert edge in expected_edges, f"{route_name} is not authored at {edge}"
+                visited_edges.add(edge)
+                turn = _submit_choice(
+                    client,
+                    route_name,
+                    state["state_version"],
+                    choice_id,
+                )
+                state = turn["state"]
+
+            assert state["current_scene_id"] == "minglin"
+            assert state["story_progress"]["node_id"] == "demo_complete"
+            assert client.get(f"/api/game/{route_name}/choices").json()
+
+    assert visited_edges == expected_edges
 
 
 def test_fire_branch_reaches_lieyi_and_resumes_after_restart(tmp_path) -> None:

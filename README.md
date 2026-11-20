@@ -296,7 +296,7 @@ MODEL_GATEWAY_URL=http://127.0.0.1:8800/generate \
 | `POST /api/game/{session_id}/scene-assets`、`GET .../scene-assets/{job_id}` | 3D 工作建立、輪詢；POST 要帶 expected_state_version。 |
 | `GET /api/game/{session_id}/scene-assets/{job_id}/model` | 取得該 Session 成功工作的 GLB。 |
 
-最新自動回歸（2026-11-20）：**169 個後端測試與 12 個前端邏輯測試通過**；`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最近一次 Chrome／production build 視覺驗收仍是 2026-11-12：實際走兩條 2D 分支、四項紀錄與回報、重整／重啟承接、中文輸入法、地圖與手記，以及邊境選項、取得地圖、背包圖片與手機排版。2D 操作另由瀏覽器驗收，既有 Node 控制測試仍包含歷史 3D 測試；這些不代表六個 LLM 的內容品質或結局已完成。
+最新自動回歸（2026-11-20）：**170 個後端測試與 12 個前端邏輯測試通過**；其中故事連通測試會經由正式 API 實走目前 37 條已編寫故事邊，涵蓋兩區先後順序、替代調查、返回路徑與三種邊境結果。`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最近一次 Chrome／production build 視覺驗收仍是 2026-11-12：實際走兩條 2D 分支、四項紀錄與回報、重整／重啟承接、中文輸入法、地圖與手記，以及邊境選項、取得地圖、背包圖片與手機排版。2D 操作另由瀏覽器驗收，既有 Node 控制測試仍包含歷史 3D 測試；這些不代表六個 LLM 的內容品質或結局已完成。
 
 ```bash
 # 專案根目錄：後端與前端邏輯測試
