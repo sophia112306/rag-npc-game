@@ -1,0 +1,72 @@
+.hud {
+  position: absolute;
+  z-index: 4;
+  top: 18%;
+  right: 2.2%;
+  width: min(320px, 27vw);
+  padding: 13px 15px 14px;
+  border: 1px solid rgba(167, 218, 193, .72);
+  border-left: 3px solid #b5e8ce;
+  color: #d8f3e1;
+  background: linear-gradient(135deg, rgba(10, 29, 26, .86), rgba(9, 18, 24, .7));
+  box-shadow: 0 7px 25px rgba(0, 0, 0, .32), inset 0 0 24px rgba(111, 224, 183, .08);
+  backdrop-filter: blur(5px);
+  pointer-events: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .06em;
+}
+
+.hud::before,
+.hud::after {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  content: "";
+}
+
+.hud::before { top: -1px; right: -1px; border-top: 1px solid currentColor; border-right: 1px solid currentColor; }
+.hud::after { bottom: -1px; left: -3px; border-bottom: 1px solid currentColor; border-left: 1px solid currentColor; }
+
+.header { display: flex; align-items: center; gap: 8px; color: #c1f0d1; font-size: 11px; }
+.headerStatus { margin-left: auto; color: #9cd8b5; font-size: 8px; letter-spacing: .14em; }
+.signal { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.signal i { display: block; width: 2px; background: currentColor; }
+.signal i:nth-child(1) { height: 4px; opacity: .55; }
+.signal i:nth-child(2) { height: 8px; opacity: .78; }
+.signal i:nth-child(3) { height: 12px; }
+.meter { height: 4px; margin: 11px 0 7px; overflow: hidden; background: rgba(148, 201, 175, .18); }
+.meter span { display: block; height: 100%; min-width: 2px; background: linear-gradient(90deg, #7cd5ad, #e8f5ae); transition: width .45s ease; }
+.valueRow { display: flex; justify-content: space-between; color: #91c5a4; font-size: 9px; }
+.valueRow strong { color: #e9f8c3; font-weight: 500; }
+.hud p { margin: 9px 0 0; color: #ecf7df; font-size: 12px; line-height: 1.7; }
+.countdown { margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(236, 181, 109, .42); color: #f3c680; font-size: 10px; }
+.countdown strong { padding: 0 5px; color: #fff1c7; font-size: 17px; font-weight: 500; }
+.replay { position: relative; z-index: 1; margin-top: 8px; padding: 3px 7px; border: 1px solid rgba(175, 226, 193, .48); color: #bcebc9; background: rgba(35, 75, 61, .35); font: inherit; font-size: 9px; pointer-events: auto; cursor: pointer; }
+.replay:hover, .replay:focus-visible { color: #fff6cf; border-color: #e6cd8b; outline: none; }
+.ask, .reply { position: relative; z-index: 1; pointer-events: auto; margin-top: 10px; border-top: 1px solid rgba(175, 226, 193, .25); padding-top: 8px; }
+.ask label, .reply span { display: block; color: #aee1c2; font-size: 10px; margin-bottom: 5px; }
+.ask div { display: flex; gap: 5px; }
+.ask input { min-width: 0; flex: 1; padding: 5px 6px; border: 1px solid rgba(175, 226, 193, .5); color: #ecf7df; background: rgba(6, 20, 19, .75); font: inherit; font-size: 11px; }
+.ask button, .reply button { padding: 5px 7px; border: 1px solid rgba(175, 226, 193, .5); color: #d3efcc; background: rgba(35, 75, 61, .45); font: inherit; font-size: 10px; cursor: pointer; }
+.ask button:disabled { opacity: .55; cursor: default; }
+.reply p { margin: 0 0 5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hud .error { color: #ffc7b5; font-size: 10px; }
+.urgent { border-color: rgba(241, 192, 108, .78); border-left-color: #f0c276; color: #f5d39b; }
+.urgent .meter span { background: linear-gradient(90deg, #c7914d, #f3cf79); }
+.interference { border-color: rgba(238, 143, 114, .82); border-left-color: #ed9373; color: #ffd0a2; animation: hud-flicker 2.8s steps(2, end) infinite; }
+.interference .meter span { background: linear-gradient(90deg, #c66e61, #f0c479); }
+.override { border-color: rgba(248, 105, 83, .9); border-left-color: #ff735a; color: #ffd0bc; animation: hud-pulse 1.2s ease-in-out infinite; }
+.override .meter span { background: linear-gradient(90deg, #bd4f4c, #ff9a64); }
+.silent { opacity: .55; }
+@keyframes hud-flicker { 0%, 92%, 100% { opacity: 1; } 94% { opacity: .72; } }
+@keyframes hud-pulse { 50% { box-shadow: 0 7px 30px rgba(255, 75, 44, .2), inset 0 0 24px rgba(255, 111, 67, .15); } }
+
+@media (max-width: 900px) {
+  .hud { top: 19%; width: min(280px, 34vw); }
+}
+
+@media (max-width: 640px) {
+  .hud { top: 120px; right: 10px; width: min(235px, calc(100vw - 20px)); padding: 9px 11px; }
+  .hud p { margin-top: 6px; font-size: 10px; }
+  .meter { margin: 7px 0 5px; }
+}

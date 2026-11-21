@@ -15,6 +15,7 @@ from backend.generation.gateway import (
     ModelGatewayTransientError,
     ModelStoryOutput,
     ModelTurnRequest,
+    TurnGuidance,
 )
 from backend.schemas.content import NPCGenerationContext
 from backend.schemas.game_state import GameState
@@ -66,6 +67,7 @@ class GatewayStoryPlanner:
         action: PlayerAction,
         parsed_action: ParsedAction,
         state: GameState,
+        turn_guidance: TurnGuidance | None = None,
     ) -> StoryProposal:
         npc_id = action.target_npc_id or "vidalia"
         try:
@@ -97,6 +99,7 @@ class GatewayStoryPlanner:
             action_mode=action.action_mode,
             parsed_action=parsed_action,
             target_context=target_context,
+            turn_guidance=turn_guidance or TurnGuidance(scene_name=state.current_scene_id),
             allowed_operations=allowed_operations,
             generation_budget=GenerationBudget(max_model_calls=self._max_attempts),
         )

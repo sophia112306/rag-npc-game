@@ -11,6 +11,7 @@ from backend.generation.planner import GatewayStoryPlanner
 from backend.main import create_app as create_game_app
 from gpu_gateway.app import create_app as create_gpu_gateway_app
 from gpu_gateway.config import GatewaySettings
+from test_demo_story_flow import _start
 
 
 def test_game_backend_reaches_the_vidalia_lora_through_one_gateway_url(
@@ -72,9 +73,7 @@ def test_game_backend_reaches_the_vidalia_lora_through_one_gateway_url(
     )
 
     with TestClient(game_app) as client:
-        state = client.post(
-            "/api/game/start", json={"session_id": "gateway-e2e"}
-        ).json()
+        state = _start(client, "gateway-e2e")
         response = client.post(
             "/api/game/turn",
             json={

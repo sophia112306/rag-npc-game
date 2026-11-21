@@ -13,6 +13,7 @@ from backend.database import create_async_session_factory, create_database_engin
 from backend.database.session import get_database_url
 from backend.database.repository import SqlAlchemyGameRepository
 from backend.generation.config import build_story_planner_from_env
+from backend.generation.alan_client import build_alan_client_from_env
 from backend.generation.image_gateway import ImageGateway
 from backend.generation.rule_based_planner import RuleBasedStoryPlanner
 from backend.generation.scene_image_jobs import SceneImageCoordinator
@@ -59,6 +60,7 @@ def create_app(
                 generation_mode = "external_model"
         application.state.database_engine = engine
         application.state.game_orchestrator = GameOrchestrator(repository, story_planner=story_planner)
+        application.state.alan_gateway = build_alan_client_from_env()
         application.state.scene_image_coordinator = SceneImageCoordinator(
             session_factory,
             image_gateway,

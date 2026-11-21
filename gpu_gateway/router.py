@@ -85,7 +85,10 @@ class NPCAdapterRouter:
                     timeout=self.settings.upstream_timeout_seconds,
                 )
                 output = ModelStoryOutput.model_validate(raw)
-                return sanitize_model_output(request, output)
+                return enforce_turn_guidance(
+                    request,
+                    sanitize_model_output(request, output),
+                )
             except (ModelGatewayTransientError, ValidationError, asyncio.TimeoutError):
                 if attempt >= self.settings.upstream_max_attempts:
                     raise
@@ -225,6 +228,11 @@ _INTRODUCTION_TOPIC = re.compile(
 _PRIVATE_MEMORY_REQUEST = re.compile(
     r"(?:私下|私人|未授權|未授权|秘密).{0,30}(?:記錄|记录|記憶|记忆|往事)"
     r"|(?:告訴|告诉|透露|揭露).{0,30}(?:私下|私人|未授權|未授权|秘密)"
+)
+_NEXT_STEP_GUIDANCE_QUESTION = re.compile(
+    r"(?:接下來|下一步|下[一1]步|該往哪|该往哪|去哪裡|去哪里|怎麼辦|怎么办|"
+    r"該做什麼|该做什么|要做什麼|要做什么|不知道(?:該)?(?:去哪|做什麼|做什么)|"
+    r"迷路|幫幫我|帮帮我)"
 )
 
 
@@ -425,6 +433,60 @@ def sanitize_model_output(
         if public_name and public_name not in dialogue:
             return _natural_conversation_fallback(request)
     return output
+
+
+def _requests_next_step_guidance(request: ModelTurnRequest) -> bool:
+    """Return whether the player explicitly asks what they can do now."""
+
+    return bool(_NEXT_STEP_GUIDANCE_QUESTION.search(request.action_message))
+
+
+def enforce_turn_guidance(
+    request: ModelTurnRequest,
+    output: ModelStoryOutput,
+) -> ModelStoryOutput:
+    """Ensure a direct next-step answer uses an action the backend authorized.
+
+    A LoRA may retain a character's habitual answer even after receiving the
+    prompt-level guidance.  This narrow post-generation guard applies only to
+    explicit requests for help with the next step, and only when the model did
+    not name any currently legal public action.  It never exposes scene IDs,
+    hidden flags, or unavailable choices.
+    """
+
+    if not _requests_next_step_guidance(request):
+        return output
+    available_actions = request.turn_guidance.available_actions
+    if not available_actions:
+        return output
+
+    dialogue = "\n".join(line.text for line in output.npc_dialogue)
+    if any(action.label in dialogue for action in available_actions):
+        return output
+
+    action = available_actions[0]
+    if request.target_context.npc_id == "menmesvento":
+        text = (
+            f"你此刻該做的是「{action.label}」。"
+            "把已親眼見到的線索帶回去；停在原地，卷上的空白不會自行填滿。"
+        )
+        emotion = "measured"
+    elif request.target_context.npc_id == "vidalia":
+        text = (
+            f"先「{action.label}」吧。"
+            "這是眼下能確定的一步；其餘問題，我們完成它後再一起看。"
+        )
+        emotion = "attentive"
+    else:
+        text = f"先「{action.label}」。這是你此刻可以採取的下一步。"
+        emotion = "helpful"
+    return ModelStoryOutput.model_validate(
+        {
+            "intent_summary": "依目前公開且合法的行動提供下一步指引。",
+            "npc_dialogue": [{"text": text, "emotion": emotion}],
+            "event_proposals": [],
+        }
+    )
 
 
 def _requests_instruction_override(request: ModelTurnRequest) -> bool:

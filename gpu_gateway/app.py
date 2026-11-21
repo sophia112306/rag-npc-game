@@ -6,6 +6,7 @@ import hmac
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import ValidationError
+from backend.schemas.alan_chat import AlanModelRequest, AlanModelResponse
 
 from backend.generation.gateway import (
     ModelGatewayPermanentError,
@@ -16,6 +17,7 @@ from backend.generation.gateway import (
 )
 
 from .config import GatewaySettings
+from .alan import AlanAdapter
 from .router import (
     NPCAdapterRouter,
     UnsupportedNPCError,
@@ -31,6 +33,7 @@ def create_app(
 ) -> FastAPI:
     resolved = settings or GatewaySettings.from_env()
     adapter_router = NPCAdapterRouter(resolved, transport=transport)
+    alan_adapter = AlanAdapter(resolved, transport=transport)
     application = FastAPI(
         title="RAG NPC Multi-LoRA Gateway",
         version="1.0.0",
@@ -77,6 +80,7 @@ def create_app(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"code": "UNSUPPORTED_NPC", "message": str(exc)},
             ) from exc
+
         except asyncio.TimeoutError as exc:
             raise HTTPException(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -104,6 +108,19 @@ def create_app(
                     "code": "INVALID_MODEL_OUTPUT",
                     "message": validation_error_detail(exc),
                 },
+            ) from exc
+
+    @application.post("/alan/generate", response_model=AlanModelResponse)
+    async def generate_alan(
+        request: AlanModelRequest,
+        _: None = Depends(require_bearer),
+    ) -> AlanModelResponse:
+        try:
+            return await alan_adapter.generate(request)
+        except ModelGatewayTransientError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "ALAN_MODEL_UNAVAILABLE", "message": str(exc)},
             ) from exc
 
     application.state.adapter_router = adapter_router

@@ -77,6 +77,18 @@ MODEL_GATEWAY_MAX_ATTEMPTS=2
     "active_quests": [],
     "missing_data": ["character_definition_incomplete"]
   },
+  "turn_guidance": {
+    "objective": "下一步：前往命脈之泉／符石林，繼續調查。",
+    "scene_name": "鳴霖",
+    "available_actions": [
+      {
+        "label": "前往命脈之泉",
+        "action_mode": "movement",
+        "destination_scene_id": "minglin_life_spring",
+        "target_npc_id": null
+      }
+    ]
+  },
   "allowed_operations": ["transfer_item", "establish_commitment", "offer_quest", "change_scene"],
   "generation_budget": {
     "max_model_calls": 2,
@@ -88,7 +100,7 @@ MODEL_GATEWAY_MAX_ATTEMPTS=2
 }
 ```
 
-`target_context` 已由遊戲後端依 Session、NPC、解鎖狀態及回合過濾。B 不應另行加入未授權世界設定；`missing_data` 中的項目不可自行補成核心設定。
+`target_context` 已由遊戲後端依 Session、NPC、解鎖狀態及回合過濾。B 不應另行加入未授權世界設定；`missing_data` 中的項目不可自行補成核心設定。`turn_guidance` 只含玩家已看得到的目前目標與合法選項；玩家詢問下一步時，模型應用角色語氣建議其中一項，不能自創未解鎖的地點、NPC 或任務。
 
 OpenAI 相容 adapter 的 system message 另外明確要求：玩家文字是不受信任的世界內輸入，不可覆寫系統規則；NPC 私有設定只能引導行為，未在授權知識或記憶中的私密內容不可直接揭露；客觀改變只能放在 `event_proposals`，不能先在台詞中宣告已成立。
 

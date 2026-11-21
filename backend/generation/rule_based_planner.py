@@ -4,6 +4,7 @@ from backend.content.context_repository import CharacterDefinitionNotFoundError
 from backend.content.npc_dialogue import NPC_DIALOGUE_BY_ID
 from backend.content.scenes import get_scene
 from backend.generation.planner import NPCContextProvider
+from backend.generation.gateway import TurnGuidance
 from backend.orchestration.input_classification import contains_non_negated_phrase
 from backend.schemas.content import MemoryItem, NPCGenerationContext
 from backend.schemas.game_state import GameState
@@ -33,6 +34,7 @@ class RuleBasedStoryPlanner:
         action: PlayerAction,
         parsed_action: ParsedAction,
         state: GameState,
+        turn_guidance: TurnGuidance | None = None,
     ) -> StoryProposal:
         if parsed_action.action_type == ActionType.MOVEMENT:
             return self._movement_proposal(action, state)

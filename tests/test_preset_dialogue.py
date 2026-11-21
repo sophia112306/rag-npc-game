@@ -12,6 +12,7 @@ from backend.main import create_app
 from backend.rules.event_rules import EventRules
 from backend.schemas.player_view import PlayerIdentityView
 from backend.schemas.story import AdvanceStoryOperation, DialogueLine, EventProposal, StoryProposal
+from test_demo_story_flow import _start
 
 
 class UnavailableModel:
@@ -52,10 +53,19 @@ def test_six_scene_preset_journey_never_calls_model_and_resumes(tmp_path):
                 assert state["story_progress"]["node_id"] == before
                 assert state["npc_states"][npc_id]["met"] is True
 
-        talk_to("andre")
-        for choice in ("ask_location", "ask_about_factions", "ask_about_fire_elder", "ask_about_mummies", "travel_to_minglin_life_spring"):
+        choose("meet_andre", "andre")
+        choose("walk_to_council")
+        choose("meet_vidalia", "vidalia")
+        choose("ask_for_task")
+        for choice in (
+            "ask_location",
+            "ask_for_task",
+            "ask_about_factions",
+            "ask_about_fire_elder",
+            "ask_about_mummies",
+            "travel_to_minglin_life_spring",
+        ):
             choose(choice)
-        talk_to("vidalia")
         for choice in ("study_spring_ash", "enter_lieyi_plains"):
             choose(choice)
         talk_to("dasso")
@@ -112,7 +122,7 @@ def _advance(client, session_id, choice_id):
 
 
 def _reach_border(client, session_id):
-    client.post("/api/game/start", json={"session_id": session_id})
+    _start(client, session_id)
     for choice_id in (
         "travel_to_minglin_life_spring", "study_spring_ash", "enter_lieyi_plains",
         "observe_sacred_fire", "return_with_fire_findings", "travel_to_minglin_rune_grove",
@@ -166,7 +176,7 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
 
 def test_model_cannot_select_a_reward_for_the_player(tmp_path):
     class RewardClaimingModel:
-        async def propose(self, action, _parsed, state):
+        async def propose(self, action, _parsed, state, turn_guidance):
             return StoryProposal(
                 session_id=action.session_id, turn_number=state.turn_count + 1,
                 proposed_dialogue=[DialogueLine(speaker_type="narrator", speaker_name="旁白", text="你獲得了裂隙地圖。")],

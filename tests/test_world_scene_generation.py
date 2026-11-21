@@ -141,8 +141,13 @@ def test_required_landmark_is_stable_even_when_decor_is_removed_or_reseeded():
 def test_removing_decor_keeps_spring_interactive_without_queuing_its_fixed_model(tmp_path):
     with TestClient(create_app(f"sqlite+aiosqlite:///{tmp_path / 'protected.db'}")) as client:
         from test_demo_story_flow import _start, _submit_choice
-        _start(client,"protected")
-        state = _submit_choice(client,"protected",1,"travel_to_minglin_life_spring")["state"]
+        started = _start(client,"protected")
+        state = _submit_choice(
+            client,
+            "protected",
+            started["state_version"],
+            "travel_to_minglin_life_spring",
+        )["state"]
         result = _command(client,"protected",state["state_version"],"移除樹木，移除符石，移除祭壇")
         assert result.status_code == 200
         state=result.json()["state"]

@@ -23,6 +23,29 @@ class GenerationBudget(BaseModel):
     max_active_quests: int = Field(default=2, ge=0, le=2)
 
 
+class TurnGuidanceAction(BaseModel):
+    """One public, currently legal action that an NPC may suggest to the player."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str = Field(..., min_length=1, max_length=100)
+    action_mode: ActionMode
+    destination_scene_id: str | None = Field(default=None, max_length=100)
+    target_npc_id: str | None = Field(default=None, max_length=100)
+
+
+class TurnGuidance(BaseModel):
+    """Player-visible objective and actions, never an internal state snapshot."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    objective: str = Field(
+        default="依目前已公開的線索繼續探索。", min_length=1, max_length=500
+    )
+    scene_name: str = Field(default="目前場景", min_length=1, max_length=100)
+    available_actions: list[TurnGuidanceAction] = Field(default_factory=list, max_length=8)
+
+
 class ModelTurnRequest(BaseModel):
     """Minimal authorized context sent to a model adapter for one turn."""
 
@@ -38,6 +61,7 @@ class ModelTurnRequest(BaseModel):
     action_mode: ActionMode
     parsed_action: ParsedAction
     target_context: NPCGenerationContext
+    turn_guidance: TurnGuidance = Field(default_factory=TurnGuidance)
     allowed_operations: list[OperationType]
     generation_budget: GenerationBudget = Field(default_factory=GenerationBudget)
 

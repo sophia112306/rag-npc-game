@@ -6,7 +6,7 @@ from backend.schemas.content import CharacterDefinition, SourceReference
 
 NPC_SCENES = {
     "vidalia": ("minglin", "minglin_life_spring"),
-    "andre": ("minglin",),
+    "andre": ("fissure", "minglin"),
     "menmesvento": ("liuchen_valley",),
     "dasso": ("lieyi_plains",),
     "seth": ("border_ruins",),
@@ -48,6 +48,16 @@ CHARACTER_PROFILES: dict[str, CharacterProfile] = {
         portrait_url="/images/menmesvento.png",
         description="在流塵谷記錄名字與記憶的隱者，言談沉靜，常攜著一本古卷。",
         greeting="風沙會掩去腳印，名字卻值得留下。旅人，你是從哪條路來的？",
+    ),
+    "veta": CharacterProfile(
+        npc_id="veta",
+        name="維塔",
+        romanized_name="Vita",
+        title="沉睡巨龍・命脈之泉的源頭",
+        scene_name="命脈之泉源頭",
+        portrait_url="/game/veta-sleeping-dragon.png",
+        description="沉睡中的巨龍；他的意識與封閉世界的維持有關。",
+        greeting="……誰在我的夢裡？",
     ),
     "dasso": CharacterProfile(
         npc_id="dasso",
@@ -179,6 +189,41 @@ CHARACTER_DEFINITIONS: dict[str, CharacterDefinition] = {
             ),
         ],
         setting_version=2,
+        completeness_status="reviewed_core",
+    ),
+    "veta": CharacterDefinition(
+        npc_id="veta",
+        public_profile=CHARACTER_PROFILES["veta"],
+        private_profile={
+            "core_personality": ["沉睡", "害怕失去", "維持世界的秩序"],
+            "speaking_style": "低沉、緩慢、帶著夢境般的不確定感；不要直接替玩家解釋全部真相。",
+            "current_goal": "在沉睡中維持封閉世界，避免再次承受失去。",
+            "authority_limits": [
+                "不能在沒有達成終局條件時直接宣告世界的全部真相",
+                "不能自行改寫已成立的遊戲狀態或結局",
+            ],
+            "author_only_direction": (
+                "維塔是封閉世界的核心意識；主角與他的連結及最終選擇，"
+                "必須由終局流程與已成立事件決定。"
+            ),
+            "unknown_topics": [
+                "維塔對主角的完整記憶與最終選擇尚未由事件建立",
+                "沉睡世界的全部起源與外部入侵細節不可在一般對話直接揭露",
+            ],
+        },
+        sources=[
+            SourceReference(
+                source_type="reviewed_design",
+                source_id="generative-world-design",
+                locator="docs/GENERATIVE_WORLD_DESIGN.md#2-世界規則與角色方向",
+            ),
+            SourceReference(
+                source_type="authored_dialogue",
+                source_id="veta-lora-training-output",
+                locator="training/outputs/veta_lora_model",
+            ),
+        ],
+        setting_version=1,
         completeness_status="reviewed_core",
     ),
     **{

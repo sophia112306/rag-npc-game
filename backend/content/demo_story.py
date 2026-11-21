@@ -108,8 +108,56 @@ def _minglin_travel_choices(node_id: str) -> tuple[DemoStoryChoiceDefinition, ..
 
 DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     _choice(
-        "ask_location",
+        "meet_andre",
+        "fissure_arrival",
+        "fissure",
+        "與安德烈交談",
+        "我和安德烈交談，請他帶我前往鳴霖。",
+        "你醒在屏障裂隙邊。這裡不是適合久留的地方——跟我走，我帶你去鳴霖的議會。",
+        "minglin_path_open",
+        "鳴霖・未記載之物",
+        action_mode=ActionMode.DIALOGUE,
+        target_npc_id="andre",
+        destination_scene_id="minglin",
+    ),
+    _choice(
+        "meet_andre",
         "minglin_arrival",
+        "minglin",
+        "與安德烈交談",
+        "我和安德烈交談，請告訴我接下來該怎麼走。",
+        "你醒在鳴霖林間的入口。先別急著靠近議會庭——沿著前方的路走，等你看清這片森林，我再告訴你該找誰。",
+        "minglin_path_open",
+        "鳴霖・前往議會庭",
+        action_mode=ActionMode.DIALOGUE,
+        target_npc_id="andre",
+    ),
+    _choice(
+        "walk_to_council",
+        "minglin_path_open",
+        "minglin",
+        "沿著前方道路前進",
+        "我沿著鳴霖前方的道路往前走。",
+        "林霧在前方散開，一名金髮精靈站在議會庭的石環中央。她似乎早已察覺你的到來。",
+        "minglin_council",
+        "鳴霖・議會庭",
+        action_mode=ActionMode.MOVEMENT,
+    ),
+    _choice(
+        "meet_vidalia",
+        "minglin_council",
+        "minglin",
+        "與維達利亞交談",
+        "我向維達利亞說明自己剛才的遭遇，請她告訴我這裡是什麼地方。",
+        "旅人，歡迎來到鳴霖。你身上的氣息沒有被命脈之泉記下；先告訴我，你在屏障裂隙看見了什麼？",
+        "minglin_orientation",
+        "鳴霖異象・調查委託",
+        action_mode=ActionMode.DIALOGUE,
+        target_npc_id="vidalia",
+    ),
+    _choice(
+        "ask_location",
+        "minglin_briefed",
         "minglin",
         "詢問目前所在地",
         "這裡是什麼地方？泉水和現在的異象有關嗎？",
@@ -122,7 +170,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     ),
     _choice(
         "ask_for_task",
-        "minglin_arrival",
+        "minglin_orientation",
         "minglin",
         "詢問能幫什麼忙",
         "我可以先從哪裡調查這場異象？",
@@ -133,10 +181,9 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         target_npc_id="vidalia",
         reveal_clue_ids=("minglin_anomaly",),
     ),
-    *_minglin_travel_choices("minglin_arrival"),
     _choice(
-        "ask_for_task",
-        "minglin_orientation",
+        "ask_about_anomaly",
+        "minglin_briefed",
         "minglin",
         "追問異象來源",
         "我應該先調查哪一種異象？",
@@ -147,10 +194,9 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         target_npc_id="vidalia",
         reveal_clue_ids=("minglin_anomaly",),
     ),
-    *_minglin_travel_choices("minglin_orientation"),
     _choice(
         "ask_about_factions",
-        "minglin_orientation",
+        "minglin_briefed",
         "minglin",
         "詢問其他勢力",
         "除了精靈，還有哪些勢力會追查這場異象？",
@@ -474,14 +520,26 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
     visited_both_regions = {"enter_lieyi_plains", "enter_liuchen_valley"}.issubset(
         state.story_progress.completed_choice_ids
     )
-    return tuple(
+    available = tuple(
         choice
         for choice in DEMO_STORY_CHOICES
         if choice.source_node_id == state.story_progress.node_id
         and choice.source_scene_id == state.current_scene_id
         and (choice.choice_id != "preview_border_ruins" or visited_both_regions)
         and (choice.choice_id not in BORDER_RESOLUTION_IDS or not BORDER_RESOLUTION_IDS.intersection(state.story_progress.completed_choice_ids))
-    )[:4]
+        and not (
+            state.story_progress.node_id == "minglin_briefed"
+            and choice.destination_scene_id is None
+            and choice.choice_id in state.story_progress.completed_choice_ids
+        )
+    )
+    if state.story_progress.node_id == "minglin_briefed":
+        # Once the task is accepted, put the two authored destinations first;
+        # optional follow-up questions must not hide the investigation routes.
+        available = tuple(
+            sorted(available, key=lambda choice: choice.destination_scene_id is None)
+        )
+    return available[:4]
 
 
 def available_npc_dialogue_choices(state: GameState, npc_id: str) -> tuple[DemoStoryChoiceDefinition, ...]:

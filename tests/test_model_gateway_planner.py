@@ -12,6 +12,8 @@ from backend.generation.gateway import (
     ModelGatewayPermanentError,
     ModelGatewayResponseRejectedError,
     ModelTurnRequest,
+    TurnGuidance,
+    TurnGuidanceAction,
 )
 from backend.generation.planner import GatewayStoryPlanner, StoryGenerationUnavailableError
 from backend.schemas.content import NPCGenerationContext
@@ -77,8 +79,19 @@ async def test_planner_sends_only_explicit_authorized_context() -> None:
     )
     planner = GatewayStoryPlanner(gateway, FixedContextProvider())
     action, parsed, state = make_inputs()
+    guidance = TurnGuidance(
+        objective="下一步：前往命脈之泉／符石林，繼續調查。",
+        scene_name="鳴霖",
+        available_actions=[
+            TurnGuidanceAction(
+                label="前往命脈之泉",
+                action_mode="movement",
+                destination_scene_id="minglin_life_spring",
+            )
+        ],
+    )
 
-    proposal = await planner.propose(action, parsed, state)
+    proposal = await planner.propose(action, parsed, state, guidance)
 
     assert proposal.session_id == action.session_id
     assert proposal.turn_number == 1
@@ -91,6 +104,7 @@ async def test_planner_sends_only_explicit_authorized_context() -> None:
     assert '"axis"' not in request_json
     assert "character_definition_incomplete" in request_json
     assert "map_fragment" in request_json
+    assert gateway.requests[0].turn_guidance == guidance
     assert "change_scene" not in gateway.requests[0].allowed_operations
 
 

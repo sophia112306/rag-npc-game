@@ -13,6 +13,8 @@ DEFAULT_NPC_MODEL_MAP = {
     "seth": "seth-lora",
     "syra": "syra-lora",
     "vidalia": "vidalia-lora",
+    "veta": "veta-lora",
+    "alan_walker": "alan-walker-lora",
 }
 DEFAULT_BASE_MODEL = "Qwen/Qwen2.5-7B-Instruct-AWQ"
 

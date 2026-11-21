@@ -29,7 +29,7 @@ class FixedPlanner:
     def __init__(self, item_id: str) -> None:
         self.item_id = item_id
 
-    async def propose(self, action, parsed_action, state) -> StoryProposal:
+    async def propose(self, action, parsed_action, state, turn_guidance) -> StoryProposal:
         return StoryProposal(
             session_id=action.session_id,
             turn_number=state.turn_count + 1,
@@ -54,7 +54,7 @@ class FixedPlanner:
 
 
 class CommitmentPlanner:
-    async def propose(self, action, parsed_action, state) -> StoryProposal:
+    async def propose(self, action, parsed_action, state, turn_guidance) -> StoryProposal:
         return StoryProposal(
             session_id=action.session_id,
             turn_number=state.turn_count + 1,
@@ -90,6 +90,7 @@ async def test_approved_proposal_updates_state_and_event_in_one_commit(tmp_path)
         current_scene_id="minglin",
         player=PlayerState(player_id="player", inventory=["dust_token"]),
     )
+    initial.story_progress.node_id = "minglin_briefed"
     await repository.create_or_get_session(initial)
     orchestrator = GameOrchestrator(repository, story_planner=FixedPlanner("dust_token"))
 
@@ -129,6 +130,7 @@ async def test_rejected_proposal_advances_turn_without_mutating_facts(tmp_path) 
         current_scene_id="minglin",
         player=PlayerState(player_id="player", inventory=[]),
     )
+    initial.story_progress.node_id = "minglin_briefed"
     await repository.create_or_get_session(initial)
     orchestrator = GameOrchestrator(repository, story_planner=FixedPlanner("invented_relic"))
 
@@ -170,6 +172,7 @@ async def test_approved_commitment_is_saved_once_with_source_event(tmp_path) -> 
         current_scene_id="minglin",
         player=PlayerState(player_id="player"),
     )
+    initial.story_progress.node_id = "minglin_briefed"
     await repository.create_or_get_session(initial)
     orchestrator = GameOrchestrator(repository, story_planner=CommitmentPlanner())
     action = PlayerAction(

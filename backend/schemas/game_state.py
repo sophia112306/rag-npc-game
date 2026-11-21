@@ -51,7 +51,7 @@ class StoryProgressState(BaseModel):
 
     arc_id: str = "vita_anomaly_demo_v1"
     node_id: str = "minglin_arrival"
-    chapter_title: str = "鳴霖異象"
+    chapter_title: str = "鳴霖・林間入口"
     mode: Literal["demo_fallback"] = "demo_fallback"
     completed_choice_ids: List[str] = Field(default_factory=list)
     public_clue_ids: List[str] = Field(default_factory=list)
@@ -73,7 +73,7 @@ class GameState(BaseModel):
     state_version: int = Field(default=1, ge=1)
     turn_count: int = 0                  # 總遊戲回合計數
     phase_turns: int = 0                 # 當前階段已消耗的回合數
-    current_scene_id: str = "fissure"    # 當前場景 ID (初始在屏障裂隙)
+    current_scene_id: str = "minglin"    # 當前場景 ID (開場在鳴霖林間入口)
     
     # 流程與階段控制
     story_phase: StoryPhase = StoryPhase.ACT1_APPROACHING

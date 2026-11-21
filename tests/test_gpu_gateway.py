@@ -5,7 +5,11 @@ import json
 import httpx
 from fastapi.testclient import TestClient
 
-from backend.generation.gateway import ModelTurnRequest
+from backend.generation.gateway import (
+    ModelTurnRequest,
+    TurnGuidance,
+    TurnGuidanceAction,
+)
 from backend.schemas.content import NPCGenerationContext
 from backend.schemas.parsed_action import ParsedAction
 from gpu_gateway.app import create_app
@@ -101,6 +105,42 @@ def make_menmesvento_remembrance_request() -> dict[str, object]:
     return request
 
 
+def make_next_step_guidance_request() -> dict[str, object]:
+    request = ModelTurnRequest(
+        session_id="gateway-guidance-test",
+        turn_number=4,
+        state_version=4,
+        current_scene_id="liuchen_valley",
+        player_id="gateway-test-player",
+        player_inventory=[],
+        action_message="我現在完全不知道該去哪裡、要做什麼了，可以幫幫我嗎？",
+        action_mode="dialogue",
+        parsed_action=ParsedAction(intent="ask_for_guidance"),
+        target_context=NPCGenerationContext(
+            npc_id="menmesvento",
+            setting_version=1,
+            public_profile={"name": "門梅司文托"},
+            private_profile={},
+            knowledge=[],
+            memories=[],
+            missing_data=[],
+        ),
+        turn_guidance=TurnGuidance(
+            objective="下一步：返回鳴霖，向維達利亞回報流塵谷的線索。",
+            scene_name="流塵谷",
+            available_actions=[
+                TurnGuidanceAction(
+                    label="返回鳴霖回報線索",
+                    action_mode="movement",
+                    destination_scene_id="minglin",
+                )
+            ],
+        ),
+        allowed_operations=[],
+    )
+    return request.model_dump(mode="json")
+
+
 def completion(
     dialogue_text: str = "我會先確認親眼所見的痕跡。",
     *,
@@ -137,12 +177,13 @@ def settings(*, inbound_api_key: str | None = None) -> GatewaySettings:
         npc_model_map={
             "menmesvento": "menmesvento-lora",
             "vidalia": "vidalia-lora",
+            "veta": "veta-lora",
         },
         fallback_model="Qwen/Qwen2.5-7B-Instruct-AWQ",
     )
 
 
-def test_default_routes_cover_every_npc_on_the_current_game_map() -> None:
+def test_default_routes_cover_map_and_special_model_channels() -> None:
     assert DEFAULT_NPC_MODEL_MAP == {
         "andre": "andre-lora",
         "dasso": "dasso-lora",
@@ -150,6 +191,8 @@ def test_default_routes_cover_every_npc_on_the_current_game_map() -> None:
         "seth": "seth-lora",
         "syra": "syra-lora",
         "vidalia": "vidalia-lora",
+        "veta": "veta-lora",
+        "alan_walker": "alan-walker-lora",
     }
 
 
@@ -165,13 +208,36 @@ def test_gateway_routes_each_npc_to_its_adapter_or_registered_fallback() -> None
     with TestClient(app) as client:
         assert client.post("/generate", json=make_request("vidalia")).status_code == 200
         assert client.post("/generate", json=make_request("menmesvento")).status_code == 200
+        assert client.post("/generate", json=make_request("veta")).status_code == 200
         assert client.post("/generate", json=make_request("andre")).status_code == 200
 
     assert selected_models == [
         "vidalia-lora",
         "menmesvento-lora",
+        "veta-lora",
         "Qwen/Qwen2.5-7B-Instruct-AWQ",
     ]
+
+
+def test_gateway_replaces_an_unhelpful_next_step_reply_with_a_legal_action() -> None:
+    """A LoRA must not leave a lost player without the public next step."""
+
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion(
+                "先弄清楚自己從哪來，再去考慮如何回報。"
+            )
+        ),
+    )
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_next_step_guidance_request())
+
+    assert response.status_code == 200
+    output = response.json()
+    assert "返回鳴霖回報線索" in output["npc_dialogue"][0]["text"]
+    assert "先弄清楚自己從哪來" not in output["npc_dialogue"][0]["text"]
+    assert output["event_proposals"] == []
 
 
 def test_gateway_rejects_player_as_adapter_identity() -> None:
@@ -195,6 +261,7 @@ def test_gateway_optional_bearer_token_and_health_check() -> None:
                     "data": [
                         {"id": "vidalia-lora"},
                         {"id": "menmesvento-lora"},
+                        {"id": "veta-lora"},
                         {"id": "Qwen/Qwen2.5-7B-Instruct-AWQ"},
                     ]
                 },
@@ -214,6 +281,7 @@ def test_gateway_optional_bearer_token_and_health_check() -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
     assert response.json()["npc_routes"]["vidalia"] == "vidalia-lora"
+    assert response.json()["npc_routes"]["veta"] == "veta-lora"
 
 
 def test_gateway_fails_closed_for_a_concrete_missing_canon_topic() -> None:

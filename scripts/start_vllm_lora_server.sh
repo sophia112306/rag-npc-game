@@ -11,12 +11,14 @@ ANDRE_LORA_PATH="${ANDRE_LORA_PATH:-${PROJECT_ROOT}/training/outputs/andre_lora_
 DASSO_LORA_PATH="${DASSO_LORA_PATH:-${DHASO_LORA_PATH:-${PROJECT_ROOT}/training/outputs/dhaso_lora_model}}"
 SETH_LORA_PATH="${SETH_LORA_PATH:-${PROJECT_ROOT}/training/outputs/seth_lora_model}"
 SYRA_LORA_PATH="${SYRA_LORA_PATH:-${PROJECT_ROOT}/training/outputs/syra_lora_model}"
+VETA_LORA_PATH="${VETA_LORA_PATH:-${PROJECT_ROOT}/training/outputs/veta_lora_model}"
+ALAN_WALKER_LORA_PATH="${ALAN_WALKER_LORA_PATH:-${PROJECT_ROOT}/training/outputs/alan_walker_lora_model}"
 VLLM_HOST="${VLLM_HOST:-127.0.0.1}"
 VLLM_PORT="${VLLM_PORT:-8001}"
 VLLM_GPU_MEMORY_UTILIZATION="${VLLM_GPU_MEMORY_UTILIZATION:-0.65}"
 VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-4096}"
 NPC_VLLM_MAX_LORAS="${NPC_VLLM_MAX_LORAS:-2}"
-NPC_VLLM_MAX_CPU_LORAS="${NPC_VLLM_MAX_CPU_LORAS:-6}"
+NPC_VLLM_MAX_CPU_LORAS="${NPC_VLLM_MAX_CPU_LORAS:-8}"
 
 LORA_MODULES=(
   "andre-lora=${ANDRE_LORA_PATH}"
@@ -25,6 +27,8 @@ LORA_MODULES=(
   "seth-lora=${SETH_LORA_PATH}"
   "syra-lora=${SYRA_LORA_PATH}"
   "vidalia-lora=${VIDALIA_LORA_PATH}"
+  "veta-lora=${VETA_LORA_PATH}"
+  "alan-walker-lora=${ALAN_WALKER_LORA_PATH}"
 )
 
 if ! command -v vllm >/dev/null 2>&1; then

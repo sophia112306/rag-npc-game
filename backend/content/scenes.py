@@ -287,6 +287,27 @@ SCENES["border_ruins"] = SceneDefinition(
     map_position=(1395, 452),
 )
 
+# The opening is a real playable location, not just a narration overlay.  It
+# reuses the forest visual family until a dedicated fissure illustration is
+# commissioned, while keeping its own story gate and map position.
+SCENES["fissure"] = SCENES["minglin"].model_copy(
+    update={
+        "scene_id": "fissure",
+        "region_name": "鳴霖邊界",
+        "display_name": "屏障裂隙",
+        "subtitle": "世界邊緣的甦醒處",
+        "description": "裂隙在林地邊緣閃爍，安德烈正在確認地脈是否持續崩解。",
+        "background_url": "/game/forest-eye-backdrop.png",
+        "horizon_url": "/game/forest-eye-backdrop.png",
+        "tilemap_url": "/game/fissure.tmj",
+        "visual_profile": SCENES["minglin"].visual_profile.model_copy(
+            update={"profile_id": "minglin_fissure", "show_vidalia": False}
+        ),
+        "allowed_destinations": ("minglin",),
+        "map_position": (470, 290),
+    }
+)
+
 
 def get_scene(scene_id: str) -> SceneDefinition | None:
     """Return a registered scene without inventing missing metadata."""

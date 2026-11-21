@@ -1,5 +1,6 @@
 /** Music for each playable scene, plus the standalone Veta preview. */
 export const SCENE_MUSIC = {
+  fissure: { src: "/audio/iremos-forest-theme.ogg", title: "屏障裂隙" },
   minglin: { src: "/audio/iremos-forest-theme.ogg", title: "鳴霖・平衡議會" },
   minglin_life_spring: { src: "/audio/life-spring.ogg", title: "鳴霖・命脈之泉" },
   minglin_rune_grove: { src: "/audio/rune-grove.ogg", title: "鳴霖・符石林" },

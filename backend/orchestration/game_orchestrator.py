@@ -16,8 +16,11 @@ from backend.database.repository import (
     PersistentStateVersionConflictError,
     action_request_digest,
 )
+from backend.generation.gateway import TurnGuidance
 from backend.modules.proposal_resolver import ProposalResolution, ProposalResolver
 from backend.orchestration.player_choices import (
+    npc_available_in_state,
+    build_turn_guidance,
     build_player_choices,
     player_choice_action_matches,
 )
@@ -110,6 +113,7 @@ class StoryPlanner(Protocol):
         action: PlayerAction,
         parsed_action: ParsedAction,
         state: GameState,
+        turn_guidance: TurnGuidance,
     ) -> StoryProposal: ...
 
 
@@ -131,13 +135,11 @@ class GameOrchestrator:
 
         initial_state = GameState(
             session_id=session_id,
-            current_scene_id="minglin",
             player=PlayerState(
                 player_id=f"{session_id}-player",
                 name="玩家",
             ),
         )
-        initial_state.npc_states["vidalia"].met = True
         return await self._repository.create_or_get_session(initial_state)
 
     async def process_turn(self, action: PlayerAction) -> GameTurnResponse:
@@ -159,7 +161,9 @@ class GameOrchestrator:
         if action.expected_state_version != state.state_version:
             raise StateVersionConflictError(action.expected_state_version, state.state_version)
 
-        if action.target_npc_id in NPC_SCENES and not npc_is_present(action.target_npc_id, state.current_scene_id):
+        self._validate_opening_sequence(action, state)
+
+        if action.target_npc_id in NPC_SCENES and not npc_available_in_state(action.target_npc_id, state):
             raise NpcUnavailableError(
                 f"NPC '{action.target_npc_id}' is not present in the current scene"
             )
@@ -171,10 +175,7 @@ class GameOrchestrator:
                 raise StoryChoiceMismatchError("Scene commands cannot impersonate story travel or NPC dialogue.")
             proposal = build_world_command_proposal(action, state)
         elif action.story_choice_id:
-            try:
-                quests = await self._repository.get_player_quests(action.session_id)
-            except PersistentSessionNotFoundError as exc:
-                raise SessionNotFoundError(str(exc)) from exc
+            quests, turn_guidance = await self._public_turn_guidance(state)
             available_choices = build_player_choices(state, quests)
             if action.target_npc_id:
                 available_choices += build_player_choices(state, quests, action.target_npc_id)
@@ -206,14 +207,19 @@ class GameOrchestrator:
                     action,
                     parsed_action,
                     state.model_copy(deep=True),
+                    turn_guidance,
                 )
         else:
             typed_choice = match_typed_story_dialogue(action, state)
             confirmed_choice_id = typed_choice.choice_id if typed_choice else None
+            _, turn_guidance = await self._public_turn_guidance(state)
             proposal = (
                 build_demo_story_proposal(action, state, typed_choice)
                 if typed_choice else await self._story_planner.propose(
-                    action, parsed_action, state.model_copy(deep=True)
+                    action,
+                    parsed_action,
+                    state.model_copy(deep=True),
+                    turn_guidance,
                 )
             )
         self._validate_proposal_envelope(proposal, state)
@@ -248,6 +254,63 @@ class GameOrchestrator:
         except PersistentStateVersionConflictError as exc:
             raise StateVersionConflictError(exc.expected, exc.actual) from exc
 
+    @staticmethod
+    def _validate_opening_sequence(action: PlayerAction, state: GameState) -> None:
+        """Do not let free-form generation skip the authored opening beats."""
+
+        gated_nodes = {
+            "fissure_arrival",       # legacy saves only
+            "minglin_arrival",       # opening: Andre
+            "minglin_path_open",    # opening: walk forward
+            "minglin_council",      # opening: Vidalia
+            "minglin_orientation",  # opening: accept investigation
+        }
+        if (
+            state.story_progress.node_id not in gated_nodes
+            or action.action_mode == ActionMode.SCENE_COMMAND
+        ):
+            return
+        from backend.content.demo_story import available_demo_story_choices
+
+        choices = available_demo_story_choices(state)
+        if action.story_choice_id in {choice.choice_id for choice in choices}:
+            return
+        if (
+            action.action_mode == ActionMode.DIALOGUE
+            and any(
+                action.target_npc_id == choice.target_npc_id
+                and action.message in {choice.label, choice.message}
+                for choice in choices
+            )
+        ):
+            return
+        # The opening NPCs accept natural player text once the player has
+        # reached the correct beat. The authored transition remains bound to
+        # the current NPC, so free text cannot skip the route or reveal later
+        # locations.
+        opening_dialogue_targets = {
+            "minglin_arrival": "andre",
+            "minglin_council": "vidalia",
+            "minglin_orientation": "vidalia",
+        }
+        if (
+            action.action_mode == ActionMode.DIALOGUE
+            and action.target_npc_id == opening_dialogue_targets.get(state.story_progress.node_id)
+        ):
+            return
+        required = (
+            "與安德烈交談。"
+            if state.story_progress.node_id in {"fissure_arrival", "minglin_arrival"}
+            else "沿鳴霖前方道路往前走。"
+            if state.story_progress.node_id == "minglin_path_open"
+            else "與維達利亞交談。"
+            if state.story_progress.node_id == "minglin_council"
+            else "先向維達利亞詢問並取得調查任務。"
+        )
+        raise StoryChoiceUnavailableError(
+            "請先完成開場事件：" + required
+        )
+
     async def get_state(self, session_id: str) -> GameState:
         """Load a state snapshot from the temporary store."""
 
@@ -272,6 +335,19 @@ class GameOrchestrator:
             raise SessionNotFoundError(str(exc)) from exc
 
         return build_player_choices(state, quests, npc_id)
+
+    async def _public_turn_guidance(
+        self,
+        state: GameState,
+    ) -> tuple[list[PlayerQuestView], TurnGuidance]:
+        """Build model guidance from the same public choices sent to the player."""
+
+        try:
+            quests = await self._repository.get_player_quests(state.session_id)
+        except PersistentSessionNotFoundError as exc:
+            raise SessionNotFoundError(str(exc)) from exc
+        choices = build_player_choices(state, quests)
+        return quests, build_turn_guidance(state, choices)
 
     @staticmethod
     def _parse_action(action: PlayerAction) -> ParsedAction:
