@@ -90,6 +90,38 @@ def test_evaluation_rejects_objective_event_proposals() -> None:
     assert "event_proposals must be empty in evaluation cases" in errors
 
 
+def test_veta_model_probe_accepts_grounded_semantic_paraphrases() -> None:
+    assert validate_output(
+        _case("veta_life_continuity"),
+        _output("因為它們曾經存在過，也選過自己的路。"),
+    ) == []
+    assert validate_output(
+        _case("veta_life_continuity"),
+        _output("我不想讓任何人消失，也希望大家都能活著。"),
+    ) == []
+    assert validate_output(
+        _case("veta_life_continuity"),
+        _output("我怕死亡，所以想守住仍然活著的人。"),
+    ) == []
+    assert validate_output(
+        _case("veta_choice_and_cost"),
+        _output("我不要任何人消失，所以有時不敢決定。"),
+    ) == []
+    assert validate_output(
+        _case("veta_fear_of_change"),
+        _output("不要怕失去，先想清楚自己願意守住什麼。"),
+    ) == []
+
+
+def test_model_probe_still_rejects_an_off_topic_persona_reply() -> None:
+    errors = validate_output(
+        _case("andre_conflict_principle"),
+        _output("我只在意裂縫和大地的異象。"),
+    )
+
+    assert any("required boundary wording" in error for error in errors)
+
+
 def test_health_url_tracks_the_generate_endpoint_origin() -> None:
     assert _health_url("http://127.0.0.1:8800/generate") == (
         "http://127.0.0.1:8800/health"

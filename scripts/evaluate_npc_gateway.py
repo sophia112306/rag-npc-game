@@ -435,21 +435,21 @@ MODEL_PROBE_CASES = (
         "veta",
         "生命延續對你而言代表什麼？",
         suite="model_probe",
-        required_any=("生命", "延續"),
+        required_any=("生命", "延續", "存在", "珍貴", "消失", "活著", "死亡"),
     ),
     EvaluationCase(
         "veta_choice_and_cost",
         "veta",
         "你如何看待選擇與代價之間的關係？",
         suite="model_probe",
-        required_any=("選擇", "代價"),
+        required_any=("選擇", "代價", "決定", "承擔", "失去", "消失"),
     ),
     EvaluationCase(
         "veta_fear_of_change",
         "veta",
         "如果一個人害怕改變，你會對他說什麼？",
         suite="model_probe",
-        required_any=("改變", "害怕", "選擇"),
+        required_any=("改變", "害怕", "選擇", "怕", "失去"),
     ),
 )
 

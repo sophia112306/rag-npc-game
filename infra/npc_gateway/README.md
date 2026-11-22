@@ -47,7 +47,7 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
     --gateway-url http://127.0.0.1:8000/generate
 ```
 
-Acceptance requires eight dedicated routes in `/health`, no base fallback for the eight story NPCs, complete observability headers, passing contract tests, and reviewed generated replies. The 2026-11-22 baseline is 205 backend tests, 93/93 guarded cases (90 pre-generation guards, 3 model replies), 47/72 open-ended raw LoRA probes, eight normalized dataset contract checks, and five completed live ending routes. Weight files alone are not sufficient.
+Acceptance requires eight dedicated routes in `/health`, no base fallback for the eight story NPCs, complete observability headers, passing contract tests, and reviewed generated replies. The 2026-11-22 baseline is 207 backend tests, 93/93 guarded cases (90 pre-generation guards, 3 model replies), and 53/72 open-ended raw LoRA probes after human-confirmed semantic aliases (the earlier literal-only rubric was 47/72; weights were unchanged), plus eight normalized dataset contract checks and five completed live ending routes. Weight files alone are not sufficient.
 
 ## Stop and inspect
 
