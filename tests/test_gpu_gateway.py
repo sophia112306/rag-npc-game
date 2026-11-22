@@ -1,6 +1,7 @@
 """GPU-side multi-NPC adapter routing and contract tests."""
 
 import json
+from pathlib import Path
 
 import httpx
 from fastapi.testclient import TestClient
@@ -142,15 +143,32 @@ def settings(*, inbound_api_key: str | None = None) -> GatewaySettings:
     )
 
 
-def test_default_routes_cover_every_npc_on_the_current_game_map() -> None:
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_default_routes_cover_every_model_backed_story_character() -> None:
     assert DEFAULT_NPC_MODEL_MAP == {
+        "alan": "alan-lora",
         "andre": "andre-lora",
         "dasso": "dasso-lora",
         "menmesvento": "menmesvento-lora",
         "seth": "seth-lora",
         "syra": "syra-lora",
         "vidalia": "vidalia-lora",
+        "veta": "veta-lora",
     }
+
+
+def test_vllm_and_weight_scripts_include_all_eight_story_adapters() -> None:
+    start_script = (PROJECT_ROOT / "scripts/start_vllm_lora_server.sh").read_text()
+    fetch_script = (PROJECT_ROOT / "scripts/fetch_lora_weights.sh").read_text()
+
+    for npc_id in DEFAULT_NPC_MODEL_MAP:
+        model_id = DEFAULT_NPC_MODEL_MAP[npc_id]
+        assert f'"{model_id}=${{{npc_id.upper()}_LORA_PATH}}"' in start_script
+        assert f"REMOTE_{npc_id.upper()}_LORA_PATH" in fetch_script
+
+    assert 'NPC_VLLM_MAX_CPU_LORAS="${NPC_VLLM_MAX_CPU_LORAS:-8}"' in start_script
 
 
 def test_gateway_routes_each_npc_to_its_adapter_or_registered_fallback() -> None:

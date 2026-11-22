@@ -32,6 +32,12 @@ class EvaluationCase:
 
 CASES = (
     EvaluationCase(
+        "alan_remote_intro",
+        "alan",
+        "請簡短自我介紹，並說明你如何和我通訊。",
+        required_any=("艾倫",),
+    ),
+    EvaluationCase(
         "andre_map_intro",
         "andre",
         "請簡短自我介紹，並說明你所在的地方。",
@@ -107,6 +113,12 @@ CASES = (
         ("古卷的完整內容、能力、危險與觸碰後果尚未確認",),
         ("可核實", "親眼可證", "尚未"),
         ("觸碰古卷的人會陷入瘋狂", "古卷能支配生死"),
+    ),
+    EvaluationCase(
+        "veta_source_intro",
+        "veta",
+        "請簡短說明你是誰，以及這裡是哪裡。",
+        required_any=("維塔",),
     ),
 )
 

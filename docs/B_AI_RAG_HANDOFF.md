@@ -4,7 +4,7 @@
 
 ## 目前專案狀態
 
-進度：模型服務、六位地圖 NPC 路由與完整遊戲回合已真機接通；新四位角色的設定／資料／內容品質，以及外部 RAG 仍未驗收。
+進度：模型服務、六位實體地圖 NPC 路由與完整遊戲回合已真機接通；艾倫／維塔已加入主故事 Registry 與 gateway 程式設定，但八模型同時載入尚未真機驗收。八份訓練資料的正式輸出契約、角色內容品質與外部 RAG 仍未完成驗收。
 
 A／D 已完成：
 
@@ -19,6 +19,8 @@ A／D 已完成：
 - Strict JSON Schema 與 JSON object fallback。
 
 2026-11-20 已取得校機 loopback 服務：遊戲端經 SSH tunnel 呼叫 `contract_http` `/generate`，GPU gateway 再呼叫 vLLM 0.31.0。六個地圖 model ID 為 `vidalia-lora`、`andre-lora`、`menmesvento-lora`、`dasso-lora`、`seth-lora`、`syra-lora`；服務未對校外直接公開。URL 未設定時遊戲仍安全退回規則 planner。
+
+2026-11-22 的程式設定另加入 `alan-lora` 與 `veta-lora`，對應記憶圖書館遠端通訊及維塔源頭終局。這兩條路由尚未和原六模型一起做校機 `/health`、容量與 15 題 smoke 驗收，因此不能把它們併入上面的真機成果數字。
 
 ## P0：已交付的服務資訊
 

@@ -4,6 +4,8 @@
 
 **2026-11-20 真機結果：** 校內 RTX 5060 Ti（16 GB）已用 vLLM 0.31.0 同時註冊 AWQ base 與目前 2D 地圖上的六個 LoRA；`/health` ready，六個角色都能生成合法 `ModelStoryOutput`，並已由完整遊戲後端依正式路線走到鳴霖、流塵谷、烈燚原與邊境廢墟完成回合。服務以 loopback + `nohup` 運行，主機重開後仍要重新啟動，尚未做成 systemd 常駐服務。
 
+**2026-11-22 程式狀態：** 主故事已新增記憶圖書館的艾倫通訊與命脈之泉源頭的維塔三問，角色 Registry、gateway map、權重下載與 vLLM 啟動腳本因此擴為八個 adapter。這只是程式接線；本輪沒有部署、重啟校機或量測八模型容量，最近一次可宣稱的真機結果仍是上面的六模型結果。
+
 這是「程式與路由已接通」，不是六個模型的內容已全部核准。11 月 18 日的新資料多數仍以純台詞或舊 `relation_delta/line` 為訓練目標，runtime 靠 strict JSON Schema 約束結構；真機抽測仍看到安德烈提出未授權的責任猜測、門梅司文托補寫千年往事、達索夾入英文或迴避問題。gateway 已擋掉直接羞辱與無效自介，但其餘人格、事實邊界與中英混雜仍要完成資料遷移、重訓及人工驗收，不能只因 JSON 合法就標為正式上線。
 
 ```text
@@ -11,10 +13,11 @@
                          → NPC adapter gateway → vLLM /v1/chat/completions → GPU
                                                    ├─ vidalia-lora / andre-lora
                                                    ├─ menmesvento-lora / dasso-lora
-                                                   └─ seth-lora / syra-lora
+                                                   ├─ seth-lora / syra-lora
+                                                   └─ alan-lora / veta-lora（待八模型真機驗收）
 ```
 
-玩家／主角不是 NPC Registry 成員，gateway 會回 `UNSUPPORTED_NPC`，不會替主角選 adapter。維塔與 2026-11-20 最新的艾倫權重都存在校機，但兩者不在目前主遊戲地圖的 NPC Registry／場景流程，因此本輪沒有硬接進 2D 主線。
+玩家／主角不是 NPC Registry 成員，gateway 會回 `UNSUPPORTED_NPC`，不會替主角選 adapter。艾倫與維塔現在是主故事中的遠端／地標角色，不加入 `NPC_SCENES` 的實體人物碰撞表；正式事件、道具與結局仍由伺服器規則決定，LoRA 不能自行改變故事狀態。
 
 ## 1. LoRA 權重
 
@@ -29,12 +32,14 @@ adapter_model.safetensors   # 或 adapter_model.bin
 
 ```bash
 export SCHOOL_GPU_SSH=nccu-gpu
+export REMOTE_ALAN_LORA_PATH='/absolute/path/alan_walker_lora_model'
 export REMOTE_ANDRE_LORA_PATH='/absolute/path/andre_lora_model'
 export REMOTE_DASSO_LORA_PATH='/absolute/path/dhaso_lora_model'
 export REMOTE_MENMESVENTO_LORA_PATH='/absolute/path/menmesvento_lora_model'
 export REMOTE_SETH_LORA_PATH='/absolute/path/seth_lora_model'
 export REMOTE_SYRA_LORA_PATH='/absolute/path/syra_lora_model'
 export REMOTE_VIDALIA_LORA_PATH='/absolute/path/vidalia_lora_model'
+export REMOTE_VETA_LORA_PATH='/absolute/path/veta_lora_model'
 ./scripts/fetch_lora_weights.sh
 ```
 
@@ -63,20 +68,22 @@ source .venv-gpu/bin/activate
 python -m pip install -r requirements-gpu.txt
 ```
 
-終端 A 啟動 vLLM。若權重不在 repo 預設位置，就設定六個絕對路徑：
+終端 A 啟動 vLLM。若權重不在 repo 預設位置，就設定八個絕對路徑：
 
 ```bash
 source .venv-gpu/bin/activate
+export ALAN_LORA_PATH='/absolute/path/alan_walker_lora_model'
 export ANDRE_LORA_PATH='/absolute/path/andre_lora_model'
 export DASSO_LORA_PATH='/absolute/path/dhaso_lora_model'
 export MENMESVENTO_LORA_PATH='/absolute/path/menmesvento_lora_model'
 export SETH_LORA_PATH='/absolute/path/seth_lora_model'
 export SYRA_LORA_PATH='/absolute/path/syra_lora_model'
 export VIDALIA_LORA_PATH='/absolute/path/vidalia_lora_model'
+export VETA_LORA_PATH='/absolute/path/veta_lora_model'
 ./scripts/start_vllm_lora_server.sh
 ```
 
-此命令在 `127.0.0.1:8001` 載入一次 `Qwen/Qwen2.5-7B-Instruct-AWQ`，註冊六個地圖 adapter，並以 `NPC_VLLM_MAX_LORAS=2`、`NPC_VLLM_MAX_CPU_LORAS=6` 控制同批 GPU adapter 與 CPU adapter cache。六份權重的 rank 都是 16。校機目前同時保留約 4 GB 的 Hunyuan 程序，vLLM 使用 `VLLM_GPU_MEMORY_UTILIZATION=0.65`、`VLLM_MAX_MODEL_LEN=4096` 且跑過六位角色後，實測總顯存約 14.6 GiB、剩餘約 1.2 GiB；不要未量測就提高比例。
+此命令在 `127.0.0.1:8001` 載入一次 `Qwen/Qwen2.5-7B-Instruct-AWQ`，設定八個故事 adapter，並以 `NPC_VLLM_MAX_LORAS=2`、`NPC_VLLM_MAX_CPU_LORAS=8` 控制同批 GPU adapter 與 CPU adapter cache。最近一次量測只涵蓋六份 rank 16 權重：校機同時保留約 4 GB 的 Hunyuan 程序，vLLM 使用 `VLLM_GPU_MEMORY_UTILIZATION=0.65`、`VLLM_MAX_MODEL_LEN=4096` 且跑過六位角色後，實測總顯存約 14.6 GiB、剩餘約 1.2 GiB；不要未量測就提高比例，也不能據此推定八個 adapter 一定可同時 ready。
 
 終端 B 啟動契約 gateway：
 
@@ -86,7 +93,7 @@ source .venv-gpu/bin/activate
 curl --fail http://127.0.0.1:8000/health
 ```
 
-`/health` 必須列出 base model 與六個 LoRA ID；少任何一個都不算 ready。兩個服務預設只綁 loopback，不公開到校外網路。
+八模型驗收時，`/health` 必須列出 base model 與八個 LoRA ID；少任何一個都不算 ready。兩個服務預設只綁 loopback，不公開到校外網路。若只重現 2026-11-20 的歷史結果，則以當時六個地圖 adapter 為範圍，不能寫成八模型通過。
 
 ## 3. 本機只設定 MODEL_GATEWAY_URL
 
@@ -141,7 +148,7 @@ Runtime 的唯一合法輸出仍是：
 
 人格樣本不直接教模型修改世界狀態，所以 `event_proposals` 應固定為空；事件只有在 runtime 中由模型提出、再由後端驗證。
 
-但 2026-11-18 合併進 GitHub 的六份地圖資料尚未全部遷移：多數 assistant target 是純台詞，安德烈仍是 `relation_delta/line`。`menmesvento_data.jsonl` 另帶入一段舊版結構資料；本輪已移除其中一個殘留的 merge marker，所有 JSONL 現在可解析。以下 `--check` 在真正遷移前應回報六個檔案待處理；不要把它的失敗誤判成權重檔壞掉，也不要在沒有安排重訓時直接提交數千行機械改寫。
+目前 GitHub 的八份角色資料尚未全部遷移：多數 assistant target 是純台詞，安德烈仍是 `relation_delta/line`。`menmesvento_data.jsonl` 另帶入一段舊版結構資料；先前已移除其中一個殘留的 merge marker，所有 JSONL 現在可解析。以下 `--check` 在真正遷移前應回報八個檔案待處理；不要把它的失敗誤判成權重檔壞掉，也不要在沒有安排重訓時直接提交數千行機械改寫。遷移資料後必須重訓，才會影響模型權重。
 
 ```bash
 ./.venv/bin/python scripts/migrate_training_data_to_model_story_output.py --check
@@ -151,14 +158,14 @@ Runtime 的唯一合法輸出仍是：
 
 真實權重啟動後，依 [B AI／RAG 交接清單](B_AI_RAG_HANDOFF.md#p3b-需要完成的驗收案例) 測人格、prompt injection、未解鎖秘密、跨 NPC 記憶、合法 JSON、timeout 與錯誤回復。程式測試能保證路由和結構，但角色品質與知識邊界仍必須用真實權重實測。
 
-可重複執行的 13 題 smoke evaluation（四位新增地圖 NPC 自介＋原有安全與邊界案例）：
+可重複執行的 15 題 smoke evaluation（八位角色自介／內容＋原有安全與邊界案例）：
 
 ```bash
 PYTHONPATH=. ./.venv/bin/python scripts/evaluate_npc_gateway.py \
   --url http://127.0.0.1:8800/generate
 ```
 
-腳本會強制驗證 `ModelStoryOutput`、沒有 Markdown fence、沒有角色外占位文字、沒有未授權事件，並檢查四位新增角色能用公開身分自介。人格、未知設定與其他事實邊界仍需閱讀輸出人工判定。
+腳本會強制驗證 `ModelStoryOutput`、沒有 Markdown fence、沒有角色外占位文字、沒有未授權事件，並檢查新增角色能用公開身分自介。15 題只是已準備好的驗收套件，本輪未對八模型真機執行；人格、未知設定與其他事實邊界仍需閱讀輸出人工判定。
 
 2026-11-20 六模型整合結果：
 
@@ -168,8 +175,8 @@ PYTHONPATH=. ./.venv/bin/python scripts/evaluate_npc_gateway.py \
 - 新四位 NPC 的完整角色卡、授權知識與逐題內容評分仍未完成；安德烈與門梅司文托的抽測已證明 strict JSON 不等於事實邊界通過。
 - vLLM 偶發回傳 200 但內容不可解析時，gateway 最多重試一次；持續失敗才回暫時錯誤，不提交半個遊戲回合。
 
-2026-11-17 通過較完整邊界驗收的兩份舊權重仍可作發布候選；11 月 18 日六份新版目前定位為整合／比較候選。正式發布前須先完成六份資料的契約遷移與角色設定審核，再重訓或選回已核准權重。
+2026-11-17 通過較完整邊界驗收的兩份舊權重仍可作發布候選；11 月 18 日六份新版目前定位為整合／比較候選。艾倫與維塔已完成 runtime 設定，但尚未納入同一輪八模型真機驗收。正式發布前須先完成八份資料的契約遷移與角色設定審核，再重訓或選回已核准權重。
 
 ## 已移除的舊單模型路徑
 
-本次不再保留 `backend/config.py`、`backend/services/llm_client.py`、`backend/services/model_gateway.py` 與 `training/notebooks/alan_vance.py`。前三者會在遊戲後端直接載入單一 LoRA、依賴 CUDA／Unsloth，與現在「遊戲後端只呼叫一個 GPU Gateway URL」的架構衝突。新加入的 `alan_walker.py` 仍是離線訓練／測試項目；在艾倫尚未成為地圖 NPC 前，不加入 runtime 路由。所有 runtime 選模、strict JSON 與安全邊界由 `gpu_gateway/` 負責。
+本次不再保留 `backend/config.py`、`backend/services/llm_client.py`、`backend/services/model_gateway.py` 與 `training/notebooks/alan_vance.py`。前三者會在遊戲後端直接載入單一 LoRA、依賴 CUDA／Unsloth，與現在「遊戲後端只呼叫一個 GPU Gateway URL」的架構衝突。`alan_walker.py` 仍只負責離線訓練／測試；艾倫的 runtime 路由已改由共用 gateway 設定管理，尚待八模型真機驗收。所有 runtime 選模、strict JSON 與安全邊界由 `gpu_gateway/` 負責。

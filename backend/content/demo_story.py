@@ -35,6 +35,7 @@ class DemoStoryChoiceDefinition:
     rule_event_id: str | None = None
     witness_npc_ids: tuple[str, ...] = ()
     narrate_response: bool = False
+    speaker_npc_id: str | None = None
     required_completed_choice_ids: tuple[str, ...] = ()
     epilogue_answer_key: str | None = None
     epilogue_answer_value: str | None = None
@@ -528,7 +529,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "觀測者艾倫承認：外界技術評議會把維塔的永生夢境當成可長期保存意識的資料系統，而你的進入重新啟動了被壓住的因果衝突。",
         "memory_truths_complete", "真相三：夢境之外",
         rule_event_id="Truth_C", reveal_clue_ids=("truth_c_alan_transmission",),
-        narrate_response=True,
+        speaker_npc_id="alan",
     ),
     _choice(
         "seek_menmesvento_after_truths", "memory_truths_complete", "memory_library",
@@ -574,6 +575,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "生命因只有一次而珍貴", "我回答維塔：生命因為終會結束，每一次選擇才真正重要。",
         "維塔聽見你承認死亡，也聽見你仍願意珍惜每一次存在。泉水向外流動了一步。",
         "veta_question_two", "維塔三問：記憶",
+        speaker_npc_id="veta",
         rule_event_id="VETA_Q1_EACH_LIFE", epilogue_answer_key="answer_q1",
         epilogue_answer_value="生命因為終會結束，每一次選擇才真正重要。",
     ),
@@ -582,6 +584,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "延續本身也有價值", "我回答維塔：即使生命重複，延續與守護仍然有價值。",
         "維塔的夢安靜下來。你沒有否定輪迴中的感情，但也必須承擔停滯可能帶來的代價。",
         "veta_question_two", "維塔三問：記憶",
+        speaker_npc_id="veta",
         rule_event_id="VETA_Q1_RECURRING", epilogue_answer_key="answer_q1",
         epilogue_answer_value="即使生命重複，延續與守護仍然有價值。",
     ),
@@ -590,6 +593,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "記住痛苦，讓它成為見證", "我回答維塔：記憶即使痛苦，也不該被替他人抹去。",
         "被埋葬的名字沿泉水浮現。維塔讓你看見可用現有歷史承擔的最後選擇。",
         "veta_final_choice", "維塔三問：世界的去向",
+        speaker_npc_id="veta",
         rule_event_id="VETA_Q2_REMEMBER", epilogue_answer_key="answer_q2",
         epilogue_answer_value="記憶即使痛苦，也不該被替他人抹去。",
     ),
@@ -598,6 +602,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "允許放下，但不能竄改", "我回答維塔：可以選擇放下痛苦，但不能把他人的歷史改成不存在。",
         "維塔接受遺忘也必須出於選擇。泉面映出你與兩位守護者共同改寫夢境的可能。",
         "veta_final_choice", "維塔三問：世界的去向",
+        speaker_npc_id="veta",
         rule_event_id="VETA_Q2_RELEASE", epilogue_answer_key="answer_q2",
         epilogue_answer_value="可以選擇放下痛苦，但不能把他人的歷史改成不存在。",
     ),
@@ -606,6 +611,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "把記憶當成可以控制的資料", "我回答維塔：記憶只是可以重寫的資料，應由能掌控它的人決定。",
         "世界邊緣的裂痕同時張開。你把問答變成奪權宣告，維塔的控制權開始動搖。",
         "veta_usurp_warning", "篡夢警告",
+        speaker_npc_id="veta",
         rule_event_id="VETA_Q2_CONTROL", epilogue_answer_key="answer_q2",
         epilogue_answer_value="記憶只是可以重寫的資料，應由能掌控它的人決定。",
     ),
@@ -614,6 +620,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "在五次警告脈衝後仍選擇奪權", "我理解警告，仍要在第五次脈衝後奪取維塔的控制權。",
         "五次警告脈衝逐一熄滅，你仍沒有退後。篡夢倒數啟動，其他世界去向隨控制權關閉。",
         "veta_final_choice", "維塔三問：世界的去向",
+        speaker_npc_id="veta",
         rule_event_id="VETA_USURP_CONFIRM",
     ),
     _choice(

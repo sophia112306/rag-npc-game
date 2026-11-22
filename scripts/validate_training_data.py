@@ -10,12 +10,14 @@ import sys
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 TRAINING_DATASETS = {
+    "alan": "alan_train.jsonl",
     "andre": "npc_train_andre.jsonl",
     "dasso": "npc_train_dhaso.jsonl",
     "menmesvento": "menmesvento_data.jsonl",
     "seth": "npc_train_seth.jsonl",
     "syra": "npc_train_syra.jsonl",
     "vidalia": "vidalia_train.jsonl",
+    "veta": "npc_train_veta.jsonl",
 }
 sys.path.insert(0, str(ROOT_DIR))
 

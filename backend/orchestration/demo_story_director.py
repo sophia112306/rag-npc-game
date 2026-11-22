@@ -65,11 +65,14 @@ def build_demo_story_proposal(
             )
         )
 
-    if choice.target_npc_id and not choice.narrate_response:
+    speaker_npc_id = choice.speaker_npc_id or (
+        choice.target_npc_id if not choice.narrate_response else None
+    )
+    if speaker_npc_id:
         dialogue = DialogueLine(
             speaker_type=SpeakerType.NPC,
-            speaker_id=choice.target_npc_id,
-            speaker_name=CHARACTER_PROFILES[choice.target_npc_id].name,
+            speaker_id=speaker_npc_id,
+            speaker_name=CHARACTER_PROFILES[speaker_npc_id].name,
             text=(f"我記下了你這次的回報：\n{finding_report(state)}\n我們先保留這些紀錄，再比對另一條路線。"
                   if choice.choice_id == "review_demo_findings" else choice.response_text),
             emotion="focused",

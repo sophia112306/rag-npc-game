@@ -229,6 +229,12 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
                     state["state_version"],
                     choice_id,
                 )
+                if choice_id == "contact_alan_observer":
+                    assert turn["story"]["dialogue"][0]["speaker_id"] == "alan"
+                    assert turn["story"]["dialogue"][0]["speaker_name"] == "艾倫・沃克"
+                if choice_id.startswith("veta_q") or choice_id == "confirm_usurp_after_warning":
+                    assert turn["story"]["dialogue"][0]["speaker_id"] == "veta"
+                    assert turn["story"]["dialogue"][0]["speaker_name"] == "維塔"
                 state = turn["state"]
 
             choices = client.get(f"/api/game/{route_name}/choices").json()
