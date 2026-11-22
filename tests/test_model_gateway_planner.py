@@ -93,6 +93,14 @@ async def test_planner_sends_only_explicit_authorized_context() -> None:
     assert "map_fragment" in request_json
     assert "change_scene" not in gateway.requests[0].allowed_operations
 
+    guidance = gateway.requests[0].turn_guidance
+    assert guidance.scene_name == "平衡議會"
+    assert guidance.objective.startswith("下一步：")
+    assert guidance.available_actions
+    assert all(action.label for action in guidance.available_actions)
+    assert all(action.destination_scene_id is None for action in guidance.available_actions)
+    assert all(action.target_npc_id is None for action in guidance.available_actions)
+
 
 @pytest.mark.asyncio
 async def test_movement_request_limits_model_to_scene_change_operation() -> None:

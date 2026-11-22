@@ -341,6 +341,38 @@ def test_gateway_replaces_untrusted_objective_outcome_claims(
     assert output["event_proposals"] == []
 
 
+def test_gateway_replaces_vague_next_step_with_authorized_public_label() -> None:
+    request = make_request("vidalia")
+    request["action_message"] = "我迷路了，接下來該做什麼？"
+    request["turn_guidance"] = {
+        "objective": "下一步：前往命脈之泉，繼續調查。",
+        "scene_name": "鳴霖議會區",
+        "available_actions": [
+            {
+                "label": "前往命脈之泉",
+                "action_mode": "movement",
+                "destination_scene_id": "minglin_life_spring",
+                "target_npc_id": None,
+            }
+        ],
+    }
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion("你可以再四處看看。")
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    dialogue = response.json()["npc_dialogue"][0]["text"]
+    assert "前往命脈之泉" in dialogue
+    assert "minglin_life_spring" not in dialogue
+    assert response.json()["event_proposals"] == []
+
+
 def test_gateway_does_not_invent_spring_symptoms_when_asked_for_method() -> None:
     upstream_called = False
 
