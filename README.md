@@ -309,7 +309,7 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
 | `POST /api/game/{session_id}/scene-assets`、`GET .../scene-assets/{job_id}` | 3D 工作建立、輪詢；POST 要帶 expected_state_version。 |
 | `GET /api/game/{session_id}/scene-assets/{job_id}/model` | 取得該 Session 成功工作的 GLB。 |
 
-最新自動回歸（2026-11-22）：**201 個後端測試、12 個前端邏輯測試與 Next.js 16.4.6 production build 均通過，npm audit 為 0 vulnerabilities**；故事連通測試會經由正式 API 實走目前 61 條已編寫故事邊，涵蓋兩區先後順序、三種邊境結果、記憶圖書館三層真相、塵歸令取捨、維塔三問與長眠／醒來／新夢／塵歸／篡夢五種結局。另有五結局真機腳本把六位地圖 NPC 的專屬 LoRA 回合放進正式遊戲流程，並驗證自由對話不能改動場景、背包、進度或結局。守門後 93／93 中有 90 次為前置守門、3 次採用模型；強制進 LoRA 的開放式基準則為 47／72，兩者不可混寫。`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最新加入的記憶圖書館、維塔源頭、生死之書、塵歸令與艾倫通訊圖均使用使用者於 2026-11-22 指定的固定圖片；遊玩流程不會即時生圖。
+最新自動回歸（2026-11-22）：**205 個後端測試、12 個前端邏輯測試與 Next.js 16.4.6 production build 均通過，npm audit 為 0 vulnerabilities**；故事連通測試會經由正式 API 實走目前 61 條已編寫故事邊，涵蓋兩區先後順序、三種邊境結果、記憶圖書館三層真相、塵歸令取捨、維塔三問與長眠／醒來／新夢／塵歸／篡夢五種結局。另有五結局真機腳本把六位地圖 NPC 的專屬 LoRA 回合放進正式遊戲流程，並驗證自由對話不能改動場景、背包、進度或結局。守門後 93／93 中有 90 次為前置守門、3 次採用模型；強制進 LoRA 的開放式基準則為 47／72，兩者不可混寫。八份作者資料已可非破壞性匯出為 3,437 筆、3,474 個正式 assistant 目標，詳見 [訓練資料契約](training/README.md)；原始 JSONL 與現有權重未改。`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最新加入的記憶圖書館、維塔源頭、生死之書、塵歸令與艾倫通訊圖均使用使用者於 2026-11-22 指定的固定圖片；遊玩流程不會即時生圖。
 
 ```bash
 # SSH 進校機後：後端、故事與 Gateway 測試
@@ -340,7 +340,7 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
     --gateway-url http://127.0.0.1:8000/generate
 ```
 
-前端 12 個 Node 邏輯測試與 Next.js production build 已在本階段先行驗證；本次模型／故事修改的正式回歸一律以遠端 Docker 內的 201 個後端測試、93 個守門後案例、72 個原始 LoRA 探針與五結局真機流程為準。
+前端 12 個 Node 邏輯測試與 Next.js production build 已在本階段先行驗證；本次模型／故事修改的正式回歸一律以遠端 Docker 內的 205 個後端測試、93 個守門後案例、72 個原始 LoRA 探針、八資料集契約驗證與五結局真機流程為準。
 
 | 文件／證據 | 內容 |
 | --- | --- |

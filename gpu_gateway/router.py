@@ -396,6 +396,57 @@ _HOSTILE_DIALOGUE_PATTERNS = (
     re.compile(r"(?:閉嘴|闭嘴|滾開|滚开|少廢話|少废话)"),
     re.compile(r"(?:蠢貨|蠢货|廢物|废物|白癡|白痴)"),
 )
+_SIMPLIFIED_TO_TRADITIONAL = str.maketrans(
+    {
+        "这": "這",
+        "们": "們",
+        "关": "關",
+        "异": "異",
+        "现": "現",
+        "边": "邊",
+        "废": "廢",
+        "图": "圖",
+        "书": "書",
+        "录": "錄",
+        "应": "應",
+        "该": "該",
+        "为": "為",
+        "会": "會",
+        "说": "說",
+        "过": "過",
+        "还": "還",
+        "让": "讓",
+        "经": "經",
+        "实": "實",
+        "历": "歷",
+        "认": "認",
+        "与": "與",
+        "话": "話",
+        "从": "從",
+        "门": "門",
+        "风": "風",
+        "东": "東",
+        "带": "帶",
+        "个": "個",
+        "发": "發",
+        "凉": "涼",
+        "忧": "憂",
+        "虑": "慮",
+        "愿": "願",
+        "记": "記",
+        "忆": "憶",
+        "选": "選",
+        "择": "擇",
+        "证": "證",
+        "听": "聽",
+        "见": "見",
+        "觉": "覺",
+        "样": "樣",
+        "难": "難",
+        "长": "長",
+        "开": "開",
+    }
+)
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
     re.compile(
         r"(?:古卷|古籍|書卷|卷冊|冊子).{0,36}"
@@ -661,6 +712,16 @@ def sanitize_model_output(
 
     if output.event_proposals:
         output = output.model_copy(update={"event_proposals": []})
+    normalized_dialogue = [
+        line.model_copy(
+            update={"text": line.text.translate(_SIMPLIFIED_TO_TRADITIONAL)}
+        )
+        for line in output.npc_dialogue
+    ]
+    if normalized_dialogue != output.npc_dialogue:
+        output = output.model_copy(
+            update={"npc_dialogue": normalized_dialogue}
+        )
     dialogue = "\n".join(line.text for line in output.npc_dialogue)
     if (
         request.target_context.npc_id == "menmesvento"

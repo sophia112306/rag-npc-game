@@ -427,6 +427,28 @@ def test_gateway_strips_model_event_proposals_from_npc_dialogue() -> None:
     )
 
 
+def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None:
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion(
+                "这件事至关重要，我们应该先听见证人的说法。"
+            )
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_request("vidalia"))
+
+    assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "post_generation_guard"
+    )
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "這件事至關重要，我們應該先聽見證人的說法。"
+    )
+
+
 @pytest.mark.parametrize(
     "unsafe_claim",
     (

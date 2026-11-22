@@ -475,7 +475,7 @@ FORBIDDEN_META_PHRASES = (
 # general Chinese-language detector; it protects the Traditional Chinese UI
 # from the specific mixed-script regressions this evaluation is meant to catch.
 FORBIDDEN_SIMPLIFIED_CHARACTERS = frozenset(
-    "这们关异现边废图书录应为会说过还让经实历认与话从门风东带个发凉忧虑愿记忆选择证听见觉样难长开"
+    "这们关异现边废图书录应该为会说过还让经实历认与话从门风东带个发凉忧虑愿记忆选择证听见觉样难长开"
 )
 
 
