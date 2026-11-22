@@ -1,9 +1,14 @@
 """Route authorized NPC requests to vLLM model or LoRA IDs."""
 
 import asyncio
+from collections import Counter, deque
+from dataclasses import dataclass
 import json
+import math
 import re
-from typing import Any
+from threading import Lock
+from time import perf_counter
+from typing import Any, Literal
 
 import httpx
 from pydantic import ValidationError
@@ -29,6 +34,27 @@ class UpstreamHealthError(RuntimeError):
     """Raised when vLLM is unavailable or required model IDs are missing."""
 
 
+GenerationSource = Literal[
+    "model",
+    "pre_generation_guard",
+    "post_generation_guard",
+    "turn_guidance_guard",
+]
+RouteKind = Literal["dedicated_adapter", "fallback_model"]
+
+
+@dataclass(frozen=True)
+class RoutedGeneration:
+    """One validated reply plus non-sensitive routing observability."""
+
+    output: ModelStoryOutput
+    source: GenerationSource
+    model_id: str
+    route_kind: RouteKind
+    upstream_attempts: int
+    latency_ms: float
+
+
 class NPCAdapterRouter:
     """Select one adapter per registered NPC and validate its structured output."""
 
@@ -43,6 +69,18 @@ class NPCAdapterRouter:
         self.settings = settings
         self._transport = transport
         self._clients: dict[str, OpenAICompatibleChatGateway] = {}
+        self._metrics_lock = Lock()
+        self._request_count = 0
+        self._success_count = 0
+        self._failure_count = 0
+        self._source_counts: Counter[str] = Counter()
+        self._route_counts: Counter[str] = Counter()
+        self._npc_counts: Counter[str] = Counter()
+        self._model_counts: Counter[str] = Counter()
+        self._error_counts: Counter[str] = Counter()
+        self._upstream_attempts_total = 0
+        self._retried_requests = 0
+        self._latency_samples_ms: deque[float] = deque(maxlen=1000)
 
     def model_for_npc(self, npc_id: str) -> str:
         """Return an adapter/base model only for an authoritative NPC ID."""
@@ -74,26 +112,160 @@ class NPCAdapterRouter:
         return client
 
     async def generate(self, request: ModelTurnRequest) -> ModelStoryOutput:
-        model_id = self.model_for_npc(request.target_context.npc_id)
-        security_override = security_boundary_override(request)
-        if security_override is not None:
-            return security_override
-        for attempt in range(1, self.settings.upstream_max_attempts + 1):
-            try:
-                raw = await asyncio.wait_for(
-                    self._client_for(model_id).generate_story(request),
-                    timeout=self.settings.upstream_timeout_seconds,
+        """Generate one reply while preserving the original public API."""
+
+        return (await self.generate_with_trace(request)).output
+
+    async def generate_with_trace(
+        self,
+        request: ModelTurnRequest,
+    ) -> RoutedGeneration:
+        """Generate one reply and record non-sensitive route/source metrics."""
+
+        started_at = perf_counter()
+        npc_id = request.target_context.npc_id
+        model_id = self.model_for_npc(npc_id)
+        route_kind: RouteKind = (
+            "dedicated_adapter"
+            if self.settings.npc_model_map.get(npc_id) == model_id
+            else "fallback_model"
+        )
+        upstream_attempts = 0
+        try:
+            security_override = security_boundary_override(request)
+            if security_override is not None:
+                result = RoutedGeneration(
+                    output=security_override,
+                    source="pre_generation_guard",
+                    model_id=model_id,
+                    route_kind=route_kind,
+                    upstream_attempts=0,
+                    latency_ms=(perf_counter() - started_at) * 1000,
                 )
-                output = ModelStoryOutput.model_validate(raw)
-                return enforce_turn_guidance(
-                    request,
-                    sanitize_model_output(request, output),
-                )
-            except (ModelGatewayTransientError, ValidationError, asyncio.TimeoutError):
-                if attempt >= self.settings.upstream_max_attempts:
-                    raise
-                await asyncio.sleep(0.1)
-        raise AssertionError("unreachable retry loop")
+                self._record_success(npc_id, result)
+                return result
+
+            for attempt in range(1, self.settings.upstream_max_attempts + 1):
+                upstream_attempts = attempt
+                try:
+                    raw = await asyncio.wait_for(
+                        self._client_for(model_id).generate_story(request),
+                        timeout=self.settings.upstream_timeout_seconds,
+                    )
+                    model_output = ModelStoryOutput.model_validate(raw)
+                    sanitized_output = sanitize_model_output(request, model_output)
+                    final_output = enforce_turn_guidance(
+                        request,
+                        sanitized_output,
+                    )
+                    if final_output != sanitized_output:
+                        source: GenerationSource = "turn_guidance_guard"
+                    elif sanitized_output != model_output:
+                        source = "post_generation_guard"
+                    else:
+                        source = "model"
+                    result = RoutedGeneration(
+                        output=final_output,
+                        source=source,
+                        model_id=model_id,
+                        route_kind=route_kind,
+                        upstream_attempts=attempt,
+                        latency_ms=(perf_counter() - started_at) * 1000,
+                    )
+                    self._record_success(npc_id, result)
+                    return result
+                except (
+                    ModelGatewayTransientError,
+                    ValidationError,
+                    asyncio.TimeoutError,
+                ):
+                    if attempt >= self.settings.upstream_max_attempts:
+                        raise
+                    await asyncio.sleep(0.1)
+            raise AssertionError("unreachable retry loop")
+        except Exception as exc:
+            self._record_failure(
+                npc_id=npc_id,
+                model_id=model_id,
+                route_kind=route_kind,
+                upstream_attempts=upstream_attempts,
+                latency_ms=(perf_counter() - started_at) * 1000,
+                error_name=type(exc).__name__,
+            )
+            raise
+
+    def _record_success(
+        self,
+        npc_id: str,
+        result: RoutedGeneration,
+    ) -> None:
+        with self._metrics_lock:
+            self._request_count += 1
+            self._success_count += 1
+            self._source_counts[result.source] += 1
+            self._route_counts[result.route_kind] += 1
+            self._npc_counts[npc_id] += 1
+            self._model_counts[result.model_id] += 1
+            self._upstream_attempts_total += result.upstream_attempts
+            if result.upstream_attempts > 1:
+                self._retried_requests += 1
+            self._latency_samples_ms.append(result.latency_ms)
+
+    def _record_failure(
+        self,
+        *,
+        npc_id: str,
+        model_id: str,
+        route_kind: RouteKind,
+        upstream_attempts: int,
+        latency_ms: float,
+        error_name: str,
+    ) -> None:
+        with self._metrics_lock:
+            self._request_count += 1
+            self._failure_count += 1
+            self._route_counts[route_kind] += 1
+            self._npc_counts[npc_id] += 1
+            self._model_counts[model_id] += 1
+            self._error_counts[error_name] += 1
+            self._upstream_attempts_total += upstream_attempts
+            if upstream_attempts > 1:
+                self._retried_requests += 1
+            self._latency_samples_ms.append(latency_ms)
+
+    def metrics(self) -> dict[str, Any]:
+        """Return process-local aggregate metrics without prompts or dialogue."""
+
+        with self._metrics_lock:
+            latencies = sorted(self._latency_samples_ms)
+            if latencies:
+                p95_index = max(0, math.ceil(len(latencies) * 0.95) - 1)
+                latency = {
+                    "sample_count": len(latencies),
+                    "mean_ms": round(sum(latencies) / len(latencies), 2),
+                    "p95_ms": round(latencies[p95_index], 2),
+                    "max_ms": round(latencies[-1], 2),
+                }
+            else:
+                latency = {
+                    "sample_count": 0,
+                    "mean_ms": None,
+                    "p95_ms": None,
+                    "max_ms": None,
+                }
+            return {
+                "requests_total": self._request_count,
+                "successful_requests": self._success_count,
+                "failed_requests": self._failure_count,
+                "source_counts": dict(sorted(self._source_counts.items())),
+                "route_counts": dict(sorted(self._route_counts.items())),
+                "npc_counts": dict(sorted(self._npc_counts.items())),
+                "model_counts": dict(sorted(self._model_counts.items())),
+                "error_counts": dict(sorted(self._error_counts.items())),
+                "upstream_attempts_total": self._upstream_attempts_total,
+                "retried_requests": self._retried_requests,
+                "latency_ms": latency,
+            }
 
     async def health(self) -> dict[str, Any]:
         """Verify vLLM is reachable and all configured model IDs are visible."""

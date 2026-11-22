@@ -8,7 +8,7 @@
 
 **2026-11-22 現有服務複查：** 當天唯讀查詢正在執行的校機 `/health`，實際只列出 `vidalia-lora`、`menmesvento-lora` 與 base model；安德烈、達索、塞特、希拉會退回 base，艾倫／維塔則被舊 gateway 以 422 拒絕。八個最終目錄各有約 161.5 MB 權重，模型確實已訓練；但 `rag-npc-llm` Docker 只有閒置 shell，實際 8000／8001 服務是 host `.venv-gpu` 程序，啟動時只載入兩個 adapter。完整 93 次請求與容器檢查見 [多角色真機回覆評測](qa/model-evaluation/2026-11-22.md)。
 
-**2026-11-22 Docker 切換完成：** 已停止 host `.venv-gpu` 的 vLLM／Uvicorn，正式 runtime 改為 `infra/npc_gateway/compose.yaml` 管理。`rag-npc-llm` 內同時執行 vLLM 0.31.0 與 Gateway，`/health` 列出八條專屬 LoRA 路由；host 只綁 `127.0.0.1:8000`、`127.0.0.1:8001`，沒有公開部署。八模型初次多樣本為 61／93，補上公開角色卡、知識邊界與故事權限守門後為 93／93；Docker 內 199 個後端測試通過。
+**2026-11-22 Docker 切換完成：** 已停止 host `.venv-gpu` 的 vLLM／Uvicorn，正式 runtime 改為 `infra/npc_gateway/compose.yaml` 管理。`rag-npc-llm` 內同時執行 vLLM 0.31.0 與 Gateway，`/health` 列出八條專屬 LoRA 路由；host 只綁 `127.0.0.1:8000`、`127.0.0.1:8001`，沒有公開部署。八模型初次多樣本為 61／93，補上公開角色卡、知識邊界與故事權限守門後為 93／93；Docker 內 200 個後端測試通過。
 
 八份權重與路由已在同一個 Docker runtime 真機接通，但不能把 93／93 的系統成績寫成原始 LoRA 單獨達成。第一次八模型測試只有 61／93；目前 93／93 包含 Gateway 的公開角色卡、知識邊界與故事權限守門。11 月 18 日的新資料仍多以純台詞或舊 `relation_delta/line` 為訓練目標，後續若要宣稱模型本身的內容品質提升，仍需資料遷移、重訓及盲測。
 
@@ -107,7 +107,8 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
   python3 scripts/evaluate_npc_gateway.py \
     --url http://127.0.0.1:8000/generate \
     --samples-per-case 3 \
-    --require-dedicated-adapters
+    --require-dedicated-adapters \
+    --require-observability
 ```
 
 模型評測與後端故事測試都使用容器內同一份 checkout。不要從 host 的 Python 或本機虛擬環境替代執行。
@@ -145,7 +146,8 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
   python3 scripts/evaluate_npc_gateway.py \
     --url http://127.0.0.1:8000/generate \
     --samples-per-case 3 \
-    --require-dedicated-adapters
+    --require-dedicated-adapters \
+    --require-observability
 ```
 
 腳本會強制驗證 `ModelStoryOutput`、沒有 Markdown fence、沒有角色外占位文字、沒有未授權事件，並檢查繁體中文、身分／地點／核心動機、未知設定與合理調查方向。請求使用和 runtime 相同的角色設定、公開知識與未知欄位；可用 `--samples-per-case 3` 對同一題重複抽樣，並用 `--require-dedicated-adapters` 防止 base fallback 被誤算成角色 LoRA 通過。2026-11-22 Docker 切換前的舊服務產生 75 個六角色回覆，其中 58 個通過；艾倫／維塔另 18 次請求全為 422。切換後八條專屬 LoRA 的第一次系統結果為 61／93；補上 Gateway 守門後候選結果為 93／93。兩者都仍須搭配人工閱讀，且後者不是原始 LoRA 的獨立內容分數。

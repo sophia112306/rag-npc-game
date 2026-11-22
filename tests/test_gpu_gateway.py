@@ -182,10 +182,23 @@ def test_gateway_routes_each_npc_to_its_adapter_or_registered_fallback() -> None
 
     app = create_app(settings(), transport=httpx.MockTransport(handler))
     with TestClient(app) as client:
-        assert client.post("/generate", json=make_request("vidalia")).status_code == 200
-        assert client.post("/generate", json=make_request("menmesvento")).status_code == 200
-        assert client.post("/generate", json=make_request("andre")).status_code == 200
+        vidalia = client.post("/generate", json=make_request("vidalia"))
+        menmesvento = client.post(
+            "/generate",
+            json=make_request("menmesvento"),
+        )
+        andre = client.post("/generate", json=make_request("andre"))
 
+    assert vidalia.status_code == 200
+    assert menmesvento.status_code == 200
+    assert andre.status_code == 200
+    assert vidalia.headers["x-npc-generation-source"] == "model"
+    assert vidalia.headers["x-npc-route-kind"] == "dedicated_adapter"
+    assert vidalia.headers["x-npc-model-id"] == "vidalia-lora"
+    assert vidalia.headers["x-npc-upstream-attempts"] == "1"
+    assert vidalia.headers["server-timing"].startswith("npc-gateway;dur=")
+    assert andre.headers["x-npc-route-kind"] == "fallback_model"
+    assert andre.headers["x-npc-model-id"] == "Qwen/Qwen2.5-7B-Instruct-AWQ"
     assert selected_models == [
         "vidalia-lora",
         "menmesvento-lora",
@@ -226,13 +239,20 @@ def test_gateway_optional_bearer_token_and_health_check() -> None:
     )
     with TestClient(app) as client:
         assert client.get("/health").status_code == 401
+        assert client.get("/metrics").status_code == 401
         response = client.get(
             "/health", headers={"Authorization": "Bearer secret"}
+        )
+        metrics = client.get(
+            "/metrics",
+            headers={"Authorization": "Bearer secret"},
         )
 
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
     assert response.json()["npc_routes"]["vidalia"] == "vidalia-lora"
+    assert metrics.status_code == 200
+    assert metrics.json()["requests_total"] == 0
 
 
 def test_gateway_fails_closed_for_a_concrete_missing_canon_topic() -> None:
@@ -244,6 +264,10 @@ def test_gateway_fails_closed_for_a_concrete_missing_canon_topic() -> None:
         response = client.post("/generate", json=make_missing_canon_request())
 
     assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "pre_generation_guard"
+    )
+    assert response.headers["x-npc-upstream-attempts"] == "0"
     output = response.json()
     assert "尚未有可核實" in output["npc_dialogue"][0]["text"]
     assert output["event_proposals"] == []
@@ -290,7 +314,58 @@ def test_gateway_retries_one_transient_invalid_model_response() -> None:
         response = client.post("/generate", json=make_request("vidalia"))
 
     assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == "model"
+    assert response.headers["x-npc-upstream-attempts"] == "2"
     assert calls == 2
+
+
+def test_gateway_metrics_aggregate_sources_routes_retries_and_latency() -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {"content": "not-json"},
+                        }
+                    ]
+                },
+            )
+        return completion()
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        model_response = client.post(
+            "/generate",
+            json=make_request("vidalia"),
+        )
+        guarded_response = client.post(
+            "/generate",
+            json=make_missing_canon_request(),
+        )
+        metrics = client.get("/metrics").json()
+
+    assert model_response.status_code == 200
+    assert guarded_response.status_code == 200
+    assert metrics["requests_total"] == 2
+    assert metrics["successful_requests"] == 2
+    assert metrics["failed_requests"] == 0
+    assert metrics["source_counts"] == {
+        "model": 1,
+        "pre_generation_guard": 1,
+    }
+    assert metrics["route_counts"] == {"dedicated_adapter": 2}
+    assert metrics["npc_counts"] == {"menmesvento": 1, "vidalia": 1}
+    assert metrics["upstream_attempts_total"] == 2
+    assert metrics["retried_requests"] == 1
+    assert metrics["latency_ms"]["sample_count"] == 2
+    assert metrics["latency_ms"]["max_ms"] >= 0
 
 
 def test_gateway_fails_closed_calmly_for_an_admitted_false_inventory() -> None:
@@ -333,6 +408,10 @@ def test_gateway_replaces_untrusted_objective_outcome_claims(
         response = client.post("/generate", json=make_request("vidalia"))
 
     assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "post_generation_guard"
+    )
+    assert response.headers["x-npc-upstream-attempts"] == "1"
     output = response.json()
     assert unsafe_claim not in output["npc_dialogue"][0]["text"]
     assert "必須由你的實際選擇與已記錄的結果決定" in (
@@ -367,6 +446,10 @@ def test_gateway_replaces_vague_next_step_with_authorized_public_label() -> None
         response = client.post("/generate", json=request)
 
     assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "turn_guidance_guard"
+    )
+    assert response.headers["x-npc-upstream-attempts"] == "1"
     dialogue = response.json()["npc_dialogue"][0]["text"]
     assert "前往命脈之泉" in dialogue
     assert "minglin_life_spring" not in dialogue

@@ -30,10 +30,11 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
   python3 scripts/evaluate_npc_gateway.py \
     --url http://127.0.0.1:8000/generate \
     --samples-per-case 3 \
-    --require-dedicated-adapters
+    --require-dedicated-adapters \
+    --require-observability
 ```
 
-Acceptance requires eight dedicated routes in `/health`, no base fallback for the eight story NPCs, passing contract tests, and reviewed generated replies. The 2026-11-22 guarded system baseline is 199 backend tests and 93/93 generated cases; raw LoRA quality must still be reported separately. Weight files alone are not sufficient.
+Acceptance requires eight dedicated routes in `/health`, no base fallback for the eight story NPCs, complete observability headers, passing contract tests, and reviewed generated replies. The 2026-11-22 guarded system baseline is 200 backend tests and 93/93 generated cases; raw LoRA quality must still be reported separately. Weight files alone are not sufficient.
 
 ## Stop and inspect
 
@@ -41,6 +42,8 @@ Acceptance requires eight dedicated routes in `/health`, no base fallback for th
 docker compose -f infra/npc_gateway/compose.yaml stop runtime
 docker compose -f infra/npc_gateway/compose.yaml logs --tail=200 runtime
 ```
+
+Successful `/generate` responses expose `X-NPC-Generation-Source`, `X-NPC-Model-ID`, `X-NPC-Route-Kind`, `X-NPC-Upstream-Attempts`, and `Server-Timing`; `/metrics` aggregates the same routing, retry, failure, and latency data without storing prompts or dialogue.
 
 The source checkout, model weights, Hugging Face cache, and vLLM compile cache survive container recreation. Runtime logs use the `npc-runtime-logs` Docker volume; vLLM uses `vllm-runtime-cache`. The Gateway attempts an invalid upstream model response up to three times before returning a temporary error.
 

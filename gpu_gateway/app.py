@@ -4,7 +4,7 @@ import asyncio
 import hmac
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from pydantic import ValidationError
 
 from backend.generation.gateway import (
@@ -65,16 +65,31 @@ def create_app(
                 detail={"code": "VLLM_NOT_READY", "message": str(exc)},
             ) from exc
 
+    @application.get("/metrics")
+    async def metrics(_: None = Depends(require_bearer)) -> dict[str, object]:
+        return adapter_router.metrics()
+
     @application.post("/generate", response_model=ModelStoryOutput)
     async def generate(
         request: ModelTurnRequest,
+        response: Response,
         _: None = Depends(require_bearer),
     ) -> ModelStoryOutput:
         try:
-            return await adapter_router.generate(request)
+            result = await adapter_router.generate_with_trace(request)
+            response.headers["X-NPC-Generation-Source"] = result.source
+            response.headers["X-NPC-Model-ID"] = result.model_id
+            response.headers["X-NPC-Route-Kind"] = result.route_kind
+            response.headers["X-NPC-Upstream-Attempts"] = str(
+                result.upstream_attempts
+            )
+            response.headers["Server-Timing"] = (
+                f"npc-gateway;dur={result.latency_ms:.2f}"
+            )
+            return result.output
         except UnsupportedNPCError as exc:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={"code": "UNSUPPORTED_NPC", "message": str(exc)},
             ) from exc
         except asyncio.TimeoutError as exc:

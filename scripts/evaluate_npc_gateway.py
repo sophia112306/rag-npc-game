@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 import sys
+from time import perf_counter
 
 import httpx
 
@@ -445,6 +448,14 @@ def main() -> int:
         action="store_true",
         help="Print outcomes without full response JSON.",
     )
+    parser.add_argument(
+        "--require-observability",
+        action="store_true",
+        help=(
+            "Fail when a successful response omits source, route, model, "
+            "or upstream-attempt headers."
+        ),
+    )
     args = parser.parse_args()
     if not 1 <= args.samples_per_case <= 20:
         parser.error("--samples-per-case must be between 1 and 20")
@@ -463,6 +474,11 @@ def main() -> int:
     failures: list[str] = []
     passes = 0
     sample_count = len(selected_cases) * args.samples_per_case
+    source_counts: Counter[str] = Counter()
+    route_counts: Counter[str] = Counter()
+    model_counts: Counter[str] = Counter()
+    upstream_attempt_counts: Counter[int] = Counter()
+    latency_samples_ms: list[float] = []
     with httpx.Client(timeout=90) as client:
         health_payload: dict[str, object] | None = None
         try:
@@ -495,24 +511,77 @@ def main() -> int:
             for sample_number in range(1, args.samples_per_case + 1):
                 turn_number += 1
                 sample_id = f"{case.case_id}#{sample_number}"
+                started_at = perf_counter()
                 try:
                     response = client.post(
                         args.url,
                         headers=headers,
                         json=_request(case, turn_number).model_dump(mode="json"),
                     )
+                    latency_samples_ms.append(
+                        (perf_counter() - started_at) * 1000
+                    )
                     response.raise_for_status()
                     output = ModelStoryOutput.model_validate(response.json())
                 except (httpx.HTTPError, ValueError) as exc:
+                    if len(latency_samples_ms) < turn_number:
+                        latency_samples_ms.append(
+                            (perf_counter() - started_at) * 1000
+                        )
                     failures.append(f"{sample_id}: {exc}")
                     print(f"FAIL [{sample_id}] npc={case.npc_id} HTTP/contract: {exc}")
                     continue
 
+                source = response.headers.get(
+                    "x-npc-generation-source",
+                    "unreported",
+                )
+                route_kind = response.headers.get(
+                    "x-npc-route-kind",
+                    "unreported",
+                )
+                model_id = response.headers.get(
+                    "x-npc-model-id",
+                    "unreported",
+                )
+                attempts_text = response.headers.get(
+                    "x-npc-upstream-attempts",
+                )
+                try:
+                    upstream_attempts = int(attempts_text or "-1")
+                except ValueError:
+                    upstream_attempts = -1
+
+                source_counts[source] += 1
+                route_counts[route_kind] += 1
+                model_counts[model_id] += 1
+                upstream_attempt_counts[upstream_attempts] += 1
+
+                missing_observability = [
+                    name
+                    for name, value in (
+                        ("source", source),
+                        ("route", route_kind),
+                        ("model", model_id),
+                    )
+                    if value == "unreported"
+                ]
+                if upstream_attempts < 0:
+                    missing_observability.append("upstream_attempts")
+                if args.require_observability and missing_observability:
+                    failures.append(
+                        f"{sample_id}: missing observability headers: "
+                        + ", ".join(missing_observability)
+                    )
+
                 errors = validate_output(case, output)
-                status = "PASS" if not errors else "FAIL"
+                status = "PASS" if not errors and not (
+                    args.require_observability and missing_observability
+                ) else "FAIL"
                 print(
                     f"{status} [{sample_id}] npc={case.npc_id} "
-                    f"category={case.category}"
+                    f"category={case.category} source={source} "
+                    f"route={route_kind} attempts={upstream_attempts}"
                 )
                 if not args.summary_only:
                     print(
@@ -524,8 +593,53 @@ def main() -> int:
                     )
                 if errors:
                     failures.extend(f"{sample_id}: {error}" for error in errors)
-                else:
+                elif not (args.require_observability and missing_observability):
                     passes += 1
+
+    sorted_latencies = sorted(latency_samples_ms)
+    if sorted_latencies:
+        p95_index = max(
+            0,
+            math.ceil(len(sorted_latencies) * 0.95) - 1,
+        )
+        latency_summary = {
+            "sample_count": len(sorted_latencies),
+            "mean_ms": round(
+                sum(sorted_latencies) / len(sorted_latencies),
+                2,
+            ),
+            "p95_ms": round(sorted_latencies[p95_index], 2),
+            "max_ms": round(sorted_latencies[-1], 2),
+        }
+    else:
+        latency_summary = {
+            "sample_count": 0,
+            "mean_ms": None,
+            "p95_ms": None,
+            "max_ms": None,
+        }
+    print("\nOBSERVABILITY")
+    print(
+        json.dumps(
+            {
+                "source_counts": dict(sorted(source_counts.items())),
+                "route_counts": dict(sorted(route_counts.items())),
+                "model_counts": dict(sorted(model_counts.items())),
+                "upstream_attempt_counts": {
+                    str(key): value
+                    for key, value in sorted(upstream_attempt_counts.items())
+                },
+                "retried_responses": sum(
+                    count
+                    for attempts, count in upstream_attempt_counts.items()
+                    if attempts > 1
+                ),
+                "latency_ms": latency_summary,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
     if failures:
         print(f"\nQUALITY FAIL: {passes}/{sample_count} response samples passed", file=sys.stderr)
