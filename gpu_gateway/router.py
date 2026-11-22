@@ -659,6 +659,8 @@ def sanitize_model_output(
 ) -> ModelStoryOutput:
     """Keep training artifacts and unverified lore out of visible dialogue."""
 
+    if output.event_proposals:
+        output = output.model_copy(update={"event_proposals": []})
     dialogue = "\n".join(line.text for line in output.npc_dialogue)
     if (
         request.target_context.npc_id == "menmesvento"

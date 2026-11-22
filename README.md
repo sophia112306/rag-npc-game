@@ -278,7 +278,7 @@ production 展示：`npm run build` 後執行 `npm run start`，仍在 3200；�
 
 ### 接 B 的敘事模型
 
-專案已有 Docker 化的 GPU-side 多 NPC LoRA Gateway：維達利亞、安德烈、門梅司文托、達索、塞特、希拉、艾倫與維塔各自使用專屬 adapter；八條路由已通過同一個校機 runtime 的真機驗證。六位地圖 NPC 加上艾倫／維塔能走完正式規則式故事；玩家／主角不會選 adapter。遊戲後端不載入 CUDA，只需要一個完整 `/generate` URL。模型服務只能用下列方式啟動：
+專案已有 Docker 化的 GPU-side 多 NPC LoRA Gateway：維達利亞、安德烈、門梅司文托、達索、塞特、希拉、艾倫與維塔各自使用專屬 adapter；八條路由已通過同一個校機 runtime 的真機驗證。六位地圖 NPC 的真實 LoRA 自由對話，加上艾倫／維塔的固定故事回合，已由正式 API 實走長眠、醒來、新夢、塵歸、篡夢五條完整路線；玩家／主角不會選 adapter。遊戲後端不載入 CUDA，只需要一個完整 `/generate` URL。模型服務只能用下列方式啟動：
 
 ```bash
 ssh nccu-gpu
@@ -309,7 +309,7 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
 | `POST /api/game/{session_id}/scene-assets`、`GET .../scene-assets/{job_id}` | 3D 工作建立、輪詢；POST 要帶 expected_state_version。 |
 | `GET /api/game/{session_id}/scene-assets/{job_id}/model` | 取得該 Session 成功工作的 GLB。 |
 
-最新自動回歸（2026-11-22）：**200 個後端測試、12 個前端邏輯測試與 Next.js 16.4.6 production build 均通過，npm audit 為 0 vulnerabilities**；故事連通測試會經由正式 API 實走目前 61 條已編寫故事邊，涵蓋兩區先後順序、三種邊境結果、記憶圖書館三層真相、塵歸令取捨、維塔三問與長眠／醒來／新夢／塵歸／篡夢五種結局。`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最新加入的記憶圖書館、維塔源頭、生死之書、塵歸令與艾倫通訊圖均使用使用者於 2026-11-22 指定的固定圖片；遊玩流程不會即時生圖。切換前只有兩條專屬 LoRA 的歷史結果、八模型原始生成結果、Gateway 守門後結果與規則式完整故事流程必須分開驗收。
+最新自動回歸（2026-11-22）：**201 個後端測試、12 個前端邏輯測試與 Next.js 16.4.6 production build 均通過，npm audit 為 0 vulnerabilities**；故事連通測試會經由正式 API 實走目前 61 條已編寫故事邊，涵蓋兩區先後順序、三種邊境結果、記憶圖書館三層真相、塵歸令取捨、維塔三問與長眠／醒來／新夢／塵歸／篡夢五種結局。另有五結局真機腳本把六位地圖 NPC 的專屬 LoRA 回合放進正式遊戲流程，並驗證自由對話不能改動場景、背包、進度或結局。守門後 93／93 中有 90 次為前置守門、3 次採用模型；強制進 LoRA 的開放式基準則為 47／72，兩者不可混寫。`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最新加入的記憶圖書館、維塔源頭、生死之書、塵歸令與艾倫通訊圖均使用使用者於 2026-11-22 指定的固定圖片；遊玩流程不會即時生圖。
 
 ```bash
 # SSH 進校機後：後端、故事與 Gateway 測試
@@ -323,9 +323,24 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
     --samples-per-case 3 \
     --require-dedicated-adapters \
     --require-observability
+
+# 強制進 LoRA 的開放式內容基準
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 scripts/evaluate_npc_gateway.py \
+    --url http://127.0.0.1:8000/generate \
+    --suite model-probe \
+    --samples-per-case 3 \
+    --require-dedicated-adapters \
+    --require-observability \
+    --require-model-source
+
+# 正式 API 五結局＋六位地圖 NPC 真機流程
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 scripts/evaluate_live_story.py \
+    --gateway-url http://127.0.0.1:8000/generate
 ```
 
-前端 12 個 Node 邏輯測試與 Next.js production build 已在本階段先行驗證；本次模型／故事修改的正式回歸一律以遠端 Docker 內的後端測試與 93 個真機生成案例為準。
+前端 12 個 Node 邏輯測試與 Next.js production build 已在本階段先行驗證；本次模型／故事修改的正式回歸一律以遠端 Docker 內的 201 個後端測試、93 個守門後案例、72 個原始 LoRA 探針與五結局真機流程為準。
 
 | 文件／證據 | 內容 |
 | --- | --- |

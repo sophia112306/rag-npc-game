@@ -4,7 +4,7 @@
 
 ## 目前專案狀態
 
-進度：八位故事 NPC 的 LoRA 已在校機 Docker runtime 同時接通，六位實體地圖 NPC 加上艾倫／維塔的完整規則式故事路線可連到五種結局。八模型初次多樣本為 61／93；加上 Gateway 公開角色卡、知識邊界與故事權限守門後為 93／93，Docker 內 200 個後端測試通過。八份訓練資料的正式輸出契約、原始 LoRA 內容盲測與外部 RAG 仍未完成。
+進度：八位故事 NPC 的 LoRA 已在校機 Docker runtime 同時接通，六位實體地圖 NPC 的真實 LoRA 回合加上艾倫／維塔固定故事回合，已由正式 API 實走五種結局。守門後系統評測為 93／93（90 次前置守門、3 次模型），強制進模型的開放式原始 LoRA 基準為 47／72；Docker 內 201 個後端測試通過。八份訓練資料的正式輸出契約、人工內容盲測與外部 RAG 仍未完成。
 
 A／D 已完成：
 
@@ -22,7 +22,7 @@ A／D 已完成：
 
 2026-11-22 的程式設定另加入 `alan-lora` 與 `veta-lora`，對應記憶圖書館遠端通訊及維塔源頭終局。當天複查正在執行的校機服務時，只剩維達利亞、門梅司文托專屬 LoRA 與 base model；其他四位退回 base，艾倫／維塔回 422。八份約 161.5 MB 的最終權重都存在，但 `rag-npc-llm` Docker 沒有推論程序，實際服務是 host 上只載入兩個 adapter 的 vLLM。31 題以三次抽樣執行後，六位可識別角色為 58／75 通過，另 18 次艾倫／維塔請求均未進模型；詳見 [多角色真機回覆評測](qa/model-evaluation/2026-11-22.md)。
 
-同日已完成正式切換：停止 host `.venv-gpu` 程序，改由 `infra/npc_gateway/compose.yaml` 在 `rag-npc-llm` 內執行 vLLM 0.31.0 與 Gateway。`/health` 現在列出 `vidalia-lora`、`andre-lora`、`menmesvento-lora`、`dasso-lora`、`seth-lora`、`syra-lora`、`alan-lora`、`veta-lora` 八條專屬路由；host 只綁 loopback，沒有公開部署。第一次八模型多樣本 61／93；補上遊戲層守門並重建正式 Docker 後，`127.0.0.1:8000` 重跑為 93／93、0 個 HTTP 錯誤。兩個分數都保留，避免把系統守門後的結果誤寫成原始 LoRA 品質。
+同日已完成正式切換：停止 host `.venv-gpu` 程序，改由 `infra/npc_gateway/compose.yaml` 在 `rag-npc-llm` 內執行 vLLM 0.31.0 與 Gateway。`/health` 現在列出 `vidalia-lora`、`andre-lora`、`menmesvento-lora`、`dasso-lora`、`seth-lora`、`syra-lora`、`alan-lora`、`veta-lora` 八條專屬路由；host 只綁 loopback，沒有公開部署。守門後 `127.0.0.1:8000` 為 93／93，但其中 90 次由前置守門回答；另以 24 題開放式提示、每題三次強制進模型，原始 LoRA 為 47／72，另有 2 次 503。這些分數分開保留，避免把系統安全性誤寫成原始模型品質。
 
 ## P0：已交付的服務資訊
 

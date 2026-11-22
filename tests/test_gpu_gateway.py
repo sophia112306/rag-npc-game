@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 import httpx
 from fastapi.testclient import TestClient
@@ -107,6 +108,7 @@ def completion(
     dialogue_text: str = "我會先確認親眼所見的痕跡。",
     *,
     intent_summary: str = "回應玩家的問題。",
+    event_proposals: list[dict[str, Any]] | None = None,
 ) -> httpx.Response:
     return httpx.Response(
         200,
@@ -121,7 +123,7 @@ def completion(
                                 "npc_dialogue": [
                                     {"text": dialogue_text, "emotion": "calm"}
                                 ],
-                                "event_proposals": [],
+                                "event_proposals": event_proposals or [],
                             },
                             ensure_ascii=False,
                         )
@@ -383,6 +385,46 @@ def test_gateway_fails_closed_calmly_for_an_admitted_false_inventory() -> None:
     )
     assert output["npc_dialogue"][0]["emotion"] == "firm"
     assert output["event_proposals"] == []
+
+
+def test_gateway_strips_model_event_proposals_from_npc_dialogue() -> None:
+    event_proposal = {
+        "event_type": "item_exchange",
+        "description": "模型嘗試宣告未成立的交付。",
+        "actor_id": "gateway-test-player",
+        "target_id": "vidalia",
+        "operations": [
+            {
+                "operation_type": "transfer_item",
+                "item_id": "invented_item",
+                "from_entity_id": "gateway-test-player",
+                "to_entity_id": "vidalia",
+            }
+        ],
+        "witness_ids": ["gateway-test-player", "vidalia"],
+        "visible_to_player": True,
+    }
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion(
+                "先把你實際看到的事情說清楚。",
+                event_proposals=[event_proposal],
+            )
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_request("vidalia"))
+
+    assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "post_generation_guard"
+    )
+    assert response.json()["event_proposals"] == []
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "先把你實際看到的事情說清楚。"
+    )
 
 
 @pytest.mark.parametrize(

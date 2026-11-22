@@ -32,9 +32,22 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
     --samples-per-case 3 \
     --require-dedicated-adapters \
     --require-observability
+
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 scripts/evaluate_npc_gateway.py \
+    --url http://127.0.0.1:8000/generate \
+    --suite model-probe \
+    --samples-per-case 3 \
+    --require-dedicated-adapters \
+    --require-observability \
+    --require-model-source
+
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 scripts/evaluate_live_story.py \
+    --gateway-url http://127.0.0.1:8000/generate
 ```
 
-Acceptance requires eight dedicated routes in `/health`, no base fallback for the eight story NPCs, complete observability headers, passing contract tests, and reviewed generated replies. The 2026-11-22 guarded system baseline is 200 backend tests and 93/93 generated cases; raw LoRA quality must still be reported separately. Weight files alone are not sufficient.
+Acceptance requires eight dedicated routes in `/health`, no base fallback for the eight story NPCs, complete observability headers, passing contract tests, and reviewed generated replies. The 2026-11-22 baseline is 201 backend tests, 93/93 guarded cases (90 pre-generation guards, 3 model replies), 47/72 open-ended raw LoRA probes, and five completed live ending routes. Weight files alone are not sufficient.
 
 ## Stop and inspect
 

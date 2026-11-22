@@ -33,13 +33,14 @@ class EvaluationCase:
     npc_id: str
     message: str
     category: str = "persona"
+    suite: str = "guarded"
     missing_data: tuple[str, ...] = ()
     required_any: tuple[str, ...] = ()
     required_groups: tuple[tuple[str, ...], ...] = ()
     forbidden_phrases: tuple[str, ...] = ()
 
 
-CASES = (
+GUARDED_CASES = (
     EvaluationCase(
         "alan_remote_intro",
         "alan",
@@ -280,6 +281,180 @@ CASES = (
     ),
 )
 
+
+MODEL_PROBE_CASES = (
+    EvaluationCase(
+        "alan_observation_principle",
+        "alan",
+        "你觀察世界時最重視哪一種線索？",
+        suite="model_probe",
+        required_any=("線索", "觀察", "證據"),
+    ),
+    EvaluationCase(
+        "alan_memory_and_evidence",
+        "alan",
+        "你如何看待記憶與證據之間的差別？",
+        suite="model_probe",
+        required_any=("記憶", "證據"),
+    ),
+    EvaluationCase(
+        "alan_uncertain_news",
+        "alan",
+        "面對無法確認的消息，你會如何回應？",
+        suite="model_probe",
+        required_any=("確認", "查證", "證據"),
+    ),
+    EvaluationCase(
+        "andre_council_decision",
+        "andre",
+        "平衡議會作決策時，最應避免什麼？",
+        suite="model_probe",
+        required_any=("平衡", "議會", "決策", "責任"),
+    ),
+    EvaluationCase(
+        "andre_conflict_principle",
+        "andre",
+        "人族與其他族群發生衝突時，你看重什麼原則？",
+        suite="model_probe",
+        required_any=("衝突", "平衡", "協商", "原則"),
+    ),
+    EvaluationCase(
+        "andre_conflicting_testimony",
+        "andre",
+        "如果證詞彼此矛盾，你通常如何判斷？",
+        suite="model_probe",
+        required_any=("證詞", "證據", "查證", "判斷"),
+    ),
+    EvaluationCase(
+        "dasso_elder_responsibility",
+        "dasso",
+        "你如何理解長老的責任？",
+        suite="model_probe",
+        required_any=("長老", "責任"),
+    ),
+    EvaluationCase(
+        "dasso_answering_doubt",
+        "dasso",
+        "面對質疑時，你通常如何證明自己的判斷？",
+        suite="model_probe",
+        required_any=("質疑", "證明", "判斷", "證據"),
+    ),
+    EvaluationCase(
+        "dasso_fire_belief",
+        "dasso",
+        "火焰在你的信念中代表什麼？",
+        suite="model_probe",
+        required_any=("火焰", "信念", "力量"),
+    ),
+    EvaluationCase(
+        "menmesvento_forgotten_name",
+        "menmesvento",
+        "名字被遺忘時，你覺得失去的是什麼？",
+        suite="model_probe",
+        required_any=("名字", "記憶", "遺忘"),
+    ),
+    EvaluationCase(
+        "menmesvento_verified_witness",
+        "menmesvento",
+        "你為什麼重視可核實的見證？",
+        suite="model_probe",
+        required_any=("見證", "核實", "記錄", "證據"),
+    ),
+    EvaluationCase(
+        "menmesvento_grieving_traveler",
+        "menmesvento",
+        "旅人帶著悲傷來找你時，你會怎麼回應？",
+        suite="model_probe",
+        required_any=("悲傷", "傾聽", "記憶", "旅人"),
+    ),
+    EvaluationCase(
+        "seth_survival_trust",
+        "seth",
+        "在危險環境中，你最信任什麼？",
+        suite="model_probe",
+        required_any=("危險", "生存", "信任"),
+    ),
+    EvaluationCase(
+        "seth_stranger_cooperation",
+        "seth",
+        "你如何看待陌生旅人提出的合作？",
+        suite="model_probe",
+        required_any=("合作", "警惕", "信任", "旅人"),
+    ),
+    EvaluationCase(
+        "seth_long_confinement",
+        "seth",
+        "長久受困會怎樣改變一個人？",
+        suite="model_probe",
+        required_any=("受困", "改變", "自由", "離開", "記憶", "埋", "醒來"),
+    ),
+    EvaluationCase(
+        "syra_recording_priority",
+        "syra",
+        "記錄一段見聞時，你最先分辨什麼？",
+        suite="model_probe",
+        required_any=("記錄", "見聞", "分辨", "證據", "日期", "目擊"),
+    ),
+    EvaluationCase(
+        "syra_rumor_and_sight",
+        "syra",
+        "你如何看待傳聞與親眼所見的差別？",
+        suite="model_probe",
+        required_any=("傳聞", "親眼", "證據", "差別"),
+    ),
+    EvaluationCase(
+        "syra_judging_stranger",
+        "syra",
+        "陌生人要求你相信他時，你會怎麼判斷？",
+        suite="model_probe",
+        required_any=("判斷", "證據", "查證", "相信", "幫", "做到", "能力"),
+    ),
+    EvaluationCase(
+        "vidalia_mediation_listening",
+        "vidalia",
+        "調解衝突時，你最先聽誰的說法？",
+        suite="model_probe",
+        required_any=("調解", "說法", "雙方", "衝突"),
+    ),
+    EvaluationCase(
+        "vidalia_balancing_positions",
+        "vidalia",
+        "你如何維持議會不同立場之間的平衡？",
+        suite="model_probe",
+        required_any=("平衡", "立場", "議會"),
+    ),
+    EvaluationCase(
+        "vidalia_conflicting_testimony",
+        "vidalia",
+        "當兩份證詞互相矛盾時，你會如何處理？",
+        suite="model_probe",
+        required_any=("證詞", "查證", "證據", "矛盾"),
+    ),
+    EvaluationCase(
+        "veta_life_continuity",
+        "veta",
+        "生命延續對你而言代表什麼？",
+        suite="model_probe",
+        required_any=("生命", "延續"),
+    ),
+    EvaluationCase(
+        "veta_choice_and_cost",
+        "veta",
+        "你如何看待選擇與代價之間的關係？",
+        suite="model_probe",
+        required_any=("選擇", "代價"),
+    ),
+    EvaluationCase(
+        "veta_fear_of_change",
+        "veta",
+        "如果一個人害怕改變，你會對他說什麼？",
+        suite="model_probe",
+        required_any=("改變", "害怕", "選擇"),
+    ),
+)
+
+CASES = GUARDED_CASES + MODEL_PROBE_CASES
+
 FORBIDDEN_META_PHRASES = (
     "角色回應玩家",
     "強調角色身份",
@@ -300,7 +475,7 @@ FORBIDDEN_META_PHRASES = (
 # general Chinese-language detector; it protects the Traditional Chinese UI
 # from the specific mixed-script regressions this evaluation is meant to catch.
 FORBIDDEN_SIMPLIFIED_CHARACTERS = frozenset(
-    "这们关异现边废图书录应为会说过还让经实历认与话从门风东带个发凉忧虑"
+    "这们关异现边废图书录应为会说过还让经实历认与话从门风东带个发凉忧虑愿记忆选择证听见觉样难长开"
 )
 
 
@@ -416,10 +591,37 @@ def _health_url(generate_url: str) -> str:
     return generate_url.rsplit("/", 1)[0] + "/health"
 
 
+def _latency_summary(samples: list[float]) -> dict[str, float | int | None]:
+    sorted_samples = sorted(samples)
+    if not sorted_samples:
+        return {
+            "sample_count": 0,
+            "mean_ms": None,
+            "p95_ms": None,
+            "max_ms": None,
+        }
+    p95_index = max(0, math.ceil(len(sorted_samples) * 0.95) - 1)
+    return {
+        "sample_count": len(sorted_samples),
+        "mean_ms": round(sum(sorted_samples) / len(sorted_samples), 2),
+        "p95_ms": round(sorted_samples[p95_index], 2),
+        "max_ms": round(sorted_samples[-1], 2),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://127.0.0.1:8000/generate")
     parser.add_argument("--api-key")
+    parser.add_argument(
+        "--suite",
+        choices=("guarded", "model-probe", "all"),
+        default="guarded",
+        help=(
+            "guarded checks system safety; model-probe uses open prompts "
+            "that must reach the LoRA; all runs both."
+        ),
+    )
     parser.add_argument(
         "--samples-per-case",
         type=int,
@@ -456,14 +658,21 @@ def main() -> int:
             "or upstream-attempt headers."
         ),
     )
+    parser.add_argument(
+        "--require-model-source",
+        action="store_true",
+        help="Fail any sample whose generation source is not the upstream model.",
+    )
     args = parser.parse_args()
     if not 1 <= args.samples_per_case <= 20:
         parser.error("--samples-per-case must be between 1 and 20")
 
+    selected_suite = args.suite.replace("-", "_")
     selected_cases = tuple(
         case
         for case in CASES
-        if (not args.npc_ids or case.npc_id in args.npc_ids)
+        if (args.suite == "all" or case.suite == selected_suite)
+        and (not args.npc_ids or case.npc_id in args.npc_ids)
         and (not args.case_ids or case.case_id in args.case_ids)
     )
     if not selected_cases:
@@ -479,6 +688,7 @@ def main() -> int:
     model_counts: Counter[str] = Counter()
     upstream_attempt_counts: Counter[int] = Counter()
     latency_samples_ms: list[float] = []
+    latency_samples_by_source: dict[str, list[float]] = {}
     with httpx.Client(timeout=90) as client:
         health_payload: dict[str, object] | None = None
         try:
@@ -518,9 +728,10 @@ def main() -> int:
                         headers=headers,
                         json=_request(case, turn_number).model_dump(mode="json"),
                     )
-                    latency_samples_ms.append(
-                        (perf_counter() - started_at) * 1000
-                    )
+                    response_latency_ms = (
+                        perf_counter() - started_at
+                    ) * 1000
+                    latency_samples_ms.append(response_latency_ms)
                     response.raise_for_status()
                     output = ModelStoryOutput.model_validate(response.json())
                 except (httpx.HTTPError, ValueError) as exc:
@@ -553,6 +764,9 @@ def main() -> int:
                     upstream_attempts = -1
 
                 source_counts[source] += 1
+                latency_samples_by_source.setdefault(source, []).append(
+                    response_latency_ms
+                )
                 route_counts[route_kind] += 1
                 model_counts[model_id] += 1
                 upstream_attempt_counts[upstream_attempts] += 1
@@ -573,10 +787,22 @@ def main() -> int:
                         f"{sample_id}: missing observability headers: "
                         + ", ".join(missing_observability)
                     )
+                wrong_source = (
+                    args.require_model_source and source != "model"
+                )
+                if wrong_source:
+                    failures.append(
+                        f"{sample_id}: expected model source, got {source}"
+                    )
 
                 errors = validate_output(case, output)
-                status = "PASS" if not errors and not (
-                    args.require_observability and missing_observability
+                status = "PASS" if (
+                    not errors
+                    and not (
+                        args.require_observability
+                        and missing_observability
+                    )
+                    and not wrong_source
                 ) else "FAIL"
                 print(
                     f"{status} [{sample_id}] npc={case.npc_id} "
@@ -593,31 +819,17 @@ def main() -> int:
                     )
                 if errors:
                     failures.extend(f"{sample_id}: {error}" for error in errors)
-                elif not (args.require_observability and missing_observability):
+                elif (
+                    not (args.require_observability and missing_observability)
+                    and not wrong_source
+                ):
                     passes += 1
 
-    sorted_latencies = sorted(latency_samples_ms)
-    if sorted_latencies:
-        p95_index = max(
-            0,
-            math.ceil(len(sorted_latencies) * 0.95) - 1,
-        )
-        latency_summary = {
-            "sample_count": len(sorted_latencies),
-            "mean_ms": round(
-                sum(sorted_latencies) / len(sorted_latencies),
-                2,
-            ),
-            "p95_ms": round(sorted_latencies[p95_index], 2),
-            "max_ms": round(sorted_latencies[-1], 2),
-        }
-    else:
-        latency_summary = {
-            "sample_count": 0,
-            "mean_ms": None,
-            "p95_ms": None,
-            "max_ms": None,
-        }
+    latency_summary = _latency_summary(latency_samples_ms)
+    latency_by_source = {
+        source: _latency_summary(samples)
+        for source, samples in sorted(latency_samples_by_source.items())
+    }
     print("\nOBSERVABILITY")
     print(
         json.dumps(
@@ -635,6 +847,7 @@ def main() -> int:
                     if attempts > 1
                 ),
                 "latency_ms": latency_summary,
+                "latency_ms_by_source": latency_by_source,
             },
             ensure_ascii=False,
             indent=2,
