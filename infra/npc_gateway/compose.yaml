@@ -1,0 +1,48 @@
+name: rag-npc-model-runtime
+
+services:
+  runtime:
+    build:
+      context: ../..
+      dockerfile: infra/npc_gateway/Dockerfile
+    image: rag-npc-model-runtime:vllm-0.31.0
+    container_name: rag-npc-llm
+    restart: unless-stopped
+    init: true
+    working_dir: /workspace/rag-npc-game
+    command: ["bash", "scripts/start_npc_docker_runtime.sh"]
+    ports:
+      - "127.0.0.1:${NPC_GATEWAY_PORT:-8000}:8000"
+      - "127.0.0.1:${VLLM_PORT:-8001}:8001"
+    devices:
+      - "nvidia.com/gpu=all"
+    environment:
+      HF_HOME: /models/huggingface
+      PYTHONPATH: /workspace/rag-npc-game
+      NPC_GATEWAY_HOST: 0.0.0.0
+      NPC_GATEWAY_PORT: "8000"
+      VLLM_BASE_URL: http://127.0.0.1:8001/v1
+      VLLM_HOST: 0.0.0.0
+      VLLM_PORT: "8001"
+      VLLM_GPU_MEMORY_UTILIZATION: "${VLLM_GPU_MEMORY_UTILIZATION:-0.65}"
+      VLLM_MAX_MODEL_LEN: "${VLLM_MAX_MODEL_LEN:-4096}"
+      NPC_VLLM_MAX_LORAS: "${NPC_VLLM_MAX_LORAS:-2}"
+      NPC_VLLM_MAX_CPU_LORAS: "${NPC_VLLM_MAX_CPU_LORAS:-8}"
+    volumes:
+      - ../..:/workspace/rag-npc-game
+      - "${HF_CACHE_DIR:-/home/team115_1/.cache/huggingface}:/models/huggingface"
+      - npc-runtime-logs:/var/log/rag-npc
+    shm_size: "8gb"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import json, urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10)); assert data['status'] == 'ready'; assert len(data['npc_routes']) == 8"
+      interval: 30s
+      timeout: 15s
+      start_period: 15m
+      retries: 3
+
+volumes:
+  npc-runtime-logs:
