@@ -66,6 +66,28 @@
       "height": 941,
       "canon_status": "provisional",
       "prompt_summary": "Adapt the user-provided Lieyi Plains reference into a game-ready hand-painted fantasy background: a volcanic plain of dark basalt, branching magma streams, heat-scarred ruins, ember-orange trees, and a monumental living flame rising from a stepped obsidian altar. Preserve a clear cooled-stone route through the lower center; no people, babies, children, bodies, creatures, UI, text, logo, watermark, modern objects, science-fiction machinery, or exact copying of the reference composition."
+    },
+    {
+      "scene_id": "memory_library",
+      "file": "/game/scenes/memory-library-v1.png",
+      "sha256": "9c9e4e27998b3cd407333fc5e247917bfe5b7ed6844ed0c2b5a4f48b9137f339",
+      "width": 1672,
+      "height": 941,
+      "canon_status": "provisional",
+      "source_type": "user_provided_generated_image",
+      "source_note": "Provided by the user from their game-project reference-image folder on 2026-11-22.",
+      "prompt_summary": "A twilight-lit ancient memory archive with a clear foreground path, central reading dais, sealed records and no characters or readable text."
+    },
+    {
+      "scene_id": "veta_source",
+      "file": "/game/scenes/veta-life-spring-source-v1.png",
+      "sha256": "48c912918b382e60e39bba4d27b68d86ac0c5c8abeedb125838b3b72528f9acb",
+      "width": 1671,
+      "height": 941,
+      "canon_status": "provisional",
+      "source_type": "user_provided_generated_image",
+      "source_note": "Provided by the user from their game-project reference-image folder on 2026-11-22.",
+      "prompt_summary": "A wide walkable view of Veta sleeping beneath the Life Spring source, preserving the established stone-and-root dragon design."
     }
   ]
 }

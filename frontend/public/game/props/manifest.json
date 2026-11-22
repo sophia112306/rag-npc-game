@@ -1,0 +1,15 @@
+{
+  "assets": [
+    {
+      "prop_id": "book_of_life_and_death",
+      "version": 1,
+      "file": "book-of-life-and-death-v1.png",
+      "sha256": "283d55a997444f1c2028b8392102b3c0e12764838f0b66c53560c798bf6d8478",
+      "width": 1254,
+      "height": 1254,
+      "transparent": true,
+      "source_type": "user_provided_generated_image",
+      "story_use": "Truth_A interaction landmark in the memory library"
+    }
+  ]
+}

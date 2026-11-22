@@ -158,6 +158,8 @@ class GameOrchestrator:
         state = await self.get_state(action.session_id)
         if action.expected_state_version != state.state_version:
             raise StateVersionConflictError(action.expected_state_version, state.state_version)
+        if state.game_status != "active":
+            raise StoryChoiceUnavailableError("This game has already reached a terminal state")
 
         if action.target_npc_id in NPC_SCENES and not npc_is_present(action.target_npc_id, state.current_scene_id):
             raise NpcUnavailableError(

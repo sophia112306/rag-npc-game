@@ -72,6 +72,8 @@ class GameState(BaseModel):
     session_id: str
     state_version: int = Field(default=1, ge=1)
     turn_count: int = 0                  # 總遊戲回合計數
+    game_status: Literal["active", "completed", "game_over"] = "active"
+    final_ending: str | None = None
     phase_turns: int = 0                 # 當前階段已消耗的回合數
     current_scene_id: str = "fissure"    # 當前場景 ID (初始在屏障裂隙)
     

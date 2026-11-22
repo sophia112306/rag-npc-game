@@ -27,6 +27,8 @@ def test_scene_registry_references_existing_assets_and_destinations() -> None:
         "liuchen_valley",
         "border_ruins",
         "lieyi_plains",
+        "memory_library",
+        "veta_source",
     }
     for scene in SCENES.values():
         assert (public_root / scene.background_url.removeprefix("/")).is_file()
@@ -47,6 +49,8 @@ def test_scene_registry_references_existing_assets_and_destinations() -> None:
         "minglin_rune_grove",
         "liuchen_valley",
         "lieyi_plains",
+        "memory_library",
+        "veta_source",
     ):
         profile = SCENES[story_scene_id].visual_profile
         assert profile.show_vidalia is False

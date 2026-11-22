@@ -12,6 +12,7 @@ from backend.content.npc_dialogue import NPC_DIALOGUE_CHOICES
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import ActionMode
 from backend.schemas.player_choice import PlayerChoice
+from backend.rules.ending_rules import EndingRules
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,10 @@ class DemoStoryChoiceDefinition:
     rule_event_id: str | None = None
     witness_npc_ids: tuple[str, ...] = ()
     narrate_response: bool = False
+    required_completed_choice_ids: tuple[str, ...] = ()
+    epilogue_answer_key: str | None = None
+    epilogue_answer_value: str | None = None
+    ending_id: str | None = None
 
     def to_player_choice(self) -> PlayerChoice:
         return PlayerChoice(
@@ -462,25 +467,218 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "demo_complete", "邊境之後",
         action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
     ),
+    _choice(
+        "enter_memory_library_with_map", "demo_complete", "minglin",
+        "依裂隙地圖前往記憶圖書館", "我依照塞特與希拉交付的裂隙地圖前往記憶圖書館。",
+        "裂隙地圖在暮光下顯出一條被抹去的路。石門之後，封存輪迴記錄的古老藏庫重新出現在你面前。",
+        "memory_library_arrival", "記憶圖書館",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="memory_library",
+        unlock_scene_ids=("memory_library",), special_scene_transition=True,
+        required_completed_choice_ids=("border_help_both",),
+    ),
+    _choice(
+        "enter_memory_library_with_elders", "demo_complete", "minglin",
+        "沿長老會檔案前往記憶圖書館", "我沿長老會留下的檔案索引前往記憶圖書館。",
+        "通報換來的檔案只標出入口，沒有替你解釋其中內容。你穿過石門，獨自走進被暮光照亮的藏庫。",
+        "memory_library_arrival", "記憶圖書館",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="memory_library",
+        unlock_scene_ids=("memory_library",), special_scene_transition=True,
+        required_completed_choice_ids=("border_report",),
+    ),
+    _choice(
+        "enter_memory_library_alone", "demo_complete", "minglin",
+        "自行追蹤邊境殘痕", "我不依靠任何一方，自己追蹤邊境殘留的記憶痕跡。",
+        "你花了更久才找出石門。沒有地圖也沒有引路人，只有沿途反覆出現的空白書頁指向古老藏庫。",
+        "memory_library_arrival", "記憶圖書館",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="memory_library",
+        unlock_scene_ids=("memory_library",), special_scene_transition=True,
+        required_completed_choice_ids=("border_ignore",),
+    ),
+    _choice(
+        "inspect_life_death_book", "memory_library_arrival", "memory_library",
+        "翻閱古老生死之書", "我翻閱石台上的生死之書，找自己的名字。",
+        "書頁記得每一次埋葬與重生，輪到你時卻只剩空白。你不在這個世界原有的生死循環裡。",
+        "memory_truth_a", "真相一：無名者",
+        rule_event_id="Truth_A", reveal_clue_ids=("truth_a_blank_page",),
+    ),
+    _choice(
+        "inspect_invasion_archive", "memory_library_arrival", "memory_library",
+        "檢查千年前的入侵紀錄", "我檢查藏庫中被封存的第一次入侵紀錄。",
+        "紀錄中的入侵者與你頸後的接縫完全一致。這場異象不是第一次發生，而你帶著同一來源的痕跡。",
+        "memory_truth_b", "真相二：第一次入侵",
+        rule_event_id="Truth_B", reveal_clue_ids=("truth_b_invasion_record",),
+    ),
+    _choice(
+        "inspect_invasion_archive", "memory_truth_a", "memory_library",
+        "對照千年前的入侵紀錄", "我把空白書頁與第一次入侵紀錄放在一起比對。",
+        "紀錄中的入侵者與你頸後的接縫完全一致。空白不是遺漏，而是你來自這個輪迴之外的證據。",
+        "memory_truth_ab", "兩份相合的真相",
+        rule_event_id="Truth_B", reveal_clue_ids=("truth_b_invasion_record",),
+    ),
+    _choice(
+        "inspect_life_death_book", "memory_truth_b", "memory_library",
+        "以生死之書驗證紀錄", "我用生死之書驗證入侵紀錄裡的身分。",
+        "書頁記得每一次埋葬與重生，輪到你時卻只剩空白。你確實不在這個世界原有的循環裡。",
+        "memory_truth_ab", "兩份相合的真相",
+        rule_event_id="Truth_A", reveal_clue_ids=("truth_a_blank_page",),
+    ),
+    _choice(
+        "contact_alan_observer", "memory_truth_ab", "memory_library",
+        "回應觀測者艾倫", "我回應藏庫中出現的外界通訊。",
+        "觀測者艾倫承認：外界技術評議會把維塔的永生夢境當成可長期保存意識的資料系統，而你的進入重新啟動了被壓住的因果衝突。",
+        "memory_truths_complete", "真相三：夢境之外",
+        rule_event_id="Truth_C", reveal_clue_ids=("truth_c_alan_transmission",),
+        narrate_response=True,
+    ),
+    _choice(
+        "seek_menmesvento_after_truths", "memory_truths_complete", "memory_library",
+        "帶著真相尋找門梅司文托", "我帶著三份真相前往流塵谷，尋找門梅司文托。",
+        "門梅司文托讀完你帶來的紀錄，將一枚帶著灰燼裂痕的石牌放在生死之書旁，讓你決定是否收下。",
+        "dust_token_offer", "門梅司文托的託付",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="liuchen_valley",
+        unlock_scene_ids=("liuchen_valley",), special_scene_transition=True,
+    ),
+    _choice(
+        "accept_dust_return_token", "dust_token_offer", "liuchen_valley",
+        "收下塵歸令", "我收下塵歸令，保留終止外來因果的選擇。",
+        "門梅司文托把石牌交給你。它不會替你做決定，只會在維塔面前證明你願意承擔消失的代價。",
+        "dust_token_decided", "塵歸令",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="menmesvento",
+        witness_npc_ids=("menmesvento",), rule_event_id="E3-2_receive_dust_token",
+    ),
+    _choice(
+        "decline_dust_return_token", "dust_token_offer", "liuchen_valley",
+        "不收下塵歸令", "我不收下塵歸令，但會親自面對維塔。",
+        "門梅司文托收回石牌，接受你的決定。通往命脈之泉源頭的路仍然為你開啟。",
+        "dust_token_decided", "不以消失換取終結",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="menmesvento",
+    ),
+    _choice(
+        "return_to_minglin_for_veta", "dust_token_decided", "liuchen_valley",
+        "返回鳴霖尋找維塔", "我返回鳴霖，前往命脈之泉源頭。",
+        "三份真相讓沉默的泉水重新顯出流向。維達利亞在議會前等你，沒有阻止你走向源頭。",
+        "veta_route_ready", "命脈之泉源頭",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin",
+        special_scene_transition=True,
+    ),
+    _choice(
+        "enter_veta_source", "veta_route_ready", "minglin",
+        "前往維塔沉眠之所", "我沿重新顯現的水脈前往維塔沉眠之所。",
+        "古根與泉水在你面前分開。沉睡巨龍伏在石台上，意識越過夢境，向你提出最後三個問題。",
+        "veta_question_one", "維塔三問：生命",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="veta_source",
+        unlock_scene_ids=("veta_source",), special_scene_transition=True,
+    ),
+    _choice(
+        "veta_q1_each_life", "veta_question_one", "veta_source",
+        "生命因只有一次而珍貴", "我回答維塔：生命因為終會結束，每一次選擇才真正重要。",
+        "維塔聽見你承認死亡，也聽見你仍願意珍惜每一次存在。泉水向外流動了一步。",
+        "veta_question_two", "維塔三問：記憶",
+        rule_event_id="VETA_Q1_EACH_LIFE", epilogue_answer_key="answer_q1",
+        epilogue_answer_value="生命因為終會結束，每一次選擇才真正重要。",
+    ),
+    _choice(
+        "veta_q1_recurring_life", "veta_question_one", "veta_source",
+        "延續本身也有價值", "我回答維塔：即使生命重複，延續與守護仍然有價值。",
+        "維塔的夢安靜下來。你沒有否定輪迴中的感情，但也必須承擔停滯可能帶來的代價。",
+        "veta_question_two", "維塔三問：記憶",
+        rule_event_id="VETA_Q1_RECURRING", epilogue_answer_key="answer_q1",
+        epilogue_answer_value="即使生命重複，延續與守護仍然有價值。",
+    ),
+    _choice(
+        "veta_q2_remember", "veta_question_two", "veta_source",
+        "記住痛苦，讓它成為見證", "我回答維塔：記憶即使痛苦，也不該被替他人抹去。",
+        "被埋葬的名字沿泉水浮現。維塔讓你看見可用現有歷史承擔的最後選擇。",
+        "veta_final_choice", "維塔三問：世界的去向",
+        rule_event_id="VETA_Q2_REMEMBER", epilogue_answer_key="answer_q2",
+        epilogue_answer_value="記憶即使痛苦，也不該被替他人抹去。",
+    ),
+    _choice(
+        "veta_q2_release", "veta_question_two", "veta_source",
+        "允許放下，但不能竄改", "我回答維塔：可以選擇放下痛苦，但不能把他人的歷史改成不存在。",
+        "維塔接受遺忘也必須出於選擇。泉面映出你與兩位守護者共同改寫夢境的可能。",
+        "veta_final_choice", "維塔三問：世界的去向",
+        rule_event_id="VETA_Q2_RELEASE", epilogue_answer_key="answer_q2",
+        epilogue_answer_value="可以選擇放下痛苦，但不能把他人的歷史改成不存在。",
+    ),
+    _choice(
+        "veta_q2_control", "veta_question_two", "veta_source",
+        "把記憶當成可以控制的資料", "我回答維塔：記憶只是可以重寫的資料，應由能掌控它的人決定。",
+        "世界邊緣的裂痕同時張開。你把問答變成奪權宣告，維塔的控制權開始動搖。",
+        "veta_usurp_warning", "篡夢警告",
+        rule_event_id="VETA_Q2_CONTROL", epilogue_answer_key="answer_q2",
+        epilogue_answer_value="記憶只是可以重寫的資料，應由能掌控它的人決定。",
+    ),
+    _choice(
+        "confirm_usurp_after_warning", "veta_usurp_warning", "veta_source",
+        "在五次警告脈衝後仍選擇奪權", "我理解警告，仍要在第五次脈衝後奪取維塔的控制權。",
+        "五次警告脈衝逐一熄滅，你仍沒有退後。篡夢倒數啟動，其他世界去向隨控制權關閉。",
+        "veta_final_choice", "維塔三問：世界的去向",
+        rule_event_id="VETA_USURP_CONFIRM",
+    ),
+    _choice(
+        "choose_long_sleep", "veta_final_choice", "veta_source",
+        "讓維塔繼續長眠", "我選擇維持夢境，讓維塔繼續長眠。",
+        "泉水恢復平靜，世界留在熟悉的輪迴中。你保住了夢，也接受它不再向外生長。",
+        "ending_long_sleep", "結局：長眠", ending_id="長眠",
+    ),
+    _choice(
+        "choose_wake", "veta_final_choice", "veta_source",
+        "喚醒維塔", "我選擇喚醒維塔，讓這個世界接受死亡與真實。",
+        "巨龍第一次睜開眼。輪迴停止替眾人逃避終點，而每一段生命也因此重新成為唯一。",
+        "ending_wake", "結局：醒來", ending_id="醒來",
+    ),
+    _choice(
+        "choose_new_dream", "veta_final_choice", "veta_source",
+        "共同編織新夢", "我選擇與維塔和兩位守護者共同編織新的夢境。",
+        "新夢不再抹除死亡與記憶，而讓每個人保有離開或留下的權利。舊輪迴從此成為可被選擇的道路。",
+        "ending_new_dream", "結局：新夢", ending_id="新夢",
+    ),
+    _choice(
+        "choose_dust_return", "veta_final_choice", "veta_source",
+        "啟動塵歸令", "我選擇啟動塵歸令，從夢境中抹除外來因果。",
+        "石牌化為灰燼。你的痕跡從因果中退去，維塔與三族得到一個不再被外界重啟的未來。",
+        "ending_dust_return", "結局：塵歸", ending_id="塵歸",
+    ),
+    _choice(
+        "choose_usurp", "veta_final_choice", "veta_source",
+        "奪取維塔的夢", "我選擇奪取維塔的控制權，讓夢境服從我的意志。",
+        "你取代沉睡巨龍成為夢的控制者。世界得以延續，代價是所有記憶都開始依附你的意志。",
+        "ending_usurp", "結局：篡夢", ending_id="篡夢",
+    ),
 )
 
 BORDER_RULE_IDS = frozenset(("E2-3_help_both", "E2-3_report", "E2-3_ignore"))
 BORDER_RESOLUTION_IDS = frozenset(choice.choice_id for choice in DEMO_STORY_CHOICES if choice.rule_event_id in BORDER_RULE_IDS)
+MEMORY_LIBRARY_ENTRY_IDS = frozenset(
+    ("enter_memory_library_with_map", "enter_memory_library_with_elders", "enter_memory_library_alone")
+)
+AUTHORED_RULE_IDS = frozenset(
+    choice.rule_event_id for choice in DEMO_STORY_CHOICES if choice.rule_event_id
+)
 
 
 def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefinition, ...]:
     """Return at most four choices valid for the authoritative story position."""
 
+    if state.game_status != "active":
+        return ()
+    completed = set(state.story_progress.completed_choice_ids)
     visited_both_regions = {"enter_lieyi_plains", "enter_liuchen_valley"}.issubset(
-        state.story_progress.completed_choice_ids
+        completed
     )
+    border_resolution = BORDER_RESOLUTION_IDS.intersection(completed)
+    available_endings = set(EndingRules.evaluate_available_endings(state))
     return tuple(
         choice
         for choice in DEMO_STORY_CHOICES
         if choice.source_node_id == state.story_progress.node_id
         and choice.source_scene_id == state.current_scene_id
-        and (choice.choice_id != "preview_border_ruins" or visited_both_regions)
-        and (choice.choice_id not in BORDER_RESOLUTION_IDS or not BORDER_RESOLUTION_IDS.intersection(state.story_progress.completed_choice_ids))
+        and (choice.choice_id != "preview_border_ruins" or (visited_both_regions and not border_resolution))
+        and (choice.choice_id not in BORDER_RESOLUTION_IDS or not border_resolution)
+        and set(choice.required_completed_choice_ids).issubset(completed)
+        and (not border_resolution or state.story_progress.node_id != "demo_complete" or choice.choice_id in MEMORY_LIBRARY_ENTRY_IDS)
+        and (choice.ending_id is None or choice.ending_id in available_endings)
     )[:4]
 
 

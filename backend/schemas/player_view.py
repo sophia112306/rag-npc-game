@@ -43,14 +43,17 @@ def project_navigation(state: GameState) -> PlayerNavigationView:
     choices = build_player_choices(state, [])
     routes = {c.destination_scene_id: c for c in choices if c.destination_scene_id}
     investigations = [c for c in choices if c.action_mode == "interaction"]
-    decisions = [choice for choice in available_demo_story_choices(state) if choice.rule_event_id]
+    decisions = [
+        choice for choice in available_demo_story_choices(state)
+        if choice.choice_id in BORDER_RESOLUTION_IDS
+    ]
     if decisions:
         name = CHARACTER_PROFILES[decisions[0].target_npc_id].name
         objective = f"下一步：走近{name}，在交談選項做出邊境決定。"
     elif state.story_progress.node_id == "demo_complete":
         objective = (
-            "邊境的選擇已保存，可回訪各地；後續章節尚未開放。"
-            if BORDER_RESOLUTION_IDS.intersection(state.story_progress.completed_choice_ids) else
+            "邊境的選擇已保存，可前往古老記憶藏庫追查下一層真相。"
+            if BORDER_RESOLUTION_IDS.intersection(state.story_progress.completed_choice_ids) and "memory_library" in routes else
             "兩地線索已帶回議會，可前往邊境廢墟與兩名旅人交談。"
             if "border_ruins" in routes else
             "這條調查已完成。可探索另一條路線；正式後續章節尚未開放。"
@@ -155,6 +158,7 @@ class PlayerFindingView(BaseModel):
     source_npc_id: str | None
     kind: Literal["conversation", "investigation"]
     visual_signal: Literal["ember", "dust"] | None = None
+    image_url: str | None = None
 
 
 class PlayerStoryProgressView(BaseModel):
@@ -178,6 +182,8 @@ class PlayerViewState(BaseModel):
     session_id: str
     state_version: int
     turn_count: int
+    game_status: Literal["active", "completed", "game_over"] = "active"
+    final_ending: str | None = None
     current_scene_id: str
     current_scene: PlayerSceneView
     story_progress: PlayerStoryProgressView
@@ -205,6 +211,8 @@ def project_player_view(state: GameState) -> PlayerViewState:
         session_id=state.session_id,
         state_version=state.state_version,
         turn_count=state.turn_count,
+        game_status=state.game_status,
+        final_ending=state.final_ending,
         current_scene_id=state.current_scene_id,
         navigation=project_navigation(state),
         world_scene=world,

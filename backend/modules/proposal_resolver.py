@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from backend.content.demo_story import (
-    BORDER_RULE_IDS,
+    AUTHORED_RULE_IDS,
     find_available_demo_story_choice,
     find_demo_story_choice_definition,
 )
@@ -14,7 +14,8 @@ from backend.content.items import ITEMS
 from backend.content.characters import CHARACTER_PROFILES, npc_is_present
 from backend.rules.event_rules import EventRules
 from backend.rules.state_rules import StateRules
-from backend.schemas.game_state import GameState, NPCState
+from backend.rules.ending_rules import EndingRules
+from backend.schemas.game_state import GameState, NPCState, StoryPhase
 from backend.schemas.story import (
     AdvanceStoryOperation,
     ChangeSceneOperation,
@@ -330,17 +331,18 @@ class ProposalResolver:
 
         awarded_items = []
         if choice.rule_event_id:
-            # Only the three already-authored border outcomes are integrated.
-            # Full phase changes, danger rules and endings remain separate.
-            if choice.rule_event_id not in BORDER_RULE_IDS:
+            if choice.rule_event_id not in AUTHORED_RULE_IDS:
                 raise ProposalRuleViolation("unsupported_preset_rule", "This authored rule has not been integrated.")
             if any(not npc_is_present(npc_id, state.current_scene_id) for npc_id in choice.witness_npc_ids):
                 raise ProposalRuleViolation("missing_story_participant", "The prepared scene requires its registered participants.")
             rule = EventRules.get_event_effect(choice.rule_event_id)
             if rule is None:
                 raise ProposalRuleViolation("missing_authored_rule", "The authored outcome has no rule definition.")
+            if rule.get("clear_warning_cooldown"):
+                state.warning_cooldown_turns = 0
             StateRules.apply_delta(state, axis_delta=rule.get("axis", 0), usurp_delta=rule.get("usurp", 0), relation_deltas=rule.get("relation", {}), is_event=True)
             state.flags.update(rule.get("flags", {}))
+            state.truth_level = min(3, state.truth_level + rule.get("truth_delta", 0))
             for npc_id in choice.witness_npc_ids:
                 state.npc_states.setdefault(npc_id, NPCState(npc_id=npc_id, name=CHARACTER_PROFILES[npc_id].name)).met = True
             for item in ITEMS.values():
@@ -360,6 +362,17 @@ class ProposalResolver:
 
         state.story_progress.node_id = choice.next_node_id
         state.story_progress.chapter_title = choice.next_chapter_title
+        if choice.choice_id == "enter_veta_source":
+            state.story_phase = StoryPhase.ACT3_FREEDOM
+        if choice.epilogue_answer_key and choice.epilogue_answer_value:
+            epilogue_flags = state.flags.setdefault("epilogue_flags", {})
+            epilogue_flags[choice.epilogue_answer_key] = choice.epilogue_answer_value
+        if choice.ending_id:
+            if choice.ending_id not in EndingRules.evaluate_available_endings(state):
+                raise ProposalRuleViolation("ending_unavailable", "This ending is not available for the established history.")
+            state.game_status = "completed"
+            state.final_ending = choice.ending_id
+            state.story_phase = StoryPhase.ACT4_ENDING
         effect: dict[str, object] = {
             "operation_type": OperationType.ADVANCE_STORY.value,
             "story_choice_id": choice.choice_id,
@@ -372,10 +385,14 @@ class ProposalResolver:
             effect["rule_event_id"] = choice.rule_event_id
             effect["awarded_item_ids"] = awarded_items
             received = "、".join(ITEMS[item_id].name for item_id in awarded_items)
-            message = "邊境選擇已記錄。"
+            message = f"已記錄「{choice.next_chapter_title}」。"
             if received:
                 message += f"獲得道具：{received}。"
             return message, effect
+        if choice.ending_id:
+            effect["final_ending"] = choice.ending_id
+            effect["game_status"] = state.game_status
+            return f"已完成「{choice.next_chapter_title}」。", effect
         if choice.choice_id == "review_demo_findings":
             if choice.target_npc_id not in event.witness_ids:
                 raise ProposalRuleViolation("report_recipient_missing", "Reporting requires the recipient to witness it.")

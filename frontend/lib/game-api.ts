@@ -74,6 +74,8 @@ export type GameStateSummary = {
   player: { player_id: string; name: string; inventory: string[]; items?: PlayerItem[] };
   world_scene: WorldScene;
   turn_count: number;
+  game_status?: "active" | "completed" | "game_over";
+  final_ending?: string | null;
   state_version: number;
   updated_at: string;
   current_scene_id: string;
@@ -100,6 +102,7 @@ export type StoryFinding = {
   source_npc_id: string | null;
   kind: "conversation" | "investigation";
   visual_signal: "ember" | "dust" | null;
+  image_url?: string | null;
 };
 
 export type GameTurnResponse = {

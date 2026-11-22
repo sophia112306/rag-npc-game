@@ -154,9 +154,14 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
         alternative = client.post("/api/game/turn", json={**payload, "action_id": str(uuid4()), "expected_state_version": result["state"]["state_version"]})
         assert alternative.status_code == 409
         _advance(client, choice_id, "return_after_border_choice")
-        _advance(client, choice_id, "preview_border_ruins")
         options = client.get(f"/api/game/{choice_id}/choices").json()
-        assert not {c["choice_id"] for c in options}.intersection({"border_help_both", "border_report", "border_ignore"})
+        option_ids = {c["choice_id"] for c in options}
+        expected_entry = {
+            "border_help_both": "enter_memory_library_with_map",
+            "border_report": "enter_memory_library_with_elders",
+            "border_ignore": "enter_memory_library_alone",
+        }[choice_id]
+        assert option_ids == {expected_entry}
         saved = client.get(f"/api/game/{choice_id}/state").json()
         assert saved["player"]["inventory"] == expected_inventory
 

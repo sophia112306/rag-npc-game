@@ -287,6 +287,52 @@ SCENES["border_ruins"] = SceneDefinition(
     map_position=(1395, 452),
 )
 
+SCENES["memory_library"] = SceneDefinition(
+    scene_id="memory_library",
+    region_name="記憶圖書館",
+    display_name="古老記憶藏庫",
+    subtitle="被暮光照亮的失落檔案館",
+    description="石造書庫保存著輪迴紀錄與被封存的入侵痕跡。",
+    background_url="/game/scenes/memory-library-v1.png",
+    horizon_url="/game/scenes/memory-library-v1.png",
+    tilemap_url="/game/memory-library.tmj",
+    visual_profile=SCENES["border_ruins"].visual_profile.model_copy(
+        update={
+            "profile_id": "memory_library",
+            "fog_color": "#7a563c",
+            "fog_density": 0.012,
+            "key_light_color": "#ffd28c",
+            "accent_light_color": "#7aa2b5",
+        }
+    ),
+    canon_status="provisional",
+    allowed_destinations=(),
+    map_position=(1180, 188),
+)
+
+SCENES["veta_source"] = SceneDefinition(
+    scene_id="veta_source",
+    region_name="命脈之泉源頭",
+    display_name="維塔沉眠之所",
+    subtitle="古根與泉水環繞的世界源頭",
+    description="沉睡巨龍維塔伏在泉源石台上，等待旅人帶著已確認的真相靠近。",
+    background_url="/game/scenes/veta-life-spring-source-v1.png",
+    horizon_url="/game/scenes/veta-life-spring-source-v1.png",
+    tilemap_url="/game/veta-source.tmj",
+    visual_profile=SCENES["minglin_life_spring"].visual_profile.model_copy(
+        update={
+            "profile_id": "veta_source",
+            "fog_density": 0.014,
+            "key_light_intensity": 0.62,
+            "accent_light_color": "#f1a75b",
+            "accent_light_intensity": 0.42,
+        }
+    ),
+    canon_status="provisional",
+    allowed_destinations=(),
+    map_position=(815, 116),
+)
+
 
 def get_scene(scene_id: str) -> SceneDefinition | None:
     """Return a registered scene without inventing missing metadata."""

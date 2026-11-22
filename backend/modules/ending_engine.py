@@ -40,7 +40,9 @@ class EndingEngine:
         :return: (最終判定結局名稱, 尾聲 Prompt)
         """
         available_endings = EndingEngine.get_available_endings(game_state)
-        final_ending = "長眠"  # 預設保底結局
+        if not available_endings:
+            raise ValueError("No ending is available for the current game state.")
+        final_ending = available_endings[0]
 
         # 1. 關鍵字比對與結局歸入
         text = player_answer_q3.lower()
@@ -59,10 +61,7 @@ class EndingEngine:
         elif "長眠" in text or "沉睡" in text or "維持" in text:
             if "長眠" in available_endings:
                 final_ending = "長眠"
-        else:
-            # 若回答不明確或選了不可選的結局，優先取可選清單的第一個
-            if available_endings:
-                final_ending = available_endings[0]
+        # 回答不明確或指定了未解鎖結局時，保留可選清單的第一個。
 
         # 2. 收集尾聲旗標 (World Epilogue Flags)
         epilogue_context = EndingEngine._build_epilogue_context(

@@ -84,6 +84,17 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "preview_border_ruins",
             "border_help_both",
             "return_after_border_choice",
+            "enter_memory_library_with_map",
+            "inspect_life_death_book",
+            "inspect_invasion_archive",
+            "contact_alan_observer",
+            "seek_menmesvento_after_truths",
+            "accept_dust_return_token",
+            "return_to_minglin_for_veta",
+            "enter_veta_source",
+            "veta_q1_recurring_life",
+            "veta_q2_release",
+            "choose_long_sleep",
         ),
         "direct-briefing-and-border-report": (
             "ask_for_task",
@@ -100,6 +111,17 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "preview_border_ruins",
             "border_report",
             "return_after_border_choice",
+            "enter_memory_library_with_elders",
+            "inspect_invasion_archive",
+            "inspect_life_death_book",
+            "contact_alan_observer",
+            "seek_menmesvento_after_truths",
+            "decline_dust_return_token",
+            "return_to_minglin_for_veta",
+            "enter_veta_source",
+            "veta_q1_each_life",
+            "veta_q2_remember",
+            "choose_wake",
         ),
         "orientation-life-spring-and-border-ignore": (
             "ask_location",
@@ -116,6 +138,17 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "preview_border_ruins",
             "border_ignore",
             "return_after_border_choice",
+            "enter_memory_library_alone",
+            "inspect_life_death_book",
+            "inspect_invasion_archive",
+            "contact_alan_observer",
+            "seek_menmesvento_after_truths",
+            "accept_dust_return_token",
+            "return_to_minglin_for_veta",
+            "enter_veta_source",
+            "veta_q1_each_life",
+            "veta_q2_release",
+            "choose_new_dream",
         ),
         "orientation-rune-grove": (
             "ask_location",
@@ -148,6 +181,28 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "listen_to_forgotten_names",
             "return_with_dust_findings",
         ),
+        "dust-return-ending": (
+            "travel_to_minglin_rune_grove", "trace_dust_runes", "enter_liuchen_valley",
+            "listen_to_forgotten_names", "return_with_dust_findings",
+            "travel_to_minglin_life_spring", "study_spring_ash", "enter_lieyi_plains",
+            "observe_sacred_fire", "return_with_fire_findings", "preview_border_ruins",
+            "border_help_both", "return_after_border_choice", "enter_memory_library_with_map",
+            "inspect_invasion_archive", "inspect_life_death_book", "contact_alan_observer",
+            "seek_menmesvento_after_truths", "accept_dust_return_token",
+            "return_to_minglin_for_veta", "enter_veta_source", "veta_q1_recurring_life",
+            "veta_q2_release", "choose_dust_return",
+        ),
+        "usurp-ending": (
+            "travel_to_minglin_rune_grove", "trace_dust_runes", "enter_liuchen_valley",
+            "listen_to_forgotten_names", "return_with_dust_findings",
+            "travel_to_minglin_life_spring", "study_spring_ash", "enter_lieyi_plains",
+            "observe_sacred_fire", "return_with_fire_findings", "preview_border_ruins",
+            "border_ignore", "return_after_border_choice", "enter_memory_library_alone",
+            "inspect_invasion_archive", "inspect_life_death_book", "contact_alan_observer",
+            "seek_menmesvento_after_truths", "decline_dust_return_token",
+            "return_to_minglin_for_veta", "enter_veta_source", "veta_q1_recurring_life",
+            "veta_q2_control", "confirm_usurp_after_warning", "choose_usurp",
+        ),
     }
     expected_edges = {
         (choice.choice_id, choice.source_node_id, choice.source_scene_id)
@@ -176,9 +231,15 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
                 )
                 state = turn["state"]
 
-            assert state["current_scene_id"] == "minglin"
-            assert state["story_progress"]["node_id"] == "demo_complete"
-            assert client.get(f"/api/game/{route_name}/choices").json()
+            choices = client.get(f"/api/game/{route_name}/choices").json()
+            if state["game_status"] == "completed":
+                assert state["current_scene_id"] == "veta_source"
+                assert state["final_ending"] in {"長眠", "醒來", "新夢", "塵歸", "篡夢"}
+                assert choices == []
+            else:
+                assert state["current_scene_id"] == "minglin"
+                assert state["story_progress"]["node_id"] == "demo_complete"
+                assert choices
 
     assert visited_edges == expected_edges
 
@@ -608,13 +669,15 @@ def test_map_routes_are_server_choices_and_unlock_after_investigation(tmp_path):
     with TestClient(create_app(f"sqlite+aiosqlite:///{tmp_path / 'map.db'}")) as client:
         state = _start(client, "map-routes")
         scenes = {scene["scene_id"]: scene for scene in state["navigation"]["scenes"]}
-        assert len(scenes) == 6 and scenes["minglin"]["current"]
+        assert len(scenes) == 8 and scenes["minglin"]["current"]
         assert not scenes["liuchen_valley"]["unlocked"]
         assert not scenes["border_ruins"]["unlocked"]
+        assert not scenes["memory_library"]["unlocked"]
+        assert not scenes["veta_source"]["unlocked"]
         assert scenes["liuchen_valley"]["travel_choice"] is None
         choices = client.get("/api/game/map-routes/choices").json()
         assert scenes["minglin_rune_grove"]["travel_choice"] in choices
-        assert "記憶" not in str(scenes) and "truth_level" not in str(scenes)
+        assert "第一次入侵" not in str(scenes) and "truth_level" not in str(scenes)
         grove = _submit_choice(client, "map-routes", 1, "travel_to_minglin_rune_grove")
         assert "辨認風沙路徑" in grove["state"]["navigation"]["objective"]
         assert "前往平衡議會" not in grove["state"]["navigation"]["objective"]

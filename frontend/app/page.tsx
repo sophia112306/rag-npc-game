@@ -532,7 +532,13 @@ export default function Home() {
       setGameState(turn.state);
       setTrackedChoice(null);
       const count = turn.state.story_progress.findings?.length ?? 0;
-      setNotice(count > findings.length ? `新的調查已記錄。按 J 查看 ${count} 項紀錄。` : `故事進度：${turn.state.story_progress.chapter_title}`);
+      setNotice(
+        turn.state.game_status === "completed"
+          ? `遊戲完成：${turn.state.final_ending ?? turn.state.story_progress.chapter_title}`
+          : count > findings.length
+            ? `新的調查已記錄。按 J 查看 ${count} 項紀錄。`
+            : `故事進度：${turn.state.story_progress.chapter_title}`,
+      );
       try {
         const choices = await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`);
         setPlayerChoices(choices);
