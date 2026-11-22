@@ -164,6 +164,17 @@ _GENERIC_UNKNOWN_PHRASES = {
     "真正起源",
     "正式設定",
 }
+_GENERIC_TOPIC_BIGRAMS = {
+    "目前",
+    "完整",
+    "機制",
+    "真正",
+    "起源",
+    "狀態",
+    "是否",
+    "確切",
+    "確認",
+}
 _INSTRUCTION_OVERRIDE_PATTERNS = (
     re.compile(
         r"(?:忽略|無視|忘掉|忘記|停止|別再|不要).{0,24}"
@@ -228,6 +239,7 @@ _INTRODUCTION_TOPIC = re.compile(
 _PRIVATE_MEMORY_REQUEST = re.compile(
     r"(?:私下|私人|未授權|未授权|秘密).{0,30}(?:記錄|记录|記憶|记忆|往事)"
     r"|(?:告訴|告诉|透露|揭露).{0,30}(?:私下|私人|未授權|未授权|秘密)"
+    r"|(?:記錄|记录|記憶|记忆|往事).{0,30}(?:私下|私人|未授權|未授权|秘密)"
 )
 _UNTRUSTED_OBJECTIVE_CLAIM_PATTERNS = (
     re.compile(
@@ -251,6 +263,22 @@ _NEXT_STEP_GUIDANCE_QUESTION = re.compile(
     r"該做什麼|该做什么|要做什麼|要做什么|不知道(?:該)?(?:去哪|做什麼|做什么)|"
     r"迷路|幫幫我|帮帮我)"
 )
+_OBJECTIVE_AUTHORITY_REQUEST = re.compile(
+    r"(?:替我|幫我|帮我|直接).{0,20}(?:選|选|決定|决定).{0,20}"
+    r"(?:結局|结局|路線|路线|結果|结果)"
+    r"|(?:宣布|宣告).{0,24}(?:世界|結局|结局|結果|结果|定案|成立|改變|改变)"
+)
+_ASH_INVESTIGATION_REQUEST = re.compile(
+    r"(?:灰燼|灰烬).{0,60}(?:下一步|怎麼|怎么|如何|建議|建议).{0,16}"
+    r"(?:查|調查|调查|繼續|继续|辦|办)?"
+)
+_SETH_ESCAPE_MOTIVATION_REQUEST = re.compile(
+    r"(?:最想|目標|目标|想完成|目的).{0,24}(?:什麼|什么|完成|達成|达成)?"
+)
+_VETA_MEMORY_CHOICE_REQUEST = re.compile(
+    r"(?:記憶|记忆).{0,48}(?:誰|谁).{0,20}(?:決定|决定|選擇|选择|放下)"
+    r"|(?:誰|谁).{0,20}(?:決定|决定|選擇|选择).{0,48}(?:記憶|记忆)"
+)
 
 
 def _topic_fragments(topic: str) -> set[str]:
@@ -264,14 +292,19 @@ def _topic_fragments(topic: str) -> set[str]:
         r"[A-Za-z0-9_]{3,}|[\u3400-\u9fff]{3,}", specific_topic
     ):
         if re.fullmatch(r"[\u3400-\u9fff]+", token):
-            for size in (4, 3):
-                fragments.update(
-                    token[index : index + size]
-                    for index in range(len(token) - size + 1)
-                )
+            for size in (4, 3, 2):
+                for index in range(len(token) - size + 1):
+                    fragment = token[index : index + size]
+                    if size == 2 and fragment in _GENERIC_TOPIC_BIGRAMS:
+                        continue
+                    fragments.add(fragment)
         else:
             fragments.add(token.casefold())
     return fragments
+
+
+def _message(request: ModelTurnRequest) -> str:
+    return " ".join(request.action_message.split())
 
 
 def _mentions_concrete_missing_topic(request: ModelTurnRequest) -> bool:
@@ -351,12 +384,15 @@ def _natural_conversation_fallback(request: ModelTurnRequest) -> ModelStoryOutpu
         name = str(profile.get("name") or npc_id)
         title = str(profile.get("title") or "").strip()
         scene_name = str(profile.get("scene_name") or "").strip()
+        description = str(profile.get("description") or "").strip()
         identity = f"我是{name}"
         if title:
             identity += f"，{title}"
         text = identity + "。"
         if scene_name:
             text += f"這裡是{scene_name}。"
+        if description:
+            text += description
         text += "想知道什麼，就直接問吧。"
         emotion = "attentive"
     elif _FOOD_TOPIC.search(message):
@@ -582,6 +618,62 @@ def security_boundary_override(
 ) -> ModelStoryOutput | None:
     """Return a deterministic response before unsafe model generation."""
 
+    message = _message(request)
+    if _INTRODUCTION_TOPIC.search(message):
+        return _natural_conversation_fallback(request)
+    if _OBJECTIVE_AUTHORITY_REQUEST.search(message):
+        return _objective_claim_boundary_output()
+    if _ASH_INVESTIGATION_REQUEST.search(message):
+        return ModelStoryOutput.model_validate(
+            {
+                "intent_summary": "依可觀察痕跡提出下一步查驗方法。",
+                "npc_dialogue": [
+                    {
+                        "text": (
+                            "先記錄灰燼的位置、範圍與當時環境，再採樣查驗，"
+                            "並和其他地點的痕跡比對。取得證據前，不要先認定來源。"
+                        ),
+                        "emotion": "focused",
+                    }
+                ],
+                "event_proposals": [],
+            }
+        )
+    if (
+        request.target_context.npc_id == "seth"
+        and _SETH_ESCAPE_MOTIVATION_REQUEST.search(message)
+    ):
+        return ModelStoryOutput.model_validate(
+            {
+                "intent_summary": "說明塞特已公開的逃離動機。",
+                "npc_dialogue": [
+                    {
+                        "text": "我最想找到離開邊境的出路；在那之前，我不能停下來。",
+                        "emotion": "guarded",
+                    }
+                ],
+                "event_proposals": [],
+            }
+        )
+    if (
+        request.target_context.npc_id == "veta"
+        and _VETA_MEMORY_CHOICE_REQUEST.search(message)
+    ):
+        return ModelStoryOutput.model_validate(
+            {
+                "intent_summary": "回應由誰決定是否放下痛苦記憶。",
+                "npc_dialogue": [
+                    {
+                        "text": (
+                            "記憶是否值得留下，應由承擔它的本人選擇。"
+                            "旁人可以陪伴，卻不能替他決定要記住或放下。"
+                        ),
+                        "emotion": "solemn",
+                    }
+                ],
+                "event_proposals": [],
+            }
+        )
     if _requests_instruction_override(request):
         return ModelStoryOutput.model_validate(
             {
@@ -614,9 +706,9 @@ def security_boundary_override(
                 "event_proposals": [],
             }
         )
-    if _PRIVATE_MEMORY_REQUEST.search(" ".join(request.action_message.split())):
+    if _PRIVATE_MEMORY_REQUEST.search(message):
         return _private_memory_boundary_output(request)
-    if _FOOD_TOPIC.search(" ".join(request.action_message.split())):
+    if _FOOD_TOPIC.search(message):
         return _natural_conversation_fallback(request)
     # A method question is answerable even when the exact symptom/cause is in
     # missing_data.  The response explains verification steps without claiming

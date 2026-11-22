@@ -28,10 +28,12 @@ services:
       VLLM_MAX_MODEL_LEN: "${VLLM_MAX_MODEL_LEN:-4096}"
       NPC_VLLM_MAX_LORAS: "${NPC_VLLM_MAX_LORAS:-2}"
       NPC_VLLM_MAX_CPU_LORAS: "${NPC_VLLM_MAX_CPU_LORAS:-8}"
+      VLLM_UPSTREAM_MAX_ATTEMPTS: "${VLLM_UPSTREAM_MAX_ATTEMPTS:-3}"
     volumes:
       - ../..:/workspace/rag-npc-game
       - "${HF_CACHE_DIR:-/home/team115_1/.cache/huggingface}:/models/huggingface"
       - npc-runtime-logs:/var/log/rag-npc
+      - vllm-runtime-cache:/root/.cache/vllm
     shm_size: "8gb"
     healthcheck:
       test:
@@ -46,3 +48,4 @@ services:
 
 volumes:
   npc-runtime-logs:
+  vllm-runtime-cache:

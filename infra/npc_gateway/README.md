@@ -33,7 +33,7 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
     --require-dedicated-adapters
 ```
 
-Acceptance requires eight dedicated routes in `/health`, no base fallback for the eight story NPCs, passing contract tests, and reviewed generated replies. Weight files alone are not sufficient.
+Acceptance requires eight dedicated routes in `/health`, no base fallback for the eight story NPCs, passing contract tests, and reviewed generated replies. The 2026-11-22 guarded system baseline is 199 backend tests and 93/93 generated cases; raw LoRA quality must still be reported separately. Weight files alone are not sufficient.
 
 ## Stop and inspect
 
@@ -42,7 +42,7 @@ docker compose -f infra/npc_gateway/compose.yaml stop runtime
 docker compose -f infra/npc_gateway/compose.yaml logs --tail=200 runtime
 ```
 
-The source checkout, model weights, and Hugging Face cache are bind-mounted and survive container recreation. Runtime logs use the `npc-runtime-logs` Docker volume.
+The source checkout, model weights, Hugging Face cache, and vLLM compile cache survive container recreation. Runtime logs use the `npc-runtime-logs` Docker volume; vLLM uses `vllm-runtime-cache`. The Gateway attempts an invalid upstream model response up to three times before returning a temporary error.
 
 ## Development rule
 

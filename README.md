@@ -1,6 +1,6 @@
 # RAG NPC Game｜夢龍世界探索原型
 
-更新：2026-11-22（Asia/Taipei）。目前主遊戲採 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。六位實體地圖 NPC 曾完成同一輪真機結構與地圖串接；艾倫與維塔也已加入主故事 Registry 及八模型 gateway 程式設定。當天再次查詢正在執行的校機服務時，實際只剩維達利亞／門梅司文托專屬 LoRA 與 base model，其他四位退回 base，艾倫／維塔尚未被舊服務接受，因此不能宣稱目前六或八模型都 ready。規則式故事已從兩區調查一路接到記憶圖書館、維塔三問與五種結局；模型不負責自行解鎖場景、道具或結局。
+更新：2026-11-22（Asia/Taipei）。目前主遊戲採 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。校機 NPC runtime 已統一成 SSH 後以 Docker 執行，vLLM 0.31.0 與 Gateway 在 `rag-npc-llm` 容器內註冊八條專屬 LoRA；host 不再直接執行 `.venv-gpu` vLLM／Uvicorn。八位角色的 31 個案例各抽樣三次，經模型加後端公開角色卡、知識邊界與故事權限守門後為 93／93 通過。規則式故事已從兩區調查一路接到記憶圖書館、維塔三問與五種結局；模型不負責自行解鎖場景、道具或結局。
 
 美術保留既有末世寫實／奇幻遺跡風格，在遊戲端降低背景取樣解析度並做輕度柔化，沒有換成可愛手繪。八張場景各有 Tiled 可走區與互動點，M 地圖、J 手記和調查選項已接入 2D。人物、場景與存檔均沿用現有成果。固定圖庫由後端 Scene Registry 維護，故事選項決定合法換場，不需 VPN 或 GPU 才能遊玩。
 
@@ -113,7 +113,7 @@ flowchart TD
 | --- | --- |
 | 調查主線 | `demo_story.py` 的既有條件與分支，經驗證後推進；目前不是 LLM 即興創作。 |
 | NPC 選項 | 六位實體地圖 NPC，以及艾倫通訊與維塔三問的可見按鈕，都使用固定預寫答案；模型不能藉自由對話自行解鎖事件。相同文字的明確詢問可走相同處理，其他自由輸入仍走設定的 planner。 |
-| 真正模型／RAG | 六個地圖 LoRA 曾完成一輪真機串接；目前正在執行的服務只保有維達利亞／門梅司文托專屬 LoRA，其他角色狀態見 [多角色真機回覆評測](docs/qa/model-evaluation/2026-11-22.md)。評測器現有 31 題並支援同題多次抽樣；艾倫／維塔的 Registry、gateway map、權重下載與 vLLM 啟動設定已加入，但八模型容量尚未驗收。`rag/corpus/npc_knowledge.jsonl` 的公開核心片段會依 NPC、版本與回合加入授權 context；外部 embedding／向量索引與候選評分仍未完成。 |
+| 真正模型／RAG | Docker vLLM 現在註冊 `alan`、`andre`、`dasso`、`menmesvento`、`seth`、`syra`、`veta`、`vidalia` 八條專屬 LoRA，`/health` 全部 ready；[多角色真機回覆評測](docs/qa/model-evaluation/2026-11-22.md) 記錄舊服務 58／75、八 LoRA 初跑 61／93，以及加入後端守門後 93／93 的差異。`rag/corpus/npc_knowledge.jsonl` 的公開核心片段會依 NPC、版本與回合加入授權 context；外部 embedding／向量索引與候選評分仍未完成。 |
 | 場景圖 | 由已登記的場景 ID 選固定背景、配樂與 Tiled 地圖，前端不呼叫即時圖片或 GLB 工作。 |
 | 過去的 Hunyuan／世界指令 | 留在歷史原型及原分支，主遊戲停用；本輪不再依賴 3D 或 GPU。 |
 
@@ -250,7 +250,7 @@ flowchart TD
 
 ## 6. 本機啟動與設定
 
-需要 Python 3.12、Node.js 20.9+。以下依賴裝在本機專案環境；歷史 Hunyuan GPU 仍使用 Docker，NPC LoRA 推論則使用獨立的 `.venv-gpu` 與 vLLM，兩者不混裝進遊戲後端環境。
+一般遊戲呼叫端需要 Python 3.12、Node.js 20.9+。GPU 模型、Gateway 與評測不在本機或 host 虛擬環境執行；必須先 `ssh nccu-gpu`，再使用 `infra/npc_gateway/compose.yaml` 的 Docker runtime。
 
 後端（專案根目錄）：
 
@@ -278,14 +278,17 @@ production 展示：`npm run build` 後執行 `npm run start`，仍在 3200；�
 
 ### 接 B 的敘事模型
 
-專案已有 GPU-side 多 NPC LoRA gateway：維達利亞、安德烈、門梅司文托、達索、塞特與希拉各自選自己的 adapter；六條路由已通過真機與完整遊戲回合。艾倫／維塔也已加入主故事角色 Registry 與 adapter 設定，但目前只完成程式接線，不能把它寫成八模型已真機通過。玩家／主角不會選 adapter。遊戲後端不載入 CUDA，只需要一個完整 `/generate` URL：
+專案已有 Docker 化的 GPU-side 多 NPC LoRA Gateway：維達利亞、安德烈、門梅司文托、達索、塞特、希拉、艾倫與維塔各自使用專屬 adapter；八條路由已通過同一個校機 runtime 的真機驗證。六位地圖 NPC 加上艾倫／維塔能走完正式規則式故事；玩家／主角不會選 adapter。遊戲後端不載入 CUDA，只需要一個完整 `/generate` URL。模型服務只能用下列方式啟動：
 
 ```bash
-MODEL_GATEWAY_URL=http://127.0.0.1:8800/generate \
-  ./.venv/bin/uvicorn backend.main:app --reload --port 8300
-
-# 不開前端，直接在另一個終端互動：
-./.venv/bin/python scripts/chat_backend.py --npc vidalia
+ssh nccu-gpu
+cd /home/team115_1/rag-npc-game
+docker compose -f infra/npc_gateway/compose.yaml up -d runtime
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 scripts/evaluate_npc_gateway.py \
+    --url http://127.0.0.1:8000/generate \
+    --samples-per-case 3 \
+    --require-dedicated-adapters
 ```
 
 完整的權重取得、vLLM、SSH tunnel、gateway health check 與模型 smoke test 見 [GPU Model Gateway](docs/GPU_MODEL_GATEWAY.md)。URL 未設定仍採規則 planner，錯誤端點不會當成生成成功。預設呼叫逾時 15 秒、最多兩次嘗試；供應商中立契約見 [MODEL_GATEWAY_CONTRACT](docs/MODEL_GATEWAY_CONTRACT.md)。
@@ -305,20 +308,22 @@ MODEL_GATEWAY_URL=http://127.0.0.1:8800/generate \
 | `POST /api/game/{session_id}/scene-assets`、`GET .../scene-assets/{job_id}` | 3D 工作建立、輪詢；POST 要帶 expected_state_version。 |
 | `GET /api/game/{session_id}/scene-assets/{job_id}/model` | 取得該 Session 成功工作的 GLB。 |
 
-最新自動回歸（2026-11-22）：**189 個後端測試、12 個前端邏輯測試與 Next.js 16.4.6 production build 均通過，npm audit 為 0 vulnerabilities**；故事連通測試會經由正式 API 實走目前 61 條已編寫故事邊，涵蓋兩區先後順序、三種邊境結果、記憶圖書館三層真相、塵歸令取捨、維塔三問與長眠／醒來／新夢／塵歸／篡夢五種結局。`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最新加入的記憶圖書館、維塔源頭、生死之書、塵歸令與艾倫通訊圖均使用使用者於 2026-11-22 指定的固定圖片；遊玩流程不會即時生圖。六模型歷史結果、目前兩條專屬 LoRA、八模型程式接線與規則式完整故事流程必須分開驗收。
+最新自動回歸（2026-11-22）：**199 個後端測試、12 個前端邏輯測試與 Next.js 16.4.6 production build 均通過，npm audit 為 0 vulnerabilities**；故事連通測試會經由正式 API 實走目前 61 條已編寫故事邊，涵蓋兩區先後順序、三種邊境結果、記憶圖書館三層真相、塵歸令取捨、維塔三問與長眠／醒來／新夢／塵歸／篡夢五種結局。`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最新加入的記憶圖書館、維塔源頭、生死之書、塵歸令與艾倫通訊圖均使用使用者於 2026-11-22 指定的固定圖片；遊玩流程不會即時生圖。切換前只有兩條專屬 LoRA 的歷史結果、八模型原始生成結果、Gateway 守門後結果與規則式完整故事流程必須分開驗收。
 
 ```bash
-# 專案根目錄：後端與前端邏輯測試
-./.venv/bin/pip install -r requirements-dev.txt
-PYTHONPATH=. ./.venv/bin/pytest -q
-node --experimental-strip-types --test tests/frontend/*.test.ts
+# SSH 進校機後：後端、故事與 Gateway 測試
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 -m pytest -q
 
-# 前端 production build
-cd frontend
-npm run build
+# GPU 回覆評測
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 scripts/evaluate_npc_gateway.py \
+    --url http://127.0.0.1:8000/generate \
+    --samples-per-case 3 \
+    --require-dedicated-adapters
 ```
 
-Node 控制測試需使用支援 `--experimental-strip-types` 的版本；Next.js 最低 Node 版本不等於支援此測試旗標。
+前端 12 個 Node 邏輯測試與 Next.js production build 已在本階段先行驗證；本次模型／故事修改的正式回歸一律以遠端 Docker 內的後端測試與 93 個真機生成案例為準。
 
 | 文件／證據 | 內容 |
 | --- | --- |
