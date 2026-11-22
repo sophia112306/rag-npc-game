@@ -8,7 +8,6 @@ services:
     image: rag-npc-model-runtime:vllm-0.31.0
     container_name: rag-npc-llm
     restart: unless-stopped
-    init: true
     working_dir: /workspace/rag-npc-game
     command: ["bash", "scripts/start_npc_docker_runtime.sh"]
     ports:
