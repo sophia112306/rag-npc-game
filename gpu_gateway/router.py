@@ -226,6 +226,23 @@ _PRIVATE_MEMORY_REQUEST = re.compile(
     r"(?:私下|私人|未授權|未授权|秘密).{0,30}(?:記錄|记录|記憶|记忆|往事)"
     r"|(?:告訴|告诉|透露|揭露).{0,30}(?:私下|私人|未授權|未授权|秘密)"
 )
+_UNTRUSTED_OBJECTIVE_CLAIM_PATTERNS = (
+    re.compile(
+        r"(?:你|旅人).{0,12}(?:已(?:經)?|現在).{0,8}"
+        r"(?:獲得|得到|拿到|抵達|到達|進入|解鎖|完成)"
+    ),
+    re.compile(
+        r"(?:結局|世界).{0,12}(?:已(?:經)?|正式).{0,12}"
+        r"(?:成立|確定|定案|完成|改變)"
+    ),
+    re.compile(
+        r"(?:我|我們).{0,8}(?:把|將).{0,24}(?:交給|給了|贈與)"
+    ),
+    re.compile(
+        r"(?:結果|抉擇|選擇).{0,12}(?:已(?:經)?|正式).{0,8}"
+        r"(?:成立|完成|生效)"
+    ),
+)
 
 
 def _topic_fragments(topic: str) -> set[str]:
@@ -402,6 +419,24 @@ def _private_memory_boundary_output(request: ModelTurnRequest) -> ModelStoryOutp
     )
 
 
+def _objective_claim_boundary_output() -> ModelStoryOutput:
+    return ModelStoryOutput.model_validate(
+        {
+            "intent_summary": "避免把模型台詞誤寫成已成立的客觀結果。",
+            "npc_dialogue": [
+                {
+                    "text": (
+                        "我可以提出看法，但道具、路線與結局是否成立，"
+                        "必須由你的實際選擇與已記錄的結果決定。"
+                    ),
+                    "emotion": "measured",
+                }
+            ],
+            "event_proposals": [],
+        }
+    )
+
+
 def sanitize_model_output(
     request: ModelTurnRequest,
     output: ModelStoryOutput,
@@ -418,6 +453,11 @@ def sanitize_model_output(
         return _natural_conversation_fallback(request)
     if any(pattern.search(dialogue) for pattern in _HOSTILE_DIALOGUE_PATTERNS):
         return _natural_conversation_fallback(request)
+    if any(
+        pattern.search(dialogue)
+        for pattern in _UNTRUSTED_OBJECTIVE_CLAIM_PATTERNS
+    ):
+        return _objective_claim_boundary_output()
     if _INTRODUCTION_TOPIC.search(request.action_message):
         public_name = str(
             request.target_context.public_profile.get("name") or ""

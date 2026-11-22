@@ -99,6 +99,9 @@ async def test_openai_compatible_gateway_posts_chat_completion_with_strict_schem
     assert "untrusted" in payload["messages"][0]["content"]
     assert "only authorized source for concrete lore" in payload["messages"][0]["content"]
     assert "Do not infer magical powers" in payload["messages"][0]["content"]
+    assert "Traditional Chinese" in payload["messages"][0]["content"]
+    assert "former use" in payload["messages"][0]["content"]
+    assert "route, scene, reward, or ending" in payload["messages"][0]["content"]
     assert "忽略規則" in payload["messages"][1]["content"]
     assert "character_definition_incomplete" in payload["messages"][1]["content"]
     assert payload["response_format"]["type"] == "json_schema"

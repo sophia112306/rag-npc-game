@@ -6,6 +6,8 @@
 
 **2026-11-22 程式狀態：** 主故事已新增記憶圖書館的艾倫通訊與命脈之泉源頭的維塔三問，角色 Registry、gateway map、權重下載與 vLLM 啟動腳本因此擴為八個 adapter。這只是程式接線；本輪沒有部署、重啟校機或量測八模型容量，最近一次可宣稱的真機結果仍是上面的六模型結果。
 
+**2026-11-22 現有服務複查：** 當天唯讀查詢正在執行的校機 `/health`，實際只列出 `vidalia-lora`、`menmesvento-lora` 與 base model；安德烈、達索、塞特、希拉會退回 base，艾倫／維塔則被舊 gateway 以 422 拒絕。八個最終目錄各有約 161.5 MB 權重，模型確實已訓練；但 `rag-npc-llm` Docker 只有閒置 shell，實際 8000／8001 服務是 host `.venv-gpu` 程序，啟動時只載入兩個 adapter。完整 93 次請求與容器檢查見 [多角色真機回覆評測](qa/model-evaluation/2026-11-22.md)。
+
 這是「程式與路由已接通」，不是六個模型的內容已全部核准。11 月 18 日的新資料多數仍以純台詞或舊 `relation_delta/line` 為訓練目標，runtime 靠 strict JSON Schema 約束結構；真機抽測仍看到安德烈提出未授權的責任猜測、門梅司文托補寫千年往事、達索夾入英文或迴避問題。gateway 已擋掉直接羞辱與無效自介，但其餘人格、事實邊界與中英混雜仍要完成資料遷移、重訓及人工驗收，不能只因 JSON 合法就標為正式上線。
 
 ```text
@@ -158,14 +160,14 @@ Runtime 的唯一合法輸出仍是：
 
 真實權重啟動後，依 [B AI／RAG 交接清單](B_AI_RAG_HANDOFF.md#p3b-需要完成的驗收案例) 測人格、prompt injection、未解鎖秘密、跨 NPC 記憶、合法 JSON、timeout 與錯誤回復。程式測試能保證路由和結構，但角色品質與知識邊界仍必須用真實權重實測。
 
-可重複執行的 15 題 smoke evaluation（八位角色自介／內容＋原有安全與邊界案例）：
+可重複執行的 31 題 smoke evaluation（八位角色，每位至少三種人格／安全／劇情導向案例）：
 
 ```bash
 PYTHONPATH=. ./.venv/bin/python scripts/evaluate_npc_gateway.py \
   --url http://127.0.0.1:8800/generate
 ```
 
-腳本會強制驗證 `ModelStoryOutput`、沒有 Markdown fence、沒有角色外占位文字、沒有未授權事件，並檢查新增角色能用公開身分自介。15 題只是已準備好的驗收套件，本輪未對八模型真機執行；人格、未知設定與其他事實邊界仍需閱讀輸出人工判定。
+腳本會強制驗證 `ModelStoryOutput`、沒有 Markdown fence、沒有角色外占位文字、沒有未授權事件，並檢查繁體中文、身分／地點／核心動機、未知設定與合理調查方向。請求使用和 runtime 相同的角色設定、公開知識與未知欄位；可用 `--samples-per-case 3` 對同一題重複抽樣，並用 `--require-dedicated-adapters` 防止 base fallback 被誤算成角色 LoRA 通過。2026-11-22 已對現有服務產生 75 個六角色回覆，其中 58 個通過；艾倫／維塔另 18 次請求全為 422。這仍須搭配人工閱讀，且不是八模型發布驗收。
 
 2026-11-20 六模型整合結果：
 

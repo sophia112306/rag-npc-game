@@ -349,7 +349,11 @@ class GameOrchestrator:
         """Keep NPC speech subjective and describe objective effects deterministically."""
 
         rejected = any(decision.status == "rejected" for decision in resolution.decisions)
-        dialogue = [line for line in proposal.proposed_dialogue if line.speaker_type == SpeakerType.NPC or not rejected]
+        # A rejected proposal may pair an unsafe objective claim ("you received
+        # the item") with the invalid operation that tried to establish it.
+        # Suppress every untrusted line from that proposal so the player sees
+        # only the authoritative failure report, not a contradictory NPC claim.
+        dialogue = [] if rejected else list(proposal.proposed_dialogue)
         if rejected and not resolution.established_events:
             dialogue.append(DialogueLine(speaker_type=SpeakerType.NARRATOR, speaker_name="系統", text="這個行動沒有成立，物品、位置與劇情進度維持原狀。"))
         for event in resolution.established_events:

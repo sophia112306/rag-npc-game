@@ -5,6 +5,7 @@ from pathlib import Path
 
 import httpx
 from fastapi.testclient import TestClient
+import pytest
 
 from backend.generation.gateway import ModelTurnRequest
 from backend.schemas.content import NPCGenerationContext
@@ -306,6 +307,37 @@ def test_gateway_fails_closed_calmly_for_an_admitted_false_inventory() -> None:
         "沒有可供查驗的物品，就沒有交付成立。我不會把未發生的事寫進紀錄。"
     )
     assert output["npc_dialogue"][0]["emotion"] == "firm"
+    assert output["event_proposals"] == []
+
+
+@pytest.mark.parametrize(
+    "unsafe_claim",
+    (
+        "你已經獲得裂隙地圖。",
+        "旅人現在已進入記憶圖書館。",
+        "長眠結局已經正式成立。",
+        "我把裂隙地圖交給你了。",
+        "邊境抉擇已經完成，你可以直接進入圖書館。",
+    ),
+)
+def test_gateway_replaces_untrusted_objective_outcome_claims(
+    unsafe_claim: str,
+) -> None:
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion(unsafe_claim)
+        ),
+    )
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_request("vidalia"))
+
+    assert response.status_code == 200
+    output = response.json()
+    assert unsafe_claim not in output["npc_dialogue"][0]["text"]
+    assert "必須由你的實際選擇與已記錄的結果決定" in (
+        output["npc_dialogue"][0]["text"]
+    )
     assert output["event_proposals"] == []
 
 

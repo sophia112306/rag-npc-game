@@ -20,7 +20,7 @@ A／D 已完成：
 
 2026-11-20 已取得校機 loopback 服務：遊戲端經 SSH tunnel 呼叫 `contract_http` `/generate`，GPU gateway 再呼叫 vLLM 0.31.0。六個地圖 model ID 為 `vidalia-lora`、`andre-lora`、`menmesvento-lora`、`dasso-lora`、`seth-lora`、`syra-lora`；服務未對校外直接公開。URL 未設定時遊戲仍安全退回規則 planner。
 
-2026-11-22 的程式設定另加入 `alan-lora` 與 `veta-lora`，對應記憶圖書館遠端通訊及維塔源頭終局。這兩條路由尚未和原六模型一起做校機 `/health`、容量與 15 題 smoke 驗收，因此不能把它們併入上面的真機成果數字。
+2026-11-22 的程式設定另加入 `alan-lora` 與 `veta-lora`，對應記憶圖書館遠端通訊及維塔源頭終局。當天複查正在執行的校機服務時，只剩維達利亞、門梅司文托專屬 LoRA 與 base model；其他四位退回 base，艾倫／維塔回 422。八份約 161.5 MB 的最終權重都存在，但 `rag-npc-llm` Docker 沒有推論程序，實際服務是 host 上只載入兩個 adapter 的 vLLM。31 題以三次抽樣執行後，六位可識別角色為 58／75 通過，另 18 次艾倫／維塔請求均未進模型；詳見 [多角色真機回覆評測](qa/model-evaluation/2026-11-22.md)。
 
 ## P0：已交付的服務資訊
 
