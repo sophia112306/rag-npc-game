@@ -452,10 +452,10 @@ def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None
 @pytest.mark.parametrize(
     "unsafe_claim",
     (
-        "你已經獲得裂隙地圖。",
+        "你已經獲得裂隙拓印圖。",
         "旅人現在已進入記憶圖書館。",
         "長眠結局已經正式成立。",
-        "我把裂隙地圖交給你了。",
+        "我把裂隙拓印圖交給你了。",
         "邊境抉擇已經完成，你可以直接進入圖書館。",
     ),
 )

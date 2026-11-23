@@ -112,7 +112,7 @@ class GameState(BaseModel):
         default_factory=lambda: {
             "elder_cooperation": False,   # 長老協力
             "library_path": False,        # 圖書館路徑
-            "fissure_map": False,         # 裂隙地圖
+            "fissure_map": False,         # 裂隙拓印圖（內部 ID 保留 fissure_map）
             "has_dust_token": False,      # 持有塵歸令
             "is_transformed": False,      # 已轉化（相容舊布林判斷）
             "transformed_race": None,     # [新增] 已轉化具體種族 (None / "elf" / "mummy" / "human")

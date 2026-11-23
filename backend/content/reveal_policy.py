@@ -102,6 +102,7 @@ def public_story_text(text: str, *, allow_fissure_map: bool = False) -> str:
 
     for old, current in {**LEGACY_CHAPTER_TITLES, **LEGACY_DEMO_STORY_TEXT}.items():
         if old == "裂隙地圖" and allow_fissure_map:
+            text = text.replace(old, "裂隙拓印圖")
             continue
         text = text.replace(old, current)
     return text

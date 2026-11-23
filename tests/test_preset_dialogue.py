@@ -132,7 +132,7 @@ def _reach_border(client, session_id):
 
 
 @pytest.mark.parametrize("choice_id,rule_id,expected_inventory", [
-    ("border_help_both", "E2-3_help_both", ["fissure_map"]),
+    ("border_help_both", "E2-3_help_both", ["fissure_map", "ember_amulet", "cloth_fragment"]),
     ("border_report", "E2-3_report", []),
     ("border_ignore", "E2-3_ignore", []),
 ])
@@ -156,9 +156,11 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
         assert "flags" not in result["state"]
         assert "axis" not in effect and "usurp" not in effect
         if expected_inventory:
-            item = result["state"]["player"]["items"][0]
-            assert item["name"] == "裂隙地圖"
-            assert (Path(__file__).resolve().parents[1] / "frontend/public" / item["image_url"].lstrip("/")).exists()
+            items = result["state"]["player"]["items"]
+            assert [item["item_id"] for item in items] == expected_inventory
+            assert [item["name"] for item in items] == ["裂隙拓印圖", "餘燼護符", "麻布殘片"]
+            for item in items:
+                assert (Path(__file__).resolve().parents[1] / "frontend/public" / item["image_url"].lstrip("/")).exists()
 
         alternative = client.post("/api/game/turn", json={**payload, "action_id": str(uuid4()), "expected_state_version": result["state"]["state_version"]})
         assert alternative.status_code == 409
@@ -181,8 +183,8 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
 @pytest.mark.parametrize(
     "false_claim",
     (
-        "你已經獲得裂隙地圖。",
-        "我把裂隙地圖交給你了。",
+        "你已經獲得裂隙拓印圖。",
+        "我把裂隙拓印圖交給你了。",
         "協助兩人的結果已成立，地圖現在是你的。",
         "邊境抉擇已完成，你可以直接進入圖書館。",
     ),
@@ -219,7 +221,7 @@ def test_model_claims_cannot_replace_player_choice_or_story_rules(
         accepted, _payload = _advance(
             client, "model-claim", "border_help_both"
         )
-        assert accepted["state"]["player"]["inventory"] == ["fissure_map"]
+        assert accepted["state"]["player"]["inventory"] == ["fissure_map", "ember_amulet", "cloth_fragment"]
         assert accepted["state"]["story_progress"]["node_id"] == (
             "border_choice_resolved"
         )
@@ -227,4 +229,4 @@ def test_model_claims_cannot_replace_player_choice_or_story_rules(
 
 def test_cached_item_ids_recover_fixed_presentation():
     old = PlayerIdentityView.model_validate({"player_id": "player_01", "name": "旅人", "inventory": ["fissure_map"]})
-    assert old.items[0].name == "裂隙地圖"
+    assert old.items[0].name == "裂隙拓印圖"

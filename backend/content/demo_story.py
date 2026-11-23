@@ -485,7 +485,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     _choice(
         "border_help_both", "border_ruins_preview", "border_ruins",
         "協助塞特與希拉", "我決定協助塞特與希拉，讓兩人繼續前行。",
-        "你決定協助塞特與希拉。裂隙地圖已收進背包，圖書館的路線成為可追查的線索。",
+        "你決定協助塞特與希拉。裂隙拓印圖已收進背包，圖書館的路線成為可追查的線索。",
         "border_choice_resolved", "邊境抉擇：協助兩人",
         action_mode=ActionMode.DIALOGUE, target_npc_id="seth", rule_event_id="E2-3_help_both",
         witness_npc_ids=("seth", "syra"), narrate_response=True,
@@ -494,7 +494,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     _choice(
         "border_report", "border_ruins_preview", "border_ruins",
         "選擇通報長老會", "我選擇向長老會通報這次邊境相遇。",
-        "你選擇通報長老會，這次行動將沿長老協力的方向承接。你沒有取得裂隙地圖。",
+        "你選擇通報長老會，這次行動將沿長老協力的方向承接。你沒有取得裂隙拓印圖。",
         "border_choice_resolved", "邊境抉擇：長老協力",
         action_mode=ActionMode.DIALOGUE, target_npc_id="seth", rule_event_id="E2-3_report",
         witness_npc_ids=("seth", "syra"), narrate_response=True,
@@ -516,8 +516,8 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     ),
     _choice(
         "enter_memory_library_with_map", "demo_complete", "minglin",
-        "依裂隙地圖前往記憶圖書館", "我依照塞特與希拉交付的裂隙地圖前往記憶圖書館。",
-        "裂隙地圖在暮光下顯出一條被抹去的路。石門之後，封存輪迴記錄的古老藏庫重新出現在你面前。",
+        "依裂隙拓印圖前往記憶圖書館", "我依照塞特與希拉交付的裂隙拓印圖前往記憶圖書館。",
+        "裂隙拓印圖在暮光下顯出一條被抹去的路。石門之後，封存輪迴記錄的古老藏庫重新出現在你面前。",
         "memory_library_arrival", "記憶圖書館",
         action_mode=ActionMode.MOVEMENT, destination_scene_id="memory_library",
         unlock_scene_ids=("memory_library",), special_scene_transition=True,

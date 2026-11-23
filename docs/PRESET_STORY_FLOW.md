@@ -34,13 +34,13 @@ flowchart LR
 
 | 選擇 | 原規則 | 保存結果 |
 | --- | --- | --- |
-| 協助塞特與希拉 | `E2-3_help_both` | `fissure_map`、`library_path` 成立；背包取得一份固定裂隙地圖，手記增加圖書館路線線索。 |
+| 協助塞特與希拉 | `E2-3_help_both` | `fissure_map`、`library_path` 成立；背包取得裂隙拓印圖、餘燼護符與麻布殘片，手記增加圖書館路線線索。 |
 | 通報長老會 | `E2-3_report` | 套用原有 axis −10、usurp +5 與 `elder_cooperation`，依 C 的 StateRules 封頂；不發地圖。 |
 | 暫不介入 | `E2-3_ignore` | 記錄本次選擇，不發道具或額外路線。 |
 
 每個旅程只能決定一次。重送同一 action 回傳相同結果；新 action 重選或回訪不再套數值、發物品。兩位在場人物取得目擊記憶，其他 NPC 不會自動知道。`PlayerViewState.player.items` 只描述玩家實際持有的物品；圖片存在不代表玩家已擁有。
 
-目前已接入圖書館關卡、三層真相、塵歸令、維塔三問與五結局；裂隙地圖仍只由協助分支取得，其他兩種邊境結果不會憑空得到該道具。流程重用 `EventRules`、`StateRules` 與 `EndingRules` 的既定門檻，沒有啟用舊 `StateManager` 的死後轉化流程。尚未編寫的危險事件與未來章節不在目前完成範圍。
+目前已接入圖書館關卡、三層真相、塵歸令、維塔三問與五結局；裂隙拓印圖仍只由協助分支取得，其他兩種邊境結果不會憑空得到該道具。內部 ID 仍為 `fissure_map`，以維持既有存檔與危險事件相容。流程重用 `EventRules`、`StateRules` 與 `EndingRules` 的既定門檻，沒有啟用舊 `StateManager` 的死後轉化流程。尚未編寫的危險事件與未來章節不在目前完成範圍。
 
 ## 未來模型與評分的責任
 

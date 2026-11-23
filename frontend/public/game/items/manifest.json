@@ -11,7 +11,34 @@
       "tool": "OpenAI built-in image generation",
       "model": null,
       "source_rule": "E2-3_help_both",
+      "display_name": "裂隙拓印圖",
       "prompt_document": "docs/ITEM_ASSET_PROMPTS.md"
+    },
+    {
+      "item_id": "ember_amulet",
+      "version": 1,
+      "display_name": "餘燼護符",
+      "file": "ember-amulet-v1.jpg",
+      "sha256": "5da85e64c1f1fcd919895af7584a7fe357200f225170809fbdd08209544938a2",
+      "width": 2752,
+      "height": 1536,
+      "transparent": false,
+      "source_type": "user_provided_generated_image",
+      "source_rule": "E2-3_help_both",
+      "prompt_document": null
+    },
+    {
+      "item_id": "cloth_fragment",
+      "version": 1,
+      "display_name": "麻布殘片",
+      "file": "cloth-fragment-v1.jpg",
+      "sha256": "931e3bad39591888a065ddec0d242d85075af262710d0bea7aac59415b74ed4d",
+      "width": 2752,
+      "height": 1536,
+      "transparent": false,
+      "source_type": "user_provided_generated_image",
+      "source_rule": "E2-3_help_both",
+      "prompt_document": null
     },
     {
       "item_id": "dust_return_token",
