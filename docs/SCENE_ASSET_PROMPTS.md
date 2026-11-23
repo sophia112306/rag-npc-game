@@ -96,3 +96,14 @@ Avoid: exact copying of the reference composition, pasted or collage-like figure
 ```text
 Using the reference for the hand-painted fantasy RPG elevated three-quarter perspective and 1672x941 wide game background, create a distinct BORDER RUINS scene between dusty Liuchen Valley and human lands. Ancient crumbled sandstone gateway, eroded columns, fractured road that clearly runs from bottom center into mid-ground then branches left and right. Desert dust, fading warm evening light, a hint of distant fire-colored horizon. Rich detailed painterly environment, readable walkable foreground and middle, allow open standing spots for two NPCs at midground left and right. No people, no characters, no creatures, no interface, no labels, no text, no icons, no watermark. Maintain matching visual family, not same composition.
 ```
+
+## 記憶圖書館與維塔源頭（2026-11-22 使用者提供）
+
+這兩張圖由使用者從 `~/Downloads/遊戲專題參考圖圖片` 指定並確認接入，
+不是本次工作重新生成的圖片。來源、尺寸與 SHA-256 記於
+`frontend/public/game/scenes/manifest.json`，不得改標為本專案工具生成。
+
+- `memory-library-v1.png`：暮光下的古老記憶藏庫，接續邊境抉擇並承載 Truth A／B／C。
+- `veta-life-spring-source-v1.png`：生命泉源頭與沉睡巨龍維塔，承載維塔三問與五種正式結局。
+
+兩張場景都已有獨立 `.tmj`、可行走區、出生點與互動地標；目前不需要再生成場景圖。

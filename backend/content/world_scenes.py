@@ -40,6 +40,21 @@ def default_config(scene_id: str) -> WorldSceneConfig:
             terrain="rocky",
             time_of_day="dusk",
         ),
+        "memory_library": dict(
+            tree_count=0,
+            runestone_count=0,
+            altar_count=0,
+            terrain="rocky",
+            time_of_day="dusk",
+        ),
+        "veta_source": dict(
+            tree_count=0,
+            runestone_count=0,
+            altar_count=0,
+            terrain="rocky",
+            weather="mist",
+            time_of_day="dusk",
+        ),
     }
     require_scene(scene_id)
     return WorldSceneConfig(seed=seed, **settings[scene_id])
@@ -130,6 +145,8 @@ def build_world_scene(
         "liuchen_valley": "與門梅司文托交談",
         "lieyi_plains": "調查中央聖火",
         "border_ruins": "與塞特或希拉交談",
+        "memory_library": "調查古老記憶藏庫",
+        "veta_source": "面對沉睡的維塔",
     }[scene_id]
     return WorldSceneView(
         scene_id=scene_id,
@@ -139,6 +156,6 @@ def build_world_scene(
         npc_interactions=scene_npcs,
         interaction_label=label,
         interaction_z=-8 if scene_id == "minglin" else -6,
-        water=scene_id == "minglin_life_spring",
+        water=scene_id in {"minglin_life_spring", "veta_source"},
         fire=scene_id == "lieyi_plains",
     )

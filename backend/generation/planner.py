@@ -16,11 +16,14 @@ from backend.generation.gateway import (
     ModelStoryOutput,
     ModelTurnRequest,
     TurnGuidance,
+    TurnGuidanceAction,
 )
+from backend.orchestration.player_choices import build_player_choices
 from backend.schemas.content import NPCGenerationContext
 from backend.schemas.game_state import GameState
 from backend.schemas.parsed_action import ParsedAction
 from backend.schemas.player_action import ActionMode, PlayerAction
+from backend.schemas.player_view import project_navigation
 from backend.schemas.story import DialogueLine, OperationType, SpeakerType, StoryProposal
 
 
@@ -40,6 +43,37 @@ class StoryGenerationUnavailableError(RuntimeError):
         self.code = code
         self.attempts = attempts
         super().__init__("Story generation is temporarily unavailable")
+
+
+def _build_turn_guidance(state: GameState, npc_id: str) -> TurnGuidance:
+    """Expose only player-visible objectives and currently legal action labels."""
+
+    navigation = project_navigation(state)
+    current_scene = next(
+        (scene.display_name for scene in navigation.scenes if scene.current),
+        "目前場景",
+    )
+    candidates = [
+        *build_player_choices(state, [], npc_id),
+        *build_player_choices(state, []),
+    ]
+    actions: list[TurnGuidanceAction] = []
+    seen_choice_ids: set[str] = set()
+    for choice in candidates:
+        if choice.choice_id in seen_choice_ids:
+            continue
+        seen_choice_ids.add(choice.choice_id)
+        actions.append(
+            TurnGuidanceAction(
+                label=choice.label,
+                action_mode=choice.action_mode,
+            )
+        )
+    return TurnGuidance(
+        objective=navigation.objective,
+        scene_name=current_scene,
+        available_actions=actions[:8],
+    )
 
 
 class GatewayStoryPlanner:
@@ -99,7 +133,7 @@ class GatewayStoryPlanner:
             action_mode=action.action_mode,
             parsed_action=parsed_action,
             target_context=target_context,
-            turn_guidance=turn_guidance or TurnGuidance(scene_name=state.current_scene_id),
+            turn_guidance=turn_guidance or _build_turn_guidance(state, npc_id),
             allowed_operations=allowed_operations,
             generation_budget=GenerationBudget(max_model_calls=self._max_attempts),
         )

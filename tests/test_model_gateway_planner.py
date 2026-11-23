@@ -107,6 +107,11 @@ async def test_planner_sends_only_explicit_authorized_context() -> None:
     assert gateway.requests[0].turn_guidance == guidance
     assert "change_scene" not in gateway.requests[0].allowed_operations
 
+    request_guidance = gateway.requests[0].turn_guidance
+    assert request_guidance.scene_name == "鳴霖"
+    assert request_guidance.objective == guidance.objective
+    assert request_guidance.available_actions == guidance.available_actions
+
 
 @pytest.mark.asyncio
 async def test_movement_request_limits_model_to_scene_change_operation() -> None:

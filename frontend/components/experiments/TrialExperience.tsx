@@ -393,7 +393,9 @@ export default function TrialExperience() {
       });
       pendingRef.current = null;
       applyState(turn.state);
-      if (snapshot.story_progress.node_id !== turn.state.story_progress.node_id) {
+      if (turn.state.game_status === "completed") {
+        setMilestone(`遊戲完成 · ${turn.state.final_ending ?? turn.state.story_progress.chapter_title}`);
+      } else if (snapshot.story_progress.node_id !== turn.state.story_progress.node_id) {
         setMilestone(`調查進度更新 · ${turn.state.story_progress.chapter_title}`);
       } else if (turn.state.story_progress.public_clue_ids.length > snapshot.story_progress.public_clue_ids.length) {
         setMilestone("新的調查線索已記錄");
@@ -406,7 +408,7 @@ export default function TrialExperience() {
         .map((line) => line.text)
         .join(" ");
       setLine(result);
-      setNotice(result);
+      setNotice(turn.state.game_status === "completed" ? `結局：${turn.state.final_ending}` : result);
       setCommand("");
       if (input.action_mode === "scene_command") setJournal(false);
       setChoices(

@@ -56,6 +56,24 @@ def test_public_character_profile_is_available(client: TestClient) -> None:
     assert "secrets" not in response.json()
 
 
+@pytest.mark.parametrize(
+    ("npc_id", "name", "portrait"),
+    (
+        ("alan", "艾倫・沃克", "/images/alan.jpg"),
+        ("veta", "維塔", "/game/scenes/veta-life-spring-source-v1.png"),
+    ),
+)
+def test_remote_story_character_profiles_are_public_but_bounded(
+    client: TestClient, npc_id: str, name: str, portrait: str
+) -> None:
+    response = client.get(f"/api/characters/{npc_id}")
+
+    assert response.status_code == 200
+    assert response.json()["name"] == name
+    assert response.json()["portrait_url"] == portrait
+    assert "private_profile" not in response.json()
+
+
 def test_andre_profile_choices_and_dialogue_are_available(client: TestClient) -> None:
     profile = client.get("/api/characters/andre")
     assert profile.status_code == 200

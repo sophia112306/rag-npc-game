@@ -194,6 +194,20 @@ OpenAI 相容服務外層須使用 Chat Completions 的 `choices[0].message.cont
 
 後端會比對 Scene Registry、目前位置與合法出口；通過後才更新 `current_scene_id` 並產生確定性的抵達敘事。玩家選項送出的 `destination_scene_id` 也會放入 action 去重內容，避免同一 action ID 被換成不同目的地。
 
+## 校機 Gateway 遙測延伸
+
+校機的 `contract_http` Gateway 維持相同的 `ModelStoryOutput` JSON，不把遙測欄位混入遊戲故事契約。成功回覆另外提供：
+
+| Header | 用途 |
+| --- | --- |
+| `X-NPC-Generation-Source` | `model`、`pre_generation_guard`、`post_generation_guard` 或 `turn_guidance_guard`。 |
+| `X-NPC-Model-ID` | 實際選到的 vLLM model／LoRA ID。 |
+| `X-NPC-Route-Kind` | `dedicated_adapter` 或 `fallback_model`。 |
+| `X-NPC-Upstream-Attempts` | 本次實際呼叫 vLLM 的次數；前置守門為 0。 |
+| `Server-Timing` | Gateway 內部處理時間。 |
+
+`GET /metrics` 使用與其他端點相同的 Bearer 驗證，回傳 process-local 的成功／失敗、來源、路由、NPC、模型、重試與最近 1,000 筆延遲統計。遙測不保存玩家訊息、prompt、模型原始輸出或 NPC 台詞。
+
 ## 錯誤與重試
 
 - HTTP 408、429、5xx、連線失敗：視為暫時錯誤，可在上限內重試。

@@ -12,6 +12,18 @@
       "model": null,
       "source_rule": "E2-3_help_both",
       "prompt_document": "docs/ITEM_ASSET_PROMPTS.md"
+    },
+    {
+      "item_id": "dust_return_token",
+      "version": 1,
+      "file": "dust-return-token-v1.png",
+      "sha256": "9c2e9625aa77e43725867eb6c27735200f17fa573ae3368ed51472e814f7a0f5",
+      "width": 1254,
+      "height": 1254,
+      "transparent": true,
+      "source_type": "user_provided_generated_image",
+      "source_rule": "E3-2_receive_dust_token",
+      "prompt_document": "docs/ITEM_ASSET_PROMPTS.md"
     }
   ]
 }

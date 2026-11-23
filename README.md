@@ -1,8 +1,8 @@
 # RAG NPC Game｜夢龍世界探索原型
 
-更新：2026-11-20（Asia/Taipei）。目前主遊戲採 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。地圖上的維達利亞、安德烈、門梅司文托、達索、塞特與希拉都已可依 NPC ID 路由到各自 LoRA，並通過真機結構與完整地圖路線串接；其中只有維達利亞與門梅司文托已有經審核核心角色卡與公開 RAG starter corpus。新四位模型及 11 月 18 日新版權重仍需資料契約遷移、設定邊界與內容品質驗收，外部 embedding／向量索引、第二幕與五結局也尚未完成。
+更新：2026-11-22（Asia/Taipei）。目前主遊戲採 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。校機 NPC runtime 已統一成 SSH 後以 Docker 執行，vLLM 0.31.0 與 Gateway 在 `rag-npc-llm` 容器內註冊八條專屬 LoRA；host 不再直接執行 `.venv-gpu` vLLM／Uvicorn。八位角色的 31 個案例各抽樣三次，經模型加後端公開角色卡、知識邊界與故事權限守門後為 93／93 通過。規則式故事已從兩區調查一路接到記憶圖書館、維塔三問與五種結局；模型不負責自行解鎖場景、道具或結局。
 
-美術保留既有末世寫實／奇幻遺跡風格，在遊戲端降低背景取樣解析度並做輕度柔化，沒有換成可愛手繪。六張場景各有 Tiled 可走區與互動點，M 地圖、J 手記和調查選項已接入 2D。人物、場景與存檔均沿用現有成果。固定圖庫由後端 Scene Registry 維護，故事選項決定合法換場，不需 VPN 或 GPU 才能遊玩。
+美術保留既有末世寫實／奇幻遺跡風格，在遊戲端降低背景取樣解析度並做輕度柔化，沒有換成可愛手繪。八張場景各有 Tiled 可走區與互動點，M 地圖、J 手記和調查選項已接入 2D。人物、場景與存檔均沿用現有成果。固定圖庫由後端 Scene Registry 維護，故事選項決定合法換場，不需 VPN 或 GPU 才能遊玩。
 
 這份 README 說明目前程式；原始設定見 [世界設計](docs/GENERATIVE_WORLD_DESIGN.md)，操作與交接見 [Demo 交接](docs/DEMO_HANDOFF.md)，歷史進度見 [PROGRESS](docs/PROGRESS.md)。舊進度百分比只代表當時驗收範圍，不代表整個遊戲完成。
 
@@ -21,7 +21,8 @@
 | 門梅司文托 | 流塵谷的名字／記憶記錄者，2D 有出場。深層動機與真相需按條件揭露。 |
 | 達索 | 烈燚原的首席長老，有近距離交談與公開現況選項。 |
 | 塞特、希拉 | 走訪兩地後在邊境廢墟出場，有固定詢問及協助／通報／不介入三種抉擇；協助兩人可取得裂隙地圖。 |
-| 維塔及其他勢力 | 已有設定或規則草案；維塔另有獨立預覽，尚未形成完整任務與結局流程。 |
+| 艾倫 | 外界技術神權評議會的遠端觀測者；在記憶圖書館以通訊出場，不是地圖上的實體 NPC。 |
+| 維塔 | 沉睡於命脈之泉源頭的巨龍；主線中承接三問與五種結局，另保留獨立美術預覽。 |
 
 維達利亞與門梅司文托已有版本 2 的經審核核心角色卡，包含人格、語氣、目標、能力邊界、來源與明確未知項目。其他 NPC 的 `private_profile` 仍未補齊；兩名已整理角色的深層秘密與揭露條件也尚未定案，不能由訓練樣本自行補成正式設定。
 
@@ -38,19 +39,19 @@
 | 新夢 | 主角協助維塔重新創造，世界持續擴展。 |
 | 塵歸 | 主角抹除自己，入侵停止，世界恢復平靜。 |
 
-五種結局已有設計與 C 的規則模組，尚未接成目前 API 的完整遊戲流程。使用者已確認「主角死亡即遊戲結束」；舊 C 模組仍有死後轉化邏輯，需協調修正後再整合。正式開場、完整知識卡與部分數值門檻仍待確認。
+五種結局已接入目前 API 的完整固定選項流程，並由後端狀態、真相、關係、塵歸令與篡奪值門檻決定可見選項。模型可提供角色語氣候選，但不能自行改寫結局條件。完整知識卡與部分內容邊界仍待人工驗收。
 
 </details>
 
 ## 2. 現在怎麼玩
 
-主要網址：**<http://localhost:3200>**。`/experiments` 與 `/experiments/babylon` 會導回同一個 2D 遊戲，舊 3D 程式保留作歷史原型。`/preview/veta` 仍是獨立美術預覽，未接主故事。
+主要網址：**<http://localhost:3200>**。`/experiments` 與 `/experiments/babylon` 會導回同一個 2D 遊戲，舊 3D 程式保留作歷史原型。`/preview/veta` 仍是獨立美術預覽；主故事則使用 `veta_source` 場景承接維塔三問。
 
 | 操作 | 功能 |
 | --- | --- |
 | WASD／方向鍵、點地面 | 自由移動；中文輸入法使用實體鍵碼，輸入框內不移動。 |
 | 點人物／發光地標 | 先步行接近，再開啟交談／調查；也可走近後按 E。 |
-| M／旅途地圖 | 看六地預覽、已解鎖地點、下一步與合法旅行選項；遠處追蹤先步行，抵達後確認。 |
+| M／旅途地圖 | 看八地預覽、已解鎖地點、下一步與合法旅行選項；遠處追蹤先步行，抵達後確認。 |
 | J／手記 | 看實際調查及來源，回議會後可走近維達利亞回報。 |
 | 右鍵、Q／R | 原地轉身。 |
 | 滾輪、＋／－、雙指 | 地圖縮放；手機直向畫面會隨玩家移動。 |
@@ -70,8 +71,10 @@
 | 流塵谷 `liuchen_valley` | 荒原、龜裂地表、遺跡與風沙；與門梅司文托交談、調查名字及埋葬。 |
 | 烈燚原 `lieyi_plains` | 熔流、玄武岩道路、聖火祭壇；調查聖火與長老行蹤，也能與達索交談。 |
 | 邊境廢墟 `border_ruins` | 荒原與人族領地間的破損石門；走訪兩地後開放塞特／希拉交談與邊境抉擇。 |
+| 記憶圖書館 `memory_library` | 古老記憶藏庫；取得三層真相、回應艾倫通訊並決定是否收下塵歸令。 |
+| 命脈之泉源頭 `veta_source` | 維塔沉眠之所；完成三問後，由已成立的歷史開放合法結局。 |
 
-六地各有自己的 Tiled 地圖、可走範圍、出生點與角色／地標，URL 由 `backend/content/scenes.py` 統一提供。人物比例、原畫構圖與寫實風格保留；背景在遊戲內以 836×471 取樣再放大，以 0.55px 柔化及線性插值降低細碎與尖銳邊緣，沒有重新畫成可愛風格。符石林與烈燚原的正式世界細節仍待確認，產品介面只描述可觀察景象。
+八地各有自己的 Tiled 地圖、可走範圍、出生點與角色／地標，URL 由 `backend/content/scenes.py` 統一提供。人物比例、原畫構圖與寫實風格保留；背景在遊戲內以 836×471 取樣再放大，以 0.55px 柔化及線性插值降低細碎與尖銳邊緣，沒有重新畫成可愛風格。符石林與烈燚原的正式世界細節仍待確認，產品介面只描述可觀察景象。
 
 ### 可玩的調查分支
 
@@ -92,9 +95,15 @@ flowchart TD
     J --> K[協助兩人：裂隙地圖與圖書館線索]
     J --> L[通報長老會：長老協力]
     J --> N[暫不介入：不發道具]
+    K --> O[記憶圖書館：真相 A／B／C]
+    L --> O
+    N --> O
+    O --> P[塵歸令取捨與艾倫通訊]
+    P --> Q[命脈之泉源頭：維塔三問]
+    Q --> R[長眠／醒來／新夢／塵歸／篡夢]
 ```
 
-不同選擇會保存不同線索、開放不同路線、顯示不同調查標記。回報時維達利亞只整理實際建立的公開紀錄；私下調查不直接變成她的記憶，需透過回報事件得知。走訪兩地並返回議會後可進入邊境廢墟與塞特、希拉對話，可選協助兩人、通報長老會或暫不介入；只整合 C 既有 E2-3 三種效果，其他中期事件、圖書館關卡、危險事件使用地圖及五結局仍未完成。
+不同選擇會保存不同線索、開放不同路線、顯示不同調查標記。回報時維達利亞只整理實際建立的公開紀錄；私下調查不直接變成她的記憶，需透過回報事件得知。走訪兩地並返回議會後可進入邊境廢墟，三種邊境結果都能依各自條件前往記憶圖書館；取得三層真相後再進入維塔源頭。所有已編寫故事邊都由 API 端到端測試驗證，尚未加入的未來章節仍須另行設計。
 
 ### 故事與圖庫如何配合
 
@@ -103,8 +112,8 @@ flowchart TD
 | 部分 | 現在的實作 |
 | --- | --- |
 | 調查主線 | `demo_story.py` 的既有條件與分支，經驗證後推進；目前不是 LLM 即興創作。 |
-| NPC 選項 | 六位角色的可見按鈕使用固定預寫答案，不呼叫模型；相同文字的明確詢問可走相同處理。自由輸入仍走設定的 planner。 |
-| 真正模型／RAG | 六個地圖 LoRA、GPU Gateway 與自由對話路由已接通；`rag/corpus/npc_knowledge.jsonl` 的公開核心片段會依 NPC、版本與回合加入授權 context。新四位角色卡、資料契約與內容邊界仍待驗收，外部 embedding／向量索引與候選評分也未完成。 |
+| NPC 選項 | 六位實體地圖 NPC，以及艾倫通訊與維塔三問的可見按鈕，都使用固定預寫答案；模型不能藉自由對話自行解鎖事件。相同文字的明確詢問可走相同處理，其他自由輸入仍走設定的 planner。 |
+| 真正模型／RAG | Docker vLLM 現在註冊 `alan`、`andre`、`dasso`、`menmesvento`、`seth`、`syra`、`veta`、`vidalia` 八條專屬 LoRA，`/health` 全部 ready；[多角色真機回覆評測](docs/qa/model-evaluation/2026-11-22.md) 記錄舊服務 58／75、八 LoRA 初跑 61／93，以及加入後端守門後 93／93 的差異。`rag/corpus/npc_knowledge.jsonl` 的公開核心片段會依 NPC、版本與回合加入授權 context；外部 embedding／向量索引與候選評分仍未完成。 |
 | 場景圖 | 由已登記的場景 ID 選固定背景、配樂與 Tiled 地圖，前端不呼叫即時圖片或 GLB 工作。 |
 | 過去的 Hunyuan／世界指令 | 留在歷史原型及原分支，主遊戲停用；本輪不再依賴 3D 或 GPU。 |
 
@@ -145,8 +154,8 @@ rag-npc-game/
 │   └── public/
 │       ├── audio/                   場景音樂與維塔配樂
 │       ├── images/                  NPC 肖像等靜態圖
-│       └── game/                    森林素材、人物去背、旅途地圖、六份 .tmj
-│           ├── scenes/              四張地點插畫與 manifest
+│       └── game/                    森林素材、人物去背、旅途地圖、八份 .tmj
+│           ├── scenes/              八張地點插畫與 manifest
 │           ├── models/              預設 GLB、manifest、references/ 生成參考圖
 │           └── materials/           沙土、玄武岩等材質
 ├── infra/hunyuan3d/                  歷史 GPU Docker 與生成服務（主遊戲不依賴）
@@ -241,7 +250,7 @@ flowchart TD
 
 ## 6. 本機啟動與設定
 
-需要 Python 3.12、Node.js 20.9+。以下依賴裝在本機專案環境；歷史 Hunyuan GPU 仍使用 Docker，NPC LoRA 推論則使用獨立的 `.venv-gpu` 與 vLLM，兩者不混裝進遊戲後端環境。
+一般遊戲呼叫端需要 Python 3.12、Node.js 20.9+。GPU 模型、Gateway 與評測不在本機或 host 虛擬環境執行；必須先 `ssh nccu-gpu`，再使用 `infra/npc_gateway/compose.yaml` 的 Docker runtime。
 
 後端（專案根目錄）：
 
@@ -269,14 +278,18 @@ production 展示：`npm run build` 後執行 `npm run start`，仍在 3200；�
 
 ### 接 B 的敘事模型
 
-專案已有 GPU-side 多 NPC LoRA gateway：地圖上的維達利亞、安德烈、門梅司文托、達索、塞特與希拉各自選自己的 adapter；其他已登記 NPC 才走 base model，玩家／主角不會選 adapter。六條路由已通過真機與完整遊戲回合，但新權重的角色內容與未知設定邊界仍須人工驗收。遊戲後端不載入 CUDA，只需要一個完整 `/generate` URL：
+專案已有 Docker 化的 GPU-side 多 NPC LoRA Gateway：維達利亞、安德烈、門梅司文托、達索、塞特、希拉、艾倫與維塔各自使用專屬 adapter；八條路由已通過同一個校機 runtime 的真機驗證。六位地圖 NPC 的真實 LoRA 自由對話，加上艾倫／維塔的固定故事回合，已由正式 API 實走長眠、醒來、新夢、塵歸、篡夢五條完整路線；玩家／主角不會選 adapter。遊戲後端不載入 CUDA，只需要一個完整 `/generate` URL。模型服務只能用下列方式啟動：
 
 ```bash
-MODEL_GATEWAY_URL=http://127.0.0.1:8800/generate \
-  ./.venv/bin/uvicorn backend.main:app --reload --port 8300
-
-# 不開前端，直接在另一個終端互動：
-./.venv/bin/python scripts/chat_backend.py --npc vidalia
+ssh nccu-gpu
+cd /home/team115_1/rag-npc-game
+docker compose -f infra/npc_gateway/compose.yaml up -d runtime
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 scripts/evaluate_npc_gateway.py \
+    --url http://127.0.0.1:8000/generate \
+    --samples-per-case 3 \
+    --require-dedicated-adapters \
+    --require-observability
 ```
 
 完整的權重取得、vLLM、SSH tunnel、gateway health check 與模型 smoke test 見 [GPU Model Gateway](docs/GPU_MODEL_GATEWAY.md)。URL 未設定仍採規則 planner，錯誤端點不會當成生成成功。預設呼叫逾時 15 秒、最多兩次嘗試；供應商中立契約見 [MODEL_GATEWAY_CONTRACT](docs/MODEL_GATEWAY_CONTRACT.md)。
@@ -290,29 +303,48 @@ MODEL_GATEWAY_URL=http://127.0.0.1:8800/generate \
 | `POST /api/game/start` | 建立／恢復 Session。 |
 | `POST /api/game/turn` | 提交 action_id、預期版本與行動模式。 |
 | `GET /api/game/{session_id}/state` | 公開狀態、場景、手記、地圖及下一步。 |
-| `GET /api/game/{session_id}/choices` | 情境選項；`npc_id` 可使用目前地圖上的六位 NPC。 |
+| `GET /api/game/{session_id}/choices` | 情境選項；實體地圖互動使用六位 NPC，艾倫／維塔則由主故事事件指定發話者。 |
 | `GET /api/game/{session_id}/quests` | 玩家可見的未結束任務。 |
 | `POST /api/game/{session_id}/scene-image`、`GET .../scene-image/{job_id}` | 2D 圖片工作；未設定 provider 使用版本化場景。 |
 | `POST /api/game/{session_id}/scene-assets`、`GET .../scene-assets/{job_id}` | 3D 工作建立、輪詢；POST 要帶 expected_state_version。 |
 | `GET /api/game/{session_id}/scene-assets/{job_id}/model` | 取得該 Session 成功工作的 GLB。 |
 
-最新自動回歸（2026-11-20）：**170 個後端測試與 12 個前端邏輯測試通過**；其中故事連通測試會經由正式 API 實走目前 37 條已編寫故事邊，涵蓋兩區先後順序、替代調查、返回路徑與三種邊境結果。`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最近一次 Chrome／production build 視覺驗收仍是 2026-11-12：實際走兩條 2D 分支、四項紀錄與回報、重整／重啟承接、中文輸入法、地圖與手記，以及邊境選項、取得地圖、背包圖片與手機排版。2D 操作另由瀏覽器驗收，既有 Node 控制測試仍包含歷史 3D 測試；這些不代表六個 LLM 的內容品質或結局已完成。
+最新自動回歸（2026-11-22）：**207 個後端測試、12 個前端邏輯測試與 Next.js 16.4.6 production build 均通過，npm audit 為 0 vulnerabilities**；故事連通測試會經由正式 API 實走目前 61 條已編寫故事邊，涵蓋兩區先後順序、三種邊境結果、記憶圖書館三層真相、塵歸令取捨、維塔三問與長眠／醒來／新夢／塵歸／篡夢五種結局。另有五結局真機腳本把六位地圖 NPC 的專屬 LoRA 回合放進正式遊戲流程，並驗證自由對話不能改動場景、背包、進度或結局。守門後 93／93 中有 90 次為前置守門、3 次採用模型；強制進 LoRA 的早期逐字基準為 47／72，人工確認維塔同義回答後的最新評分為 53／72。權重未變，差異只來自評分校準，且兩者都不能與守門後成績混寫。八份作者資料已可非破壞性匯出為 3,437 筆、3,474 個正式 assistant 目標，詳見 [訓練資料契約](training/README.md)；原始 JSONL 與現有權重未改。`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最新加入的記憶圖書館、維塔源頭、生死之書、塵歸令與艾倫通訊圖均使用使用者於 2026-11-22 指定的固定圖片；遊玩流程不會即時生圖。
 
 ```bash
-# 專案根目錄：後端與前端邏輯測試
-./.venv/bin/pip install -r requirements-dev.txt
-PYTHONPATH=. ./.venv/bin/pytest -q
-node --experimental-strip-types --test tests/frontend/*.test.ts
+# SSH 進校機後：後端、故事與 Gateway 測試
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 -m pytest -q
 
-# 前端 production build
-cd frontend
-npm run build
+# GPU 回覆評測
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 scripts/evaluate_npc_gateway.py \
+    --url http://127.0.0.1:8000/generate \
+    --samples-per-case 3 \
+    --require-dedicated-adapters \
+    --require-observability
+
+# 強制進 LoRA 的開放式內容基準
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 scripts/evaluate_npc_gateway.py \
+    --url http://127.0.0.1:8000/generate \
+    --suite model-probe \
+    --samples-per-case 3 \
+    --require-dedicated-adapters \
+    --require-observability \
+    --require-model-source
+
+# 正式 API 五結局＋六位地圖 NPC 真機流程
+docker compose -f infra/npc_gateway/compose.yaml exec runtime \
+  python3 scripts/evaluate_live_story.py \
+    --gateway-url http://127.0.0.1:8000/generate
 ```
 
-Node 控制測試需使用支援 `--experimental-strip-types` 的版本；Next.js 最低 Node 版本不等於支援此測試旗標。
+前端 12 個 Node 邏輯測試與 Next.js production build 已在本階段先行驗證；本次模型／故事修改的正式回歸一律以遠端 Docker 內的 207 個後端測試、93 個守門後案例、72 個原始 LoRA 探針、八資料集契約驗證與五結局真機流程為準。
 
 | 文件／證據 | 內容 |
 | --- | --- |
+| [多角色真機回覆評測](docs/qa/model-evaluation/2026-11-22.md) | 31 題、同題三次抽樣、實際路由與 93 次請求結果。 |
 | [最新固定選項／道具 QA](docs/qa/preset-story/README.md) | 寫實柔化、六地固定選項、邊境決定與真實背包。 |
 | [2D 基礎 QA](docs/qa/2d-exploration/README.md) | 固定圖庫、六地探索、兩條分支、手記、移動及手機。 |
 | [地圖 QA](docs/qa/world-map/README.md)、[森林 QA](docs/qa/forest-sanctuary/README.md) | 路線、承接、原版主景與操作。 |

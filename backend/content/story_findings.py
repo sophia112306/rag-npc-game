@@ -17,6 +17,7 @@ class PublicFinding:
     source_npc_id: str | None
     kind: str
     visual_signal: str | None
+    image_url: str | None = None
 
 
 def public_findings(state: GameState) -> list[PublicFinding]:
@@ -39,6 +40,10 @@ def public_findings(state: GameState) -> list[PublicFinding]:
             source_npc_id=source.target_npc_id,
             kind="conversation" if source.target_npc_id else "investigation",
             visual_signal=source.visual_signal,
+            image_url={
+                "truth_a_blank_page": "/game/props/book-of-life-and-death-v1.png",
+                "truth_c_alan_transmission": "/images/alan.jpg",
+            }.get(clue_id),
         ))
     return result
 

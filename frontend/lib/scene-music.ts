@@ -7,6 +7,8 @@ export const SCENE_MUSIC = {
   liuchen_valley: { src: "/audio/liuchen-valley.ogg", title: "流塵谷" },
   border_ruins: { src: "/audio/liuchen-valley.ogg", title: "邊境廢墟" },
   lieyi_plains: { src: "/audio/lieyi-plains.ogg", title: "烈燚原" },
+  memory_library: { src: "/audio/liuchen-valley.ogg", title: "古老記憶藏庫" },
+  veta_source: { src: "/audio/veta-dream.ogg", title: "維塔・沉眠之所" },
   veta_preview: { src: "/audio/veta-dream.ogg", title: "維塔・沉眠之所" },
 } as const;
 

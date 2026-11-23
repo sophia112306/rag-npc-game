@@ -1,0 +1,70 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.12.2",
+  "orientation": "isometric",
+  "renderorder": "right-down",
+  "width": 13,
+  "height": 15,
+  "tilewidth": 128,
+  "tileheight": 64,
+  "infinite": false,
+  "nextlayerid": 4,
+  "nextobjectid": 4,
+  "layers": [
+    {
+      "id": 1,
+      "name": "Background",
+      "type": "imagelayer",
+      "image": "scenes/veta-life-spring-source-v1.png",
+      "x": 0,
+      "y": 0,
+      "opacity": 1,
+      "visible": true
+    },
+    {
+      "id": 2,
+      "name": "Walkable",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {
+          "id": 1,
+          "name": "spring_source_path",
+          "type": "walkable",
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "polygon": [
+            {"x": 300, "y": 941},
+            {"x": 1370, "y": 941},
+            {"x": 1510, "y": 690},
+            {"x": 1420, "y": 470},
+            {"x": 1210, "y": 300},
+            {"x": 650, "y": 300},
+            {"x": 330, "y": 450},
+            {"x": 190, "y": 700}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Actors",
+      "type": "objectgroup",
+      "draworder": "topdown",
+      "opacity": 1,
+      "visible": true,
+      "objects": [
+        {"id": 2, "name": "player_spawn", "type": "spawn", "point": true, "x": 836, "y": 820, "width": 0, "height": 0, "rotation": 0, "visible": true},
+        {"id": 3, "name": "veta", "type": "landmark", "point": true, "x": 1080, "y": 350, "width": 0, "height": 0, "rotation": 0, "visible": true}
+      ]
+    }
+  ],
+  "tilesets": []
+}

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Copy the six adapters used by the current game map from the school GPU host
+# Copy the eight adapters referenced by the current story from the school GPU host
 # without deleting anything already present locally. Remote locations are
 # explicit because weights are not stored in GitHub.
 
@@ -9,6 +9,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DESTINATION_ROOT="${LORA_DESTINATION_ROOT:-${PROJECT_ROOT}/training/outputs}"
 
 : "${SCHOOL_GPU_SSH:?Set SCHOOL_GPU_SSH, for example nccu-gpu}"
+: "${REMOTE_ALAN_LORA_PATH:?Set the absolute remote Alan adapter path}"
 : "${REMOTE_ANDRE_LORA_PATH:?Set the absolute remote Andre adapter path}"
 : "${REMOTE_DASSO_LORA_PATH:=${REMOTE_DHASO_LORA_PATH:-}}"
 : "${REMOTE_DASSO_LORA_PATH:?Set the absolute remote Dasso adapter path}"
@@ -16,6 +17,7 @@ DESTINATION_ROOT="${LORA_DESTINATION_ROOT:-${PROJECT_ROOT}/training/outputs}"
 : "${REMOTE_SETH_LORA_PATH:?Set the absolute remote Seth adapter path}"
 : "${REMOTE_SYRA_LORA_PATH:?Set the absolute remote Syra adapter path}"
 : "${REMOTE_VIDALIA_LORA_PATH:?Set the absolute remote Vidalia adapter path}"
+: "${REMOTE_VETA_LORA_PATH:?Set the absolute remote Veta adapter path}"
 
 if [[ "${SCHOOL_GPU_SSH}" == -* ]]; then
   echo "SCHOOL_GPU_SSH cannot start with '-'" >&2
@@ -23,12 +25,14 @@ if [[ "${SCHOOL_GPU_SSH}" == -* ]]; then
 fi
 
 ADAPTER_SPECS=(
+  "alan|${REMOTE_ALAN_LORA_PATH}|alan_walker_lora_model"
   "andre|${REMOTE_ANDRE_LORA_PATH}|andre_lora_model"
   "dasso|${REMOTE_DASSO_LORA_PATH}|dhaso_lora_model"
   "menmesvento|${REMOTE_MENMESVENTO_LORA_PATH}|menmesvento_lora_model"
   "seth|${REMOTE_SETH_LORA_PATH}|seth_lora_model"
   "syra|${REMOTE_SYRA_LORA_PATH}|syra_lora_model"
   "vidalia|${REMOTE_VIDALIA_LORA_PATH}|vidalia_lora_model"
+  "veta|${REMOTE_VETA_LORA_PATH}|veta_lora_model"
 )
 
 for spec in "${ADAPTER_SPECS[@]}"; do
@@ -63,4 +67,4 @@ for spec in "${ADAPTER_SPECS[@]}"; do
   fi
 done
 
-echo "All six map NPC LoRA adapters are ready under ${DESTINATION_ROOT}"
+echo "All eight story NPC LoRA adapters are ready under ${DESTINATION_ROOT}"

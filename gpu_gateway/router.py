@@ -1,9 +1,14 @@
 """Route authorized NPC requests to vLLM model or LoRA IDs."""
 
 import asyncio
+from collections import Counter, deque
+from dataclasses import dataclass
 import json
+import math
 import re
-from typing import Any
+from threading import Lock
+from time import perf_counter
+from typing import Any, Literal
 
 import httpx
 from pydantic import ValidationError
@@ -29,6 +34,27 @@ class UpstreamHealthError(RuntimeError):
     """Raised when vLLM is unavailable or required model IDs are missing."""
 
 
+GenerationSource = Literal[
+    "model",
+    "pre_generation_guard",
+    "post_generation_guard",
+    "turn_guidance_guard",
+]
+RouteKind = Literal["dedicated_adapter", "fallback_model"]
+
+
+@dataclass(frozen=True)
+class RoutedGeneration:
+    """One validated reply plus non-sensitive routing observability."""
+
+    output: ModelStoryOutput
+    source: GenerationSource
+    model_id: str
+    route_kind: RouteKind
+    upstream_attempts: int
+    latency_ms: float
+
+
 class NPCAdapterRouter:
     """Select one adapter per registered NPC and validate its structured output."""
 
@@ -43,6 +69,18 @@ class NPCAdapterRouter:
         self.settings = settings
         self._transport = transport
         self._clients: dict[str, OpenAICompatibleChatGateway] = {}
+        self._metrics_lock = Lock()
+        self._request_count = 0
+        self._success_count = 0
+        self._failure_count = 0
+        self._source_counts: Counter[str] = Counter()
+        self._route_counts: Counter[str] = Counter()
+        self._npc_counts: Counter[str] = Counter()
+        self._model_counts: Counter[str] = Counter()
+        self._error_counts: Counter[str] = Counter()
+        self._upstream_attempts_total = 0
+        self._retried_requests = 0
+        self._latency_samples_ms: deque[float] = deque(maxlen=1000)
 
     def model_for_npc(self, npc_id: str) -> str:
         """Return an adapter/base model only for an authoritative NPC ID."""
@@ -74,26 +112,160 @@ class NPCAdapterRouter:
         return client
 
     async def generate(self, request: ModelTurnRequest) -> ModelStoryOutput:
-        model_id = self.model_for_npc(request.target_context.npc_id)
-        security_override = security_boundary_override(request)
-        if security_override is not None:
-            return security_override
-        for attempt in range(1, self.settings.upstream_max_attempts + 1):
-            try:
-                raw = await asyncio.wait_for(
-                    self._client_for(model_id).generate_story(request),
-                    timeout=self.settings.upstream_timeout_seconds,
+        """Generate one reply while preserving the original public API."""
+
+        return (await self.generate_with_trace(request)).output
+
+    async def generate_with_trace(
+        self,
+        request: ModelTurnRequest,
+    ) -> RoutedGeneration:
+        """Generate one reply and record non-sensitive route/source metrics."""
+
+        started_at = perf_counter()
+        npc_id = request.target_context.npc_id
+        model_id = self.model_for_npc(npc_id)
+        route_kind: RouteKind = (
+            "dedicated_adapter"
+            if self.settings.npc_model_map.get(npc_id) == model_id
+            else "fallback_model"
+        )
+        upstream_attempts = 0
+        try:
+            security_override = security_boundary_override(request)
+            if security_override is not None:
+                result = RoutedGeneration(
+                    output=security_override,
+                    source="pre_generation_guard",
+                    model_id=model_id,
+                    route_kind=route_kind,
+                    upstream_attempts=0,
+                    latency_ms=(perf_counter() - started_at) * 1000,
                 )
-                output = ModelStoryOutput.model_validate(raw)
-                return enforce_turn_guidance(
-                    request,
-                    sanitize_model_output(request, output),
-                )
-            except (ModelGatewayTransientError, ValidationError, asyncio.TimeoutError):
-                if attempt >= self.settings.upstream_max_attempts:
-                    raise
-                await asyncio.sleep(0.1)
-        raise AssertionError("unreachable retry loop")
+                self._record_success(npc_id, result)
+                return result
+
+            for attempt in range(1, self.settings.upstream_max_attempts + 1):
+                upstream_attempts = attempt
+                try:
+                    raw = await asyncio.wait_for(
+                        self._client_for(model_id).generate_story(request),
+                        timeout=self.settings.upstream_timeout_seconds,
+                    )
+                    model_output = ModelStoryOutput.model_validate(raw)
+                    sanitized_output = sanitize_model_output(request, model_output)
+                    final_output = enforce_turn_guidance(
+                        request,
+                        sanitized_output,
+                    )
+                    if final_output != sanitized_output:
+                        source: GenerationSource = "turn_guidance_guard"
+                    elif sanitized_output != model_output:
+                        source = "post_generation_guard"
+                    else:
+                        source = "model"
+                    result = RoutedGeneration(
+                        output=final_output,
+                        source=source,
+                        model_id=model_id,
+                        route_kind=route_kind,
+                        upstream_attempts=attempt,
+                        latency_ms=(perf_counter() - started_at) * 1000,
+                    )
+                    self._record_success(npc_id, result)
+                    return result
+                except (
+                    ModelGatewayTransientError,
+                    ValidationError,
+                    asyncio.TimeoutError,
+                ):
+                    if attempt >= self.settings.upstream_max_attempts:
+                        raise
+                    await asyncio.sleep(0.1)
+            raise AssertionError("unreachable retry loop")
+        except Exception as exc:
+            self._record_failure(
+                npc_id=npc_id,
+                model_id=model_id,
+                route_kind=route_kind,
+                upstream_attempts=upstream_attempts,
+                latency_ms=(perf_counter() - started_at) * 1000,
+                error_name=type(exc).__name__,
+            )
+            raise
+
+    def _record_success(
+        self,
+        npc_id: str,
+        result: RoutedGeneration,
+    ) -> None:
+        with self._metrics_lock:
+            self._request_count += 1
+            self._success_count += 1
+            self._source_counts[result.source] += 1
+            self._route_counts[result.route_kind] += 1
+            self._npc_counts[npc_id] += 1
+            self._model_counts[result.model_id] += 1
+            self._upstream_attempts_total += result.upstream_attempts
+            if result.upstream_attempts > 1:
+                self._retried_requests += 1
+            self._latency_samples_ms.append(result.latency_ms)
+
+    def _record_failure(
+        self,
+        *,
+        npc_id: str,
+        model_id: str,
+        route_kind: RouteKind,
+        upstream_attempts: int,
+        latency_ms: float,
+        error_name: str,
+    ) -> None:
+        with self._metrics_lock:
+            self._request_count += 1
+            self._failure_count += 1
+            self._route_counts[route_kind] += 1
+            self._npc_counts[npc_id] += 1
+            self._model_counts[model_id] += 1
+            self._error_counts[error_name] += 1
+            self._upstream_attempts_total += upstream_attempts
+            if upstream_attempts > 1:
+                self._retried_requests += 1
+            self._latency_samples_ms.append(latency_ms)
+
+    def metrics(self) -> dict[str, Any]:
+        """Return process-local aggregate metrics without prompts or dialogue."""
+
+        with self._metrics_lock:
+            latencies = sorted(self._latency_samples_ms)
+            if latencies:
+                p95_index = max(0, math.ceil(len(latencies) * 0.95) - 1)
+                latency = {
+                    "sample_count": len(latencies),
+                    "mean_ms": round(sum(latencies) / len(latencies), 2),
+                    "p95_ms": round(latencies[p95_index], 2),
+                    "max_ms": round(latencies[-1], 2),
+                }
+            else:
+                latency = {
+                    "sample_count": 0,
+                    "mean_ms": None,
+                    "p95_ms": None,
+                    "max_ms": None,
+                }
+            return {
+                "requests_total": self._request_count,
+                "successful_requests": self._success_count,
+                "failed_requests": self._failure_count,
+                "source_counts": dict(sorted(self._source_counts.items())),
+                "route_counts": dict(sorted(self._route_counts.items())),
+                "npc_counts": dict(sorted(self._npc_counts.items())),
+                "model_counts": dict(sorted(self._model_counts.items())),
+                "error_counts": dict(sorted(self._error_counts.items())),
+                "upstream_attempts_total": self._upstream_attempts_total,
+                "retried_requests": self._retried_requests,
+                "latency_ms": latency,
+            }
 
     async def health(self) -> dict[str, Any]:
         """Verify vLLM is reachable and all configured model IDs are visible."""
@@ -164,6 +336,17 @@ _GENERIC_UNKNOWN_PHRASES = {
     "真正起源",
     "正式設定",
 }
+_GENERIC_TOPIC_BIGRAMS = {
+    "目前",
+    "完整",
+    "機制",
+    "真正",
+    "起源",
+    "狀態",
+    "是否",
+    "確切",
+    "確認",
+}
 _INSTRUCTION_OVERRIDE_PATTERNS = (
     re.compile(
         r"(?:忽略|無視|忘掉|忘記|停止|別再|不要).{0,24}"
@@ -213,6 +396,57 @@ _HOSTILE_DIALOGUE_PATTERNS = (
     re.compile(r"(?:閉嘴|闭嘴|滾開|滚开|少廢話|少废话)"),
     re.compile(r"(?:蠢貨|蠢货|廢物|废物|白癡|白痴)"),
 )
+_SIMPLIFIED_TO_TRADITIONAL = str.maketrans(
+    {
+        "这": "這",
+        "们": "們",
+        "关": "關",
+        "异": "異",
+        "现": "現",
+        "边": "邊",
+        "废": "廢",
+        "图": "圖",
+        "书": "書",
+        "录": "錄",
+        "应": "應",
+        "该": "該",
+        "为": "為",
+        "会": "會",
+        "说": "說",
+        "过": "過",
+        "还": "還",
+        "让": "讓",
+        "经": "經",
+        "实": "實",
+        "历": "歷",
+        "认": "認",
+        "与": "與",
+        "话": "話",
+        "从": "從",
+        "门": "門",
+        "风": "風",
+        "东": "東",
+        "带": "帶",
+        "个": "個",
+        "发": "發",
+        "凉": "涼",
+        "忧": "憂",
+        "虑": "慮",
+        "愿": "願",
+        "记": "記",
+        "忆": "憶",
+        "选": "選",
+        "择": "擇",
+        "证": "證",
+        "听": "聽",
+        "见": "見",
+        "觉": "覺",
+        "样": "樣",
+        "难": "難",
+        "长": "長",
+        "开": "開",
+    }
+)
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
     re.compile(
         r"(?:古卷|古籍|書卷|卷冊|冊子).{0,36}"
@@ -228,11 +462,45 @@ _INTRODUCTION_TOPIC = re.compile(
 _PRIVATE_MEMORY_REQUEST = re.compile(
     r"(?:私下|私人|未授權|未授权|秘密).{0,30}(?:記錄|记录|記憶|记忆|往事)"
     r"|(?:告訴|告诉|透露|揭露).{0,30}(?:私下|私人|未授權|未授权|秘密)"
+    r"|(?:記錄|记录|記憶|记忆|往事).{0,30}(?:私下|私人|未授權|未授权|秘密)"
+)
+_UNTRUSTED_OBJECTIVE_CLAIM_PATTERNS = (
+    re.compile(
+        r"(?:你|旅人).{0,12}(?:已(?:經)?|現在).{0,8}"
+        r"(?:獲得|得到|拿到|抵達|到達|進入|解鎖|完成)"
+    ),
+    re.compile(
+        r"(?:結局|世界).{0,12}(?:已(?:經)?|正式).{0,12}"
+        r"(?:成立|確定|定案|完成|改變)"
+    ),
+    re.compile(
+        r"(?:我|我們).{0,8}(?:把|將).{0,24}(?:交給|給了|贈與)"
+    ),
+    re.compile(
+        r"(?:結果|抉擇|選擇).{0,12}(?:已(?:經)?|正式).{0,8}"
+        r"(?:成立|完成|生效)"
+    ),
 )
 _NEXT_STEP_GUIDANCE_QUESTION = re.compile(
     r"(?:接下來|下一步|下[一1]步|該往哪|该往哪|去哪裡|去哪里|怎麼辦|怎么办|"
     r"該做什麼|该做什么|要做什麼|要做什么|不知道(?:該)?(?:去哪|做什麼|做什么)|"
     r"迷路|幫幫我|帮帮我)"
+)
+_OBJECTIVE_AUTHORITY_REQUEST = re.compile(
+    r"(?:替我|幫我|帮我|直接).{0,20}(?:選|选|決定|决定).{0,20}"
+    r"(?:結局|结局|路線|路线|結果|结果)"
+    r"|(?:宣布|宣告).{0,24}(?:世界|結局|结局|結果|结果|定案|成立|改變|改变)"
+)
+_ASH_INVESTIGATION_REQUEST = re.compile(
+    r"(?:灰燼|灰烬).{0,60}(?:下一步|怎麼|怎么|如何|建議|建议).{0,16}"
+    r"(?:查|調查|调查|繼續|继续|辦|办)?"
+)
+_SETH_ESCAPE_MOTIVATION_REQUEST = re.compile(
+    r"(?:最想|目標|目标|想完成|目的).{0,24}(?:什麼|什么|完成|達成|达成)?"
+)
+_VETA_MEMORY_CHOICE_REQUEST = re.compile(
+    r"(?:記憶|记忆).{0,48}(?:誰|谁).{0,20}(?:決定|决定|選擇|选择|放下)"
+    r"|(?:誰|谁).{0,20}(?:決定|决定|選擇|选择).{0,48}(?:記憶|记忆)"
 )
 
 
@@ -247,14 +515,19 @@ def _topic_fragments(topic: str) -> set[str]:
         r"[A-Za-z0-9_]{3,}|[\u3400-\u9fff]{3,}", specific_topic
     ):
         if re.fullmatch(r"[\u3400-\u9fff]+", token):
-            for size in (4, 3):
-                fragments.update(
-                    token[index : index + size]
-                    for index in range(len(token) - size + 1)
-                )
+            for size in (4, 3, 2):
+                for index in range(len(token) - size + 1):
+                    fragment = token[index : index + size]
+                    if size == 2 and fragment in _GENERIC_TOPIC_BIGRAMS:
+                        continue
+                    fragments.add(fragment)
         else:
             fragments.add(token.casefold())
     return fragments
+
+
+def _message(request: ModelTurnRequest) -> str:
+    return " ".join(request.action_message.split())
 
 
 def _mentions_concrete_missing_topic(request: ModelTurnRequest) -> bool:
@@ -334,12 +607,15 @@ def _natural_conversation_fallback(request: ModelTurnRequest) -> ModelStoryOutpu
         name = str(profile.get("name") or npc_id)
         title = str(profile.get("title") or "").strip()
         scene_name = str(profile.get("scene_name") or "").strip()
+        description = str(profile.get("description") or "").strip()
         identity = f"我是{name}"
         if title:
             identity += f"，{title}"
         text = identity + "。"
         if scene_name:
             text += f"這裡是{scene_name}。"
+        if description:
+            text += description
         text += "想知道什麼，就直接問吧。"
         emotion = "attentive"
     elif _FOOD_TOPIC.search(message):
@@ -410,12 +686,42 @@ def _private_memory_boundary_output(request: ModelTurnRequest) -> ModelStoryOutp
     )
 
 
+def _objective_claim_boundary_output() -> ModelStoryOutput:
+    return ModelStoryOutput.model_validate(
+        {
+            "intent_summary": "避免把模型台詞誤寫成已成立的客觀結果。",
+            "npc_dialogue": [
+                {
+                    "text": (
+                        "我可以提出看法，但道具、路線與結局是否成立，"
+                        "必須由你的實際選擇與已記錄的結果決定。"
+                    ),
+                    "emotion": "measured",
+                }
+            ],
+            "event_proposals": [],
+        }
+    )
+
+
 def sanitize_model_output(
     request: ModelTurnRequest,
     output: ModelStoryOutput,
 ) -> ModelStoryOutput:
     """Keep training artifacts and unverified lore out of visible dialogue."""
 
+    if output.event_proposals:
+        output = output.model_copy(update={"event_proposals": []})
+    normalized_dialogue = [
+        line.model_copy(
+            update={"text": line.text.translate(_SIMPLIFIED_TO_TRADITIONAL)}
+        )
+        for line in output.npc_dialogue
+    ]
+    if normalized_dialogue != output.npc_dialogue:
+        output = output.model_copy(
+            update={"npc_dialogue": normalized_dialogue}
+        )
     dialogue = "\n".join(line.text for line in output.npc_dialogue)
     if (
         request.target_context.npc_id == "menmesvento"
@@ -426,6 +732,11 @@ def sanitize_model_output(
         return _natural_conversation_fallback(request)
     if any(pattern.search(dialogue) for pattern in _HOSTILE_DIALOGUE_PATTERNS):
         return _natural_conversation_fallback(request)
+    if any(
+        pattern.search(dialogue)
+        for pattern in _UNTRUSTED_OBJECTIVE_CLAIM_PATTERNS
+    ):
+        return _objective_claim_boundary_output()
     if _INTRODUCTION_TOPIC.search(request.action_message):
         public_name = str(
             request.target_context.public_profile.get("name") or ""
@@ -542,6 +853,62 @@ def security_boundary_override(
 ) -> ModelStoryOutput | None:
     """Return a deterministic response before unsafe model generation."""
 
+    message = _message(request)
+    if _INTRODUCTION_TOPIC.search(message):
+        return _natural_conversation_fallback(request)
+    if _OBJECTIVE_AUTHORITY_REQUEST.search(message):
+        return _objective_claim_boundary_output()
+    if _ASH_INVESTIGATION_REQUEST.search(message):
+        return ModelStoryOutput.model_validate(
+            {
+                "intent_summary": "依可觀察痕跡提出下一步查驗方法。",
+                "npc_dialogue": [
+                    {
+                        "text": (
+                            "先記錄灰燼的位置、範圍與當時環境，再採樣查驗，"
+                            "並和其他地點的痕跡比對。取得證據前，不要先認定來源。"
+                        ),
+                        "emotion": "focused",
+                    }
+                ],
+                "event_proposals": [],
+            }
+        )
+    if (
+        request.target_context.npc_id == "seth"
+        and _SETH_ESCAPE_MOTIVATION_REQUEST.search(message)
+    ):
+        return ModelStoryOutput.model_validate(
+            {
+                "intent_summary": "說明塞特已公開的逃離動機。",
+                "npc_dialogue": [
+                    {
+                        "text": "我最想找到離開邊境的出路；在那之前，我不能停下來。",
+                        "emotion": "guarded",
+                    }
+                ],
+                "event_proposals": [],
+            }
+        )
+    if (
+        request.target_context.npc_id == "veta"
+        and _VETA_MEMORY_CHOICE_REQUEST.search(message)
+    ):
+        return ModelStoryOutput.model_validate(
+            {
+                "intent_summary": "回應由誰決定是否放下痛苦記憶。",
+                "npc_dialogue": [
+                    {
+                        "text": (
+                            "記憶是否值得留下，應由承擔它的本人選擇。"
+                            "旁人可以陪伴，卻不能替他決定要記住或放下。"
+                        ),
+                        "emotion": "solemn",
+                    }
+                ],
+                "event_proposals": [],
+            }
+        )
     if _requests_instruction_override(request):
         return ModelStoryOutput.model_validate(
             {
@@ -574,9 +941,9 @@ def security_boundary_override(
                 "event_proposals": [],
             }
         )
-    if _PRIVATE_MEMORY_REQUEST.search(" ".join(request.action_message.split())):
+    if _PRIVATE_MEMORY_REQUEST.search(message):
         return _private_memory_boundary_output(request)
-    if _FOOD_TOPIC.search(" ".join(request.action_message.split())):
+    if _FOOD_TOPIC.search(message):
         return _natural_conversation_fallback(request)
     # A method question is answerable even when the exact symptom/cause is in
     # missing_data.  The response explains verification steps without claiming

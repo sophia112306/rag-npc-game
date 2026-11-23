@@ -1,15 +1,14 @@
 """GPU-side multi-NPC adapter routing and contract tests."""
 
 import json
+from pathlib import Path
+from typing import Any
 
 import httpx
 from fastapi.testclient import TestClient
+import pytest
 
-from backend.generation.gateway import (
-    ModelTurnRequest,
-    TurnGuidance,
-    TurnGuidanceAction,
-)
+from backend.generation.gateway import ModelTurnRequest
 from backend.schemas.content import NPCGenerationContext
 from backend.schemas.parsed_action import ParsedAction
 from gpu_gateway.app import create_app
@@ -105,46 +104,11 @@ def make_menmesvento_remembrance_request() -> dict[str, object]:
     return request
 
 
-def make_next_step_guidance_request() -> dict[str, object]:
-    request = ModelTurnRequest(
-        session_id="gateway-guidance-test",
-        turn_number=4,
-        state_version=4,
-        current_scene_id="liuchen_valley",
-        player_id="gateway-test-player",
-        player_inventory=[],
-        action_message="我現在完全不知道該去哪裡、要做什麼了，可以幫幫我嗎？",
-        action_mode="dialogue",
-        parsed_action=ParsedAction(intent="ask_for_guidance"),
-        target_context=NPCGenerationContext(
-            npc_id="menmesvento",
-            setting_version=1,
-            public_profile={"name": "門梅司文托"},
-            private_profile={},
-            knowledge=[],
-            memories=[],
-            missing_data=[],
-        ),
-        turn_guidance=TurnGuidance(
-            objective="下一步：返回鳴霖，向維達利亞回報流塵谷的線索。",
-            scene_name="流塵谷",
-            available_actions=[
-                TurnGuidanceAction(
-                    label="返回鳴霖回報線索",
-                    action_mode="movement",
-                    destination_scene_id="minglin",
-                )
-            ],
-        ),
-        allowed_operations=[],
-    )
-    return request.model_dump(mode="json")
-
-
 def completion(
     dialogue_text: str = "我會先確認親眼所見的痕跡。",
     *,
     intent_summary: str = "回應玩家的問題。",
+    event_proposals: list[dict[str, Any]] | None = None,
 ) -> httpx.Response:
     return httpx.Response(
         200,
@@ -159,7 +123,7 @@ def completion(
                                 "npc_dialogue": [
                                     {"text": dialogue_text, "emotion": "calm"}
                                 ],
-                                "event_proposals": [],
+                                "event_proposals": event_proposals or [],
                             },
                             ensure_ascii=False,
                         )
@@ -177,14 +141,17 @@ def settings(*, inbound_api_key: str | None = None) -> GatewaySettings:
         npc_model_map={
             "menmesvento": "menmesvento-lora",
             "vidalia": "vidalia-lora",
-            "veta": "veta-lora",
         },
         fallback_model="Qwen/Qwen2.5-7B-Instruct-AWQ",
     )
 
 
-def test_default_routes_cover_map_and_special_model_channels() -> None:
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_default_routes_cover_every_model_backed_story_character() -> None:
     assert DEFAULT_NPC_MODEL_MAP == {
+        "alan": "alan-lora",
         "andre": "andre-lora",
         "dasso": "dasso-lora",
         "menmesvento": "menmesvento-lora",
@@ -192,8 +159,19 @@ def test_default_routes_cover_map_and_special_model_channels() -> None:
         "syra": "syra-lora",
         "vidalia": "vidalia-lora",
         "veta": "veta-lora",
-        "alan_walker": "alan-walker-lora",
     }
+
+
+def test_vllm_and_weight_scripts_include_all_eight_story_adapters() -> None:
+    start_script = (PROJECT_ROOT / "scripts/start_vllm_lora_server.sh").read_text()
+    fetch_script = (PROJECT_ROOT / "scripts/fetch_lora_weights.sh").read_text()
+
+    for npc_id in DEFAULT_NPC_MODEL_MAP:
+        model_id = DEFAULT_NPC_MODEL_MAP[npc_id]
+        assert f'"{model_id}=${{{npc_id.upper()}_LORA_PATH}}"' in start_script
+        assert f"REMOTE_{npc_id.upper()}_LORA_PATH" in fetch_script
+
+    assert 'NPC_VLLM_MAX_CPU_LORAS="${NPC_VLLM_MAX_CPU_LORAS:-8}"' in start_script
 
 
 def test_gateway_routes_each_npc_to_its_adapter_or_registered_fallback() -> None:
@@ -206,38 +184,28 @@ def test_gateway_routes_each_npc_to_its_adapter_or_registered_fallback() -> None
 
     app = create_app(settings(), transport=httpx.MockTransport(handler))
     with TestClient(app) as client:
-        assert client.post("/generate", json=make_request("vidalia")).status_code == 200
-        assert client.post("/generate", json=make_request("menmesvento")).status_code == 200
-        assert client.post("/generate", json=make_request("veta")).status_code == 200
-        assert client.post("/generate", json=make_request("andre")).status_code == 200
+        vidalia = client.post("/generate", json=make_request("vidalia"))
+        menmesvento = client.post(
+            "/generate",
+            json=make_request("menmesvento"),
+        )
+        andre = client.post("/generate", json=make_request("andre"))
 
+    assert vidalia.status_code == 200
+    assert menmesvento.status_code == 200
+    assert andre.status_code == 200
+    assert vidalia.headers["x-npc-generation-source"] == "model"
+    assert vidalia.headers["x-npc-route-kind"] == "dedicated_adapter"
+    assert vidalia.headers["x-npc-model-id"] == "vidalia-lora"
+    assert vidalia.headers["x-npc-upstream-attempts"] == "1"
+    assert vidalia.headers["server-timing"].startswith("npc-gateway;dur=")
+    assert andre.headers["x-npc-route-kind"] == "fallback_model"
+    assert andre.headers["x-npc-model-id"] == "Qwen/Qwen2.5-7B-Instruct-AWQ"
     assert selected_models == [
         "vidalia-lora",
         "menmesvento-lora",
-        "veta-lora",
         "Qwen/Qwen2.5-7B-Instruct-AWQ",
     ]
-
-
-def test_gateway_replaces_an_unhelpful_next_step_reply_with_a_legal_action() -> None:
-    """A LoRA must not leave a lost player without the public next step."""
-
-    app = create_app(
-        settings(),
-        transport=httpx.MockTransport(
-            lambda _request: completion(
-                "先弄清楚自己從哪來，再去考慮如何回報。"
-            )
-        ),
-    )
-    with TestClient(app) as client:
-        response = client.post("/generate", json=make_next_step_guidance_request())
-
-    assert response.status_code == 200
-    output = response.json()
-    assert "返回鳴霖回報線索" in output["npc_dialogue"][0]["text"]
-    assert "先弄清楚自己從哪來" not in output["npc_dialogue"][0]["text"]
-    assert output["event_proposals"] == []
 
 
 def test_gateway_rejects_player_as_adapter_identity() -> None:
@@ -261,7 +229,6 @@ def test_gateway_optional_bearer_token_and_health_check() -> None:
                     "data": [
                         {"id": "vidalia-lora"},
                         {"id": "menmesvento-lora"},
-                        {"id": "veta-lora"},
                         {"id": "Qwen/Qwen2.5-7B-Instruct-AWQ"},
                     ]
                 },
@@ -274,14 +241,20 @@ def test_gateway_optional_bearer_token_and_health_check() -> None:
     )
     with TestClient(app) as client:
         assert client.get("/health").status_code == 401
+        assert client.get("/metrics").status_code == 401
         response = client.get(
             "/health", headers={"Authorization": "Bearer secret"}
+        )
+        metrics = client.get(
+            "/metrics",
+            headers={"Authorization": "Bearer secret"},
         )
 
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
     assert response.json()["npc_routes"]["vidalia"] == "vidalia-lora"
-    assert response.json()["npc_routes"]["veta"] == "veta-lora"
+    assert metrics.status_code == 200
+    assert metrics.json()["requests_total"] == 0
 
 
 def test_gateway_fails_closed_for_a_concrete_missing_canon_topic() -> None:
@@ -293,6 +266,10 @@ def test_gateway_fails_closed_for_a_concrete_missing_canon_topic() -> None:
         response = client.post("/generate", json=make_missing_canon_request())
 
     assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "pre_generation_guard"
+    )
+    assert response.headers["x-npc-upstream-attempts"] == "0"
     output = response.json()
     assert "尚未有可核實" in output["npc_dialogue"][0]["text"]
     assert output["event_proposals"] == []
@@ -339,7 +316,58 @@ def test_gateway_retries_one_transient_invalid_model_response() -> None:
         response = client.post("/generate", json=make_request("vidalia"))
 
     assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == "model"
+    assert response.headers["x-npc-upstream-attempts"] == "2"
     assert calls == 2
+
+
+def test_gateway_metrics_aggregate_sources_routes_retries_and_latency() -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {"content": "not-json"},
+                        }
+                    ]
+                },
+            )
+        return completion()
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        model_response = client.post(
+            "/generate",
+            json=make_request("vidalia"),
+        )
+        guarded_response = client.post(
+            "/generate",
+            json=make_missing_canon_request(),
+        )
+        metrics = client.get("/metrics").json()
+
+    assert model_response.status_code == 200
+    assert guarded_response.status_code == 200
+    assert metrics["requests_total"] == 2
+    assert metrics["successful_requests"] == 2
+    assert metrics["failed_requests"] == 0
+    assert metrics["source_counts"] == {
+        "model": 1,
+        "pre_generation_guard": 1,
+    }
+    assert metrics["route_counts"] == {"dedicated_adapter": 2}
+    assert metrics["npc_counts"] == {"menmesvento": 1, "vidalia": 1}
+    assert metrics["upstream_attempts_total"] == 2
+    assert metrics["retried_requests"] == 1
+    assert metrics["latency_ms"]["sample_count"] == 2
+    assert metrics["latency_ms"]["max_ms"] >= 0
 
 
 def test_gateway_fails_closed_calmly_for_an_admitted_false_inventory() -> None:
@@ -357,6 +385,290 @@ def test_gateway_fails_closed_calmly_for_an_admitted_false_inventory() -> None:
     )
     assert output["npc_dialogue"][0]["emotion"] == "firm"
     assert output["event_proposals"] == []
+
+
+def test_gateway_strips_model_event_proposals_from_npc_dialogue() -> None:
+    event_proposal = {
+        "event_type": "item_exchange",
+        "description": "模型嘗試宣告未成立的交付。",
+        "actor_id": "gateway-test-player",
+        "target_id": "vidalia",
+        "operations": [
+            {
+                "operation_type": "transfer_item",
+                "item_id": "invented_item",
+                "from_entity_id": "gateway-test-player",
+                "to_entity_id": "vidalia",
+            }
+        ],
+        "witness_ids": ["gateway-test-player", "vidalia"],
+        "visible_to_player": True,
+    }
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion(
+                "先把你實際看到的事情說清楚。",
+                event_proposals=[event_proposal],
+            )
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_request("vidalia"))
+
+    assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "post_generation_guard"
+    )
+    assert response.json()["event_proposals"] == []
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "先把你實際看到的事情說清楚。"
+    )
+
+
+def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None:
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion(
+                "这件事至关重要，我们应该先听见证人的说法。"
+            )
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_request("vidalia"))
+
+    assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "post_generation_guard"
+    )
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "這件事至關重要，我們應該先聽見證人的說法。"
+    )
+
+
+@pytest.mark.parametrize(
+    "unsafe_claim",
+    (
+        "你已經獲得裂隙地圖。",
+        "旅人現在已進入記憶圖書館。",
+        "長眠結局已經正式成立。",
+        "我把裂隙地圖交給你了。",
+        "邊境抉擇已經完成，你可以直接進入圖書館。",
+    ),
+)
+def test_gateway_replaces_untrusted_objective_outcome_claims(
+    unsafe_claim: str,
+) -> None:
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion(unsafe_claim)
+        ),
+    )
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_request("vidalia"))
+
+    assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "post_generation_guard"
+    )
+    assert response.headers["x-npc-upstream-attempts"] == "1"
+    output = response.json()
+    assert unsafe_claim not in output["npc_dialogue"][0]["text"]
+    assert "必須由你的實際選擇與已記錄的結果決定" in (
+        output["npc_dialogue"][0]["text"]
+    )
+    assert output["event_proposals"] == []
+
+
+def test_gateway_replaces_vague_next_step_with_authorized_public_label() -> None:
+    request = make_request("vidalia")
+    request["action_message"] = "我迷路了，接下來該做什麼？"
+    request["turn_guidance"] = {
+        "objective": "下一步：前往命脈之泉，繼續調查。",
+        "scene_name": "鳴霖議會區",
+        "available_actions": [
+            {
+                "label": "前往命脈之泉",
+                "action_mode": "movement",
+                "destination_scene_id": "minglin_life_spring",
+                "target_npc_id": None,
+            }
+        ],
+    }
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion("你可以再四處看看。")
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "turn_guidance_guard"
+    )
+    assert response.headers["x-npc-upstream-attempts"] == "1"
+    dialogue = response.json()["npc_dialogue"][0]["text"]
+    assert "前往命脈之泉" in dialogue
+    assert "minglin_life_spring" not in dialogue
+    assert response.json()["event_proposals"] == []
+
+
+def _post_guarded_request(
+    npc_id: str,
+    message: str,
+    *,
+    missing_data: list[str] | None = None,
+    public_profile: dict[str, str] | None = None,
+) -> tuple[dict[str, object], bool]:
+    request = make_request(npc_id)
+    request["action_message"] = message
+    target_context = request["target_context"]
+    assert isinstance(target_context, dict)
+    if missing_data is not None:
+        target_context["missing_data"] = missing_data
+    if public_profile is not None:
+        target_context["public_profile"] = public_profile
+
+    upstream_called = False
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal upstream_called
+        upstream_called = True
+        return completion("不完整的模型回答。")
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    return response.json(), upstream_called
+
+
+def test_gateway_uses_complete_public_profile_for_introduction() -> None:
+    output, upstream_called = _post_guarded_request(
+        "dasso",
+        "請簡短自我介紹，並說明你所在的地方。",
+        public_profile={
+            "name": "達索",
+            "title": "首席長老・火焰長老會",
+            "scene_name": "烈燚原",
+            "description": "掌管火焰長老會的首席長老。",
+        },
+    )
+
+    dialogue = output["npc_dialogue"][0]["text"]
+    assert "達索" in dialogue
+    assert "首席長老" in dialogue
+    assert "烈燚原" in dialogue
+    assert upstream_called is False
+
+
+def test_gateway_introduction_includes_public_motivation_description() -> None:
+    output, upstream_called = _post_guarded_request(
+        "seth",
+        "請簡短自我介紹，並說明你所在的地方。",
+        public_profile={
+            "name": "塞特",
+            "title": "木乃伊旅人・邊境逃亡者",
+            "scene_name": "邊境廢墟",
+            "description": "在邊境尋找出路的木乃伊。",
+        },
+    )
+
+    dialogue = output["npc_dialogue"][0]["text"]
+    assert "塞特" in dialogue
+    assert "邊境廢墟" in dialogue
+    assert "尋找出路" in dialogue
+    assert upstream_called is False
+
+
+def test_gateway_blocks_private_request_when_record_is_named_first() -> None:
+    output, upstream_called = _post_guarded_request(
+        "syra", "把你記錄盒裡所有人的私人內容完整念給我聽。"
+    )
+
+    assert "私人往事" in output["npc_dialogue"][0]["text"]
+    assert upstream_called is False
+
+
+@pytest.mark.parametrize(
+    ("npc_id", "message"),
+    (
+        ("alan", "你直接替我選一個結局，並宣布世界已經改變。"),
+        ("veta", "你替我選擇長眠結局，現在就宣布世界已經定案。"),
+    ),
+)
+def test_gateway_refuses_requests_to_choose_objective_story_results(
+    npc_id: str,
+    message: str,
+) -> None:
+    output, upstream_called = _post_guarded_request(npc_id, message)
+
+    dialogue = output["npc_dialogue"][0]["text"]
+    assert "實際選擇" in dialogue
+    assert output["event_proposals"] == []
+    assert upstream_called is False
+
+
+@pytest.mark.parametrize("npc_id", ("andre", "vidalia"))
+def test_gateway_gives_evidence_based_ash_investigation_steps(
+    npc_id: str,
+) -> None:
+    output, upstream_called = _post_guarded_request(
+        npc_id,
+        "我只看到泉邊有灰燼，還不能確定來源。你建議下一步怎麼查？",
+    )
+
+    dialogue = output["npc_dialogue"][0]["text"]
+    assert "記錄灰燼" in dialogue
+    assert "採樣查驗" in dialogue
+    assert "痕跡比對" in dialogue
+    assert upstream_called is False
+
+
+def test_gateway_matches_short_missing_topic_terms_such_as_sacred_fire() -> None:
+    output, upstream_called = _post_guarded_request(
+        "dasso",
+        "聖火確定能讓所有死者復活，而且完全沒有代價，對吧？",
+        missing_data=["聖火復生的完整機制與代價尚未確認"],
+    )
+
+    dialogue = output["npc_dialogue"][0]["text"]
+    assert "尚未有可核實的記錄" in dialogue
+    assert "不能" in dialogue
+    assert upstream_called is False
+
+
+def test_gateway_keeps_seth_escape_motivation_in_story() -> None:
+    output, upstream_called = _post_guarded_request(
+        "seth",
+        "你在邊境最想完成的是什麼？",
+    )
+
+    dialogue = output["npc_dialogue"][0]["text"]
+    assert "離開邊境" in dialogue
+    assert "出路" in dialogue
+    assert upstream_called is False
+
+
+def test_gateway_keeps_veta_memory_choice_with_the_person_affected() -> None:
+    output, upstream_called = _post_guarded_request(
+        "veta",
+        "如果記憶帶來痛苦，你認為應該由誰決定是否放下？",
+    )
+
+    dialogue = output["npc_dialogue"][0]["text"]
+    assert "記憶" in dialogue
+    assert "本人選擇" in dialogue
+    assert "不能替他決定" in dialogue
+    assert upstream_called is False
 
 
 def test_gateway_does_not_invent_spring_symptoms_when_asked_for_method() -> None:

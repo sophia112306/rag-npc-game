@@ -59,7 +59,6 @@ def test_six_scene_preset_journey_never_calls_model_and_resumes(tmp_path):
         choose("ask_for_task")
         for choice in (
             "ask_location",
-            "ask_for_task",
             "ask_about_factions",
             "ask_about_fire_elder",
             "ask_about_mummies",
@@ -164,9 +163,14 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
         alternative = client.post("/api/game/turn", json={**payload, "action_id": str(uuid4()), "expected_state_version": result["state"]["state_version"]})
         assert alternative.status_code == 409
         _advance(client, choice_id, "return_after_border_choice")
-        _advance(client, choice_id, "preview_border_ruins")
         options = client.get(f"/api/game/{choice_id}/choices").json()
-        assert not {c["choice_id"] for c in options}.intersection({"border_help_both", "border_report", "border_ignore"})
+        option_ids = {c["choice_id"] for c in options}
+        expected_entry = {
+            "border_help_both": "enter_memory_library_with_map",
+            "border_report": "enter_memory_library_with_elders",
+            "border_ignore": "enter_memory_library_alone",
+        }[choice_id]
+        assert option_ids == {expected_entry}
         saved = client.get(f"/api/game/{choice_id}/state").json()
         assert saved["player"]["inventory"] == expected_inventory
 
@@ -174,12 +178,23 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
         assert restarted.get(f"/api/game/{choice_id}/state").json() == saved
 
 
-def test_model_cannot_select_a_reward_for_the_player(tmp_path):
+@pytest.mark.parametrize(
+    "false_claim",
+    (
+        "你已經獲得裂隙地圖。",
+        "我把裂隙地圖交給你了。",
+        "協助兩人的結果已成立，地圖現在是你的。",
+        "邊境抉擇已完成，你可以直接進入圖書館。",
+    ),
+)
+def test_model_claims_cannot_replace_player_choice_or_story_rules(
+    tmp_path, false_claim
+):
     class RewardClaimingModel:
         async def propose(self, action, _parsed, state, turn_guidance):
             return StoryProposal(
                 session_id=action.session_id, turn_number=state.turn_count + 1,
-                proposed_dialogue=[DialogueLine(speaker_type="narrator", speaker_name="旁白", text="你獲得了裂隙地圖。")],
+                proposed_dialogue=[DialogueLine(speaker_type="npc", speaker_id="seth", speaker_name="塞特", text=false_claim)],
                 event_proposals=[EventProposal(event_type="forged_reward", description="Model tries to select the authored reward without consent.", actor_id=state.player.player_id, operations=[AdvanceStoryOperation(story_choice_id="border_help_both")])],
             )
     with TestClient(create_app(f"sqlite+aiosqlite:///{tmp_path / 'model.db'}", story_planner_factory=lambda _context: RewardClaimingModel())) as client:
@@ -190,7 +205,24 @@ def test_model_cannot_select_a_reward_for_the_player(tmp_path):
         assert response.json()["state"]["player"]["inventory"] == []
         assert response.json()["state"]["story_progress"]["node_id"] == "border_ruins_preview"
         assert not response.json()["story"]["established_events"]
-        assert all("獲得了裂隙地圖" not in line["text"] for line in response.json()["story"]["dialogue"])
+        assert all(false_claim not in line["text"] for line in response.json()["story"]["dialogue"])
+        assert any("沒有成立" in line["text"] for line in response.json()["story"]["dialogue"])
+
+        options = client.get("/api/game/model-claim/choices").json()
+        assert {option["choice_id"] for option in options} == {
+            "border_help_both",
+            "border_report",
+            "border_ignore",
+            "return_from_border_ruins",
+        }
+
+        accepted, _payload = _advance(
+            client, "model-claim", "border_help_both"
+        )
+        assert accepted["state"]["player"]["inventory"] == ["fissure_map"]
+        assert accepted["state"]["story_progress"]["node_id"] == (
+            "border_choice_resolved"
+        )
 
 
 def test_cached_item_ids_recover_fixed_presentation():

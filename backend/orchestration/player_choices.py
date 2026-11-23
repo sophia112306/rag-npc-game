@@ -30,6 +30,8 @@ def build_player_choices(
 ) -> list[PlayerChoice]:
     """Return a small contextual set; movement comes from the scene graph."""
 
+    if state.game_status != "active":
+        return []
     if npc_id is not None:
         if not npc_available_in_state(npc_id, state):
             return []

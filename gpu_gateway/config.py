@@ -7,6 +7,7 @@ from typing import Literal
 
 
 DEFAULT_NPC_MODEL_MAP = {
+    "alan": "alan-lora",
     "andre": "andre-lora",
     "dasso": "dasso-lora",
     "menmesvento": "menmesvento-lora",
@@ -14,7 +15,6 @@ DEFAULT_NPC_MODEL_MAP = {
     "syra": "syra-lora",
     "vidalia": "vidalia-lora",
     "veta": "veta-lora",
-    "alan_walker": "alan-walker-lora",
 }
 DEFAULT_BASE_MODEL = "Qwen/Qwen2.5-7B-Instruct-AWQ"
 

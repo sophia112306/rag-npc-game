@@ -33,6 +33,7 @@ export default function InvestigationJournal({findings,objective,onClose,onRepor
           : <p>目前沒有道具。調查線索請查看下方紀錄。</p>}
       </section>
       {findings.length ? <div className={styles.findingsGrid}>{findings.map(finding=><article key={finding.clue_id} data-signal={finding.visual_signal}>
+        {finding.image_url && <img className={styles.findingImage} src={finding.image_url} alt="" />}
         <small>{finding.scene_name} · {finding.kind==="conversation"?"交談記錄":"現場調查"}</small>
         <h3>{finding.title}</h3>
         <p>{finding.summary}</p>
