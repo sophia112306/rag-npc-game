@@ -86,6 +86,7 @@ class GameState(BaseModel):
     # [新增] 草案 v3 防刷分計數器（每階段切換時歸零）
     phase_usurp_dialogue_gain: int = 0   # 本階段靠激怒 NPC 累積的篡奪值 (上限 +10)
     recent_axis_signs: List[int] = Field(default_factory=list)  # 記錄最近 3 回合的主軸傾向符號 (-1, 0, 1)
+    recent_axis_stances: List[Optional[str]] = Field(default_factory=list)  # 最近 3 回合的立場類別；有類別時以類別判斷同一立場
     phase_relation_dialogue_gain: Dict[str, int] = Field(
         default_factory=lambda: {"andre": 0, "vidalia": 0, "menmesvento": 0}
     )                                    # 本階段各角色靠對話累積的關係值 (各上限 +40)

@@ -12,6 +12,32 @@ from pydantic import BaseModel, ConfigDict, Field
 from .game_state import StoryPhase
 
 
+# 規格 v3「主軸的發言判讀」的立場類別與方向（-1 偏守夢、+1 偏醒夢）。
+# 敘事 AI 從這份清單選一個；「同一立場 3 回合內只計一次」以類別判斷。
+AXIS_STANCES: Dict[str, int] = {
+    "尋求安寧": -1,
+    "承諾陪伴": -1,
+    "肯定永生或輪迴": -1,
+    "保存記憶": -1,
+    "維持現狀": -1,
+    "探討死亡的意義": 1,
+    "指出長生的虛妄": 1,
+    "支持門梅司文托": 1,
+    "主張打破循環": 1,
+}
+
+
+def valid_axis_stance(stance: object, axis_delta: int) -> str | None:
+    """類別在清單內、且方向與主軸變化一致才採用；否則視為沒有類別。"""
+
+    if not isinstance(stance, str) or not axis_delta:
+        return None
+    direction = AXIS_STANCES.get(stance.strip())
+    if direction is None or (direction > 0) != (axis_delta > 0):
+        return None
+    return stance.strip()
+
+
 class NarrativeAIRequest(BaseModel):
     """One player utterance plus the state the narrative AI needs to judge it."""
 

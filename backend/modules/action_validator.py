@@ -1,5 +1,6 @@
 from typing import List, Optional
 from backend.schemas.api_response import NarrativeAIResponse
+from backend.schemas.narrative_ai import valid_axis_stance
 
 
 class ActionValidator:
@@ -27,5 +28,8 @@ class ActionValidator:
 
         # 2. 旗標只能透過 event_done 由後端事件庫設定，敘事 AI 不能直接設
         response.flags_set = []
+
+        # 3. 立場類別必須在規格清單內且方向與主軸一致，否則改用正負號判斷同一立場
+        response.stance = valid_axis_stance(response.stance, response.delta.axis)
 
         return response

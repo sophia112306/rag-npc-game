@@ -104,7 +104,8 @@ def main() -> int:
                 print(f"{npc.name}：{reply}")
             print(
                 f"  關係值 {before.npc_states[npc_id].relation} → {npc.relation}"
-                f"｜主軸 {before.axis} → {after.axis}｜篡奪 {before.usurp} → {after.usurp}"
+                f"｜主軸 {before.axis} → {after.axis}（計入立場：{(after.recent_axis_stances or [None])[-1] or '無'}）"
+                f"｜篡奪 {before.usurp} → {after.usurp}"
                 f"｜本階段對話累積 +{after.phase_relation_dialogue_gain.get(npc_id, 0)}"
             )
             print(

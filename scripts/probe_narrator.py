@@ -89,7 +89,7 @@ def main() -> int:
         checks += bool(problems)
         print(
             f"[{status}] {NAMES[npc_id]}｜{message}\n"
-            f"  主軸 {delta['axis']:+d}　篡奪 {delta['usurp']:+d}　關係 {json.dumps(delta['relation'], ensure_ascii=False)}"
+            f"  主軸 {delta['axis']:+d}（{body.get('stance') or '無類別'}）　篡奪 {delta['usurp']:+d}　關係 {json.dumps(delta['relation'], ensure_ascii=False)}"
             f"　（{seconds:.1f} 秒）\n  理由：{body.get('reason', '')}\n"
         )
     print(f"共 {len(SAMPLES)} 筆，{len(SAMPLES) - checks} 筆符合預期，{checks} 筆需要檢查。")

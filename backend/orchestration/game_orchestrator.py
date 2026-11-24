@@ -320,11 +320,13 @@ class GameOrchestrator:
             usurp_delta=judgement.delta.usurp,
             relation_deltas=judgement.delta.relation,
             player_message=action.message,
+            axis_stance=judgement.stance,
         )
         logger.info(
-            "Narrative delta session=%s proposed=%s applied=%s duplicate=%s reason=%s",
+            "Narrative delta session=%s proposed=%s stance=%s applied=%s duplicate=%s reason=%s",
             state.session_id,
             judgement.delta.model_dump(),
+            judgement.stance,
             {"axis": applied.axis, "usurp": applied.usurp, "relation": applied.relation},
             applied.duplicate_message,
             judgement.reason,

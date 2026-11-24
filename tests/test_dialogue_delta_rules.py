@@ -123,6 +123,47 @@ def test_same_stance_on_axis_counts_once_within_three_turns() -> None:
     assert second.axis == 0
 
 
+def test_different_stances_on_the_same_side_both_count() -> None:
+    state = make_state(story_phase=StoryPhase.ACT3_FREEDOM)
+
+    first = StateRules.apply_dialogue_delta(state, axis_delta=-3, player_message="我很喜歡這片森林的寧靜", axis_stance="尋求安寧")
+    second = StateRules.apply_dialogue_delta(state, axis_delta=-3, player_message="我想留下來陪妳", axis_stance="承諾陪伴")
+
+    assert (first.axis, second.axis) == (-3, -3)
+    assert state.axis == -6
+
+
+def test_same_stance_counts_again_on_the_fourth_turn() -> None:
+    state = make_state(story_phase=StoryPhase.ACT3_FREEDOM)
+    messages = ("這裡好安靜", "我喜歡這份平靜", "在這裡什麼都不用擔心", "安寧真好")
+
+    applied = [
+        StateRules.apply_dialogue_delta(state, axis_delta=-3, player_message=message, axis_stance="尋求安寧").axis
+        for message in messages
+    ]
+
+    assert applied == [-3, 0, 0, -3]
+
+
+def test_without_stance_the_same_side_also_counts_every_third_turn() -> None:
+    state = make_state(story_phase=StoryPhase.ACT3_FREEDOM)
+    messages = ("死亡讓生命有意義", "我們應該打破循環", "長生只是逃避", "人終究會死")
+
+    applied = [StateRules.apply_dialogue_delta(state, axis_delta=4, player_message=m).axis for m in messages]
+
+    assert applied == [4, 0, 0, 4]
+
+
+def test_events_do_not_touch_the_stance_window() -> None:
+    state = make_state(story_phase=StoryPhase.ACT3_FREEDOM)
+    StateRules.apply_dialogue_delta(state, axis_delta=-3, player_message="這裡好安靜", axis_stance="尋求安寧")
+
+    StateRules.apply_delta(state, axis_delta=-10, is_event=True)
+
+    assert state.recent_axis_stances == ["尋求安寧"]
+    assert state.axis == -13
+
+
 def test_phase_caps_still_apply_to_dialogue() -> None:
     state = make_state(axis=-18)
 

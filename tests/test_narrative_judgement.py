@@ -108,6 +108,45 @@ async def test_free_dialogue_applies_clamped_delta_before_npc_reply(tmp_path) ->
     assert set(sent.relations) == {"andre", "vidalia", "menmesvento"}
 
 
+class SequenceJudge:
+    def __init__(self, *responses: NarrativeAIResponse) -> None:
+        self.responses = list(responses)
+
+    async def judge(self, request: NarrativeAIRequest) -> NarrativeAIResponse:
+        return self.responses.pop(0)
+
+
+@pytest.mark.asyncio
+async def test_different_stances_accumulate_on_the_axis(tmp_path) -> None:
+    judge = SequenceJudge(
+        judgement(axis=-3, stance="尋求安寧"),
+        judgement(axis=-3, stance="承諾陪伴"),
+    )
+    repository, orchestrator = await make_orchestrator(tmp_path, judge, RecordingPlanner())
+
+    await orchestrator.process_turn(talk("我很喜歡這片森林的寧靜"))
+    await orchestrator.process_turn(talk("我想留下來陪妳", version=2))
+
+    stored = await repository.get_state("narrative-session")
+    assert stored.axis == -6
+    assert stored.recent_axis_stances == ["尋求安寧", "承諾陪伴"]
+
+
+@pytest.mark.asyncio
+async def test_invalid_stance_falls_back_to_the_sign_rule(tmp_path) -> None:
+    judge = SequenceJudge(
+        judgement(axis=-3, stance="喜歡下雨"),
+        judgement(axis=-3, stance="主張打破循環"),  # 方向與主軸不符
+    )
+    repository, orchestrator = await make_orchestrator(tmp_path, judge, RecordingPlanner())
+
+    await orchestrator.process_turn(talk("雨聲很好聽"))
+    await orchestrator.process_turn(talk("我想一直待在這裡", version=2))
+
+    stored = await repository.get_state("narrative-session")
+    assert stored.axis == -3  # 兩次都沒有有效類別，同一方向只算第一次
+
+
 @pytest.mark.asyncio
 async def test_narrative_failure_keeps_state_and_still_replies(tmp_path) -> None:
     judge = StubJudge(error=NarrativeAIUnavailable("offline"))

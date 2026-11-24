@@ -27,6 +27,7 @@ class NarrativeAIResponse(BaseModel):
     event_done: Optional[str] = Field(default=None, description="觸發完成的事件 ID")
     flags_set: List[str] = Field(default_factory=list, description="欲設定的旗標清單")
     reason: str = Field(default="", description="AI 判讀理由")
+    stance: Optional[str] = Field(default=None, description="主軸的立場類別（見 narrative_ai.AXIS_STANCES）")
 
 
 class ApiError(BaseModel):

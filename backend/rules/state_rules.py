@@ -108,7 +108,8 @@ class StateRules:
         truth_delta: int = 0,
         relation_deltas: Dict[str, int] = None,
         phase_gained_relations: Dict[str, int] = None,
-        is_event: bool = False
+        is_event: bool = False,
+        axis_stance: str | None = None,
     ) -> Tuple[GameState, Dict[str, int]]:
         """
         將數值增減套用到 GameState，並執行：
@@ -148,19 +149,26 @@ class StateRules:
             # -------------------------------------------------------------
             # 2. 更新主軸傾向值 (axis)、邊界限制與「同一立場 3 回合內只計一次」
             # -------------------------------------------------------------
+            #    敘事 AI 有給立場類別時，以類別判斷「同一立場」（不同理由可各自累積）；
+            #    沒有類別時退回以正負號判斷。只記錄真正被計算的那一次，
+            #    所以連續重複同一立場時，每 3 回合會再計算一次。
+            counted_sign, counted_stance = 0, None
             if not is_event and axis_delta != 0:
                 current_sign = 1 if axis_delta > 0 else -1
-                if current_sign in game_state.recent_axis_signs[-2:]:
-                    effective_axis_delta = 0
+                if axis_stance:
+                    repeated = axis_stance in game_state.recent_axis_stances[-2:]
                 else:
-                    effective_axis_delta = axis_delta
-                game_state.recent_axis_signs.append(current_sign)
-                game_state.recent_axis_signs = game_state.recent_axis_signs[-3:]
+                    repeated = current_sign in game_state.recent_axis_signs[-2:]
+                effective_axis_delta = 0 if repeated else axis_delta
+                if not repeated:
+                    counted_sign, counted_stance = current_sign, axis_stance
             else:
                 effective_axis_delta = axis_delta
-                if not is_event:
-                    game_state.recent_axis_signs.append(0)
-                    game_state.recent_axis_signs = game_state.recent_axis_signs[-3:]
+            if not is_event:
+                game_state.recent_axis_signs = (game_state.recent_axis_signs + [counted_sign])[-3:]
+                game_state.recent_axis_stances = (
+                    game_state.recent_axis_stances + [counted_stance]
+                )[-3:]
 
             new_axis = game_state.axis + effective_axis_delta
             game_state.axis = max(axis_min, min(axis_max, new_axis))
@@ -237,12 +245,13 @@ class StateRules:
         usurp_delta: int = 0,
         relation_deltas: Dict[str, int] | None = None,
         player_message: str = "",
+        axis_stance: str | None = None,
     ) -> DialogueDeltaResult:
         """
         套用敘事 AI 對一句玩家發言提出的數值變化。AI 的數字只是提案，這裡依規格 v3 執行：
         1. 單回合上限：主軸 ±5、關係值 ±10、篡奪值 0～+2（對話不會降低篡奪值）
         2. 只接受安德烈、維達利亞、門梅司文托三個關係值，其他 ID 一律忽略
-        3. 同一句話 3 回合內只計一次（同一立場由 apply_delta 的主軸符號規則處理）
+        3. 同一句話 3 回合內只計一次；同一立場（有類別時看類別，否則看正負號）3 回合內只計一次主軸
         4. 每階段靠對話：每個角色關係值最多 +40、篡奪值最多 +10
         5. 再交給 apply_delta 執行階段封頂、75 攔截與倒數規則
         """
@@ -279,6 +288,7 @@ class StateRules:
             relation_deltas=relations,
             phase_gained_relations=dict(game_state.phase_relation_dialogue_gain),
             is_event=False,
+            axis_stance=axis_stance if axis else None,
         )
         game_state.phase_relation_dialogue_gain = gained
 

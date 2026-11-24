@@ -11,7 +11,8 @@ from backend.generation.gateway import ModelGatewayTransientError
 from backend.schemas.narrative_ai import NarrativeAIRequest
 from gpu_gateway.app import create_app
 from gpu_gateway.config import DEFAULT_BASE_MODEL, GatewaySettings
-from gpu_gateway.narrator import NarrativeAdapter, parse_narrator_output
+from backend.schemas.narrative_ai import AXIS_STANCES
+from gpu_gateway.narrator import NARRATOR_SYSTEM_PROMPT, NarrativeAdapter, parse_narrator_output
 
 
 REQUEST = NarrativeAIRequest(
@@ -68,6 +69,27 @@ def test_parser_accepts_fenced_and_nested_delta() -> None:
     assert result.delta.axis == 3
     assert result.delta.usurp == 2
     assert result.delta.relation == {"menmesvento": 4}
+
+
+@pytest.mark.parametrize(
+    ("axis", "stance", "expected"),
+    [
+        (-3, "承諾陪伴", "承諾陪伴"),
+        (4, "主張打破循環", "主張打破循環"),
+        (-3, "主張打破循環", None),  # 方向與主軸不符
+        (-3, "喜歡下雨", None),  # 不在清單內
+        (0, "尋求安寧", None),  # 主軸為 0 不需要類別
+    ],
+)
+def test_parser_keeps_only_valid_stances(axis, stance, expected) -> None:
+    text = json.dumps({"reason": "測試", "axis": axis, "stance": stance, "usurp": 0, "relation": {}}, ensure_ascii=False)
+
+    assert parse_narrator_output(text, REQUEST).stance == expected
+
+
+def test_prompt_lists_every_stance() -> None:
+    for stance in AXIS_STANCES:
+        assert stance in NARRATOR_SYSTEM_PROMPT
 
 
 @pytest.mark.parametrize("content", ["我覺得應該加五分", '["axis", 3]', '{"axis": "很多"}'])
