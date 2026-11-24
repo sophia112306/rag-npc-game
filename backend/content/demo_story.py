@@ -7,7 +7,7 @@ state change still passes through the normal proposal resolver.
 
 from dataclasses import dataclass
 
-from backend.content.characters import npc_is_present
+from backend.content.characters import CHARACTER_PROFILES, npc_is_present
 from backend.content.npc_dialogue import NPC_DIALOGUE_CHOICES
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import ActionMode
@@ -39,6 +39,7 @@ class DemoStoryChoiceDefinition:
     required_completed_choice_ids: tuple[str, ...] = ()
     epilogue_answer_key: str | None = None
     epilogue_answer_value: str | None = None
+    rune_site: str | None = None  # E2-4：放置觀測符印的地點（寫入 flags["placed_runes"]，供之後拆除）
     ending_id: str | None = None
 
     def to_player_choice(self) -> PlayerChoice:
@@ -699,7 +700,108 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "你取代沉睡巨龍成為夢的控制者。世界得以延續，代價是所有記憶都開始依附你的意志。",
         "ending_usurp", "結局：篡夢", ending_id="篡夢",
     ),
+    # -----------------------------------------------------------------
+    # 階段二選做支線：解決邊境廢墟後、進入記憶圖書館前，可回到三處各做一次。
+    # 規格 v3 E2-1 抽泉裝置試運轉、E2-4 觀測符印（命脈之泉／流塵谷地脈裂隙／聖火反應爐）。
+    # 艾倫此時尚未曝光身分，只以「視網膜上的字」出現。
+    # -----------------------------------------------------------------
+    _choice(
+        "side_spring_anomaly", "demo_complete", "minglin",
+        "回命脈之泉查看異常", "我回命脈之泉看看泉水的異常。",
+        "泉眼旁的岩縫裡多了一具陌生的金屬裝置，管線深深插進泉脈，正一下一下地抽動。裝置上刻著烈燚原長老會能源長老的印記。",
+        "side_spring_pump", "泉脈裡的裝置",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin_life_spring",
+    ),
+    _choice(
+        "pump_prevent", "side_spring_pump", "minglin_life_spring",
+        "拆下裝置並告訴安德烈", "我把這具裝置拆下來，並把它的來歷告訴安德烈。",
+        "你切斷管線，把裝置拖離泉眼。安德烈聽完你的說明，沉默地收起那枚長老會的印記：「這件事，我會讓平衡議會知道。」"
+        "這時，視網膜上浮現一行字：「在泉眼放下觀測符印，這是修復世界的步驟。」",
+        "side_spring_rune", "泉眼旁的訊號", rule_event_id="E2-1_prevent", narrate_response=True,
+    ),
+    _choice(
+        "pump_assist", "side_spring_pump", "minglin_life_spring",
+        "協助長老校準裝置", "我照長老會的刻痕，幫忙把裝置校準。",
+        "你依著刻痕調整閥門，裝置的抽動變得平穩而有力。泉水的聲音更低了，岩縫深處傳來長老會的回應訊號——他們記下了你的協力。"
+        "這時，視網膜上浮現一行字：「在泉眼放下觀測符印，這是修復世界的步驟。」",
+        "side_spring_rune", "泉眼旁的訊號", rule_event_id="E2-1_assist", narrate_response=True,
+    ),
+    _choice(
+        "pump_ignore", "side_spring_pump", "minglin_life_spring",
+        "不碰這具裝置", "我不碰這具裝置，先把它留在原地。",
+        "你沒有碰那具裝置。它在你身後繼續抽動，泉水的流聲一點一點變得遙遠。"
+        "這時，視網膜上浮現一行字：「在泉眼放下觀測符印，這是修復世界的步驟。」",
+        "side_spring_rune", "泉眼旁的訊號", rule_event_id="E2-1_ignore", narrate_response=True,
+    ),
+    _choice(
+        "rune_place_spring", "side_spring_rune", "minglin_life_spring",
+        "在泉眼放下觀測符印", "我照視網膜上的指示，在泉眼放下觀測符印。",
+        "符印貼上泉眼的岩面，微光沿著水脈滲了下去。視網膜角落的數字輕輕跳動了一下。你沿林道回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_place", rune_site="minglin_life_spring",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", narrate_response=True,
+    ),
+    _choice(
+        "rune_refuse_spring", "side_spring_rune", "minglin_life_spring",
+        "拒絕在泉眼放下符印", "我不打算在泉眼放下這種東西。",
+        "視網膜上的字停了一會兒，才換成較溫和的語氣：「那只是觀測用的標記，不會傷害任何人。」你沒有回應，沿林道回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_refuse",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", narrate_response=True,
+    ),
+    _choice(
+        "side_fire_reactor", "demo_complete", "minglin",
+        "前往烈燚原的聖火反應爐", "我再去一趟烈燚原，看看聖火反應爐。",
+        "你再次踏進烈燚原。聖火反應爐的熱浪撲面而來，爐壁上的紋路與泉眼旁那具裝置如出一轍。"
+        "視網膜上浮現一行字：「在反應爐放下觀測符印，這是修復世界的步驟。」",
+        "side_fire_rune", "聖火反應爐",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="lieyi_plains", special_scene_transition=True,
+    ),
+    _choice(
+        "rune_place_fire", "side_fire_rune", "lieyi_plains",
+        "在反應爐放下觀測符印", "我照視網膜上的指示，在聖火反應爐放下觀測符印。",
+        "符印貼上滾燙的爐壁，沒有被火焰吞沒，反而讓火光短暫地停頓了一瞬。視網膜角落的數字輕輕跳動了一下。你離開烈燚原，回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_place", rune_site="lieyi_plains",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
+        narrate_response=True,
+    ),
+    _choice(
+        "rune_refuse_fire", "side_fire_rune", "lieyi_plains",
+        "拒絕在反應爐放下符印", "我不打算在聖火反應爐放下這種東西。",
+        "視網膜上的字閃了閃：「只是一個標記而已，你在擔心什麼？」你沒有回應，離開烈燚原回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_refuse",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
+        narrate_response=True,
+    ),
+    _choice(
+        "side_dust_fissure", "demo_complete", "minglin",
+        "前往流塵谷的地脈裂隙", "我再去一趟流塵谷，看看地脈裂隙。",
+        "你再次走進流塵谷。風沙在一道地脈裂隙前打著旋，裂隙深處傳來與泉眼相同的低鳴。"
+        "視網膜上浮現一行字：「在裂隙放下觀測符印，這是修復世界的步驟。」",
+        "side_dust_rune", "地脈裂隙",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="liuchen_valley", special_scene_transition=True,
+    ),
+    _choice(
+        "rune_place_dust", "side_dust_rune", "liuchen_valley",
+        "在裂隙放下觀測符印", "我照視網膜上的指示，在地脈裂隙放下觀測符印。",
+        "符印沉進裂隙的陰影裡，周圍的風沙忽然安靜下來。視網膜角落的數字輕輕跳動了一下。你離開流塵谷，回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_place", rune_site="liuchen_valley",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
+        narrate_response=True,
+    ),
+    _choice(
+        "rune_refuse_dust", "side_dust_rune", "liuchen_valley",
+        "拒絕在裂隙放下符印", "我不打算在地脈裂隙放下這種東西。",
+        "視網膜上的字沉默了片刻：「你遲早會明白這是必要的步驟。」你沒有回應，離開流塵谷回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_refuse",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
+        narrate_response=True,
+    ),
 )
+
+# 階段二選做支線的入口；每處只能去一次，只在解決邊境廢墟之後出現
+SIDE_EVENT_ENTRY_IDS = frozenset(("side_spring_anomaly", "side_fire_reactor", "side_dust_fissure"))
+
+# 警告事件 W（規格 v3）：篡奪值第一次達 75 後強制發生，不屬於任何固定節點
+WARNING_RULE_IDS = frozenset(("W", "W_expose_elders"))
 
 BORDER_RULE_IDS = frozenset(("E2-3_help_both", "E2-3_report", "E2-3_ignore"))
 BORDER_RESOLUTION_IDS = frozenset(choice.choice_id for choice in DEMO_STORY_CHOICES if choice.rule_event_id in BORDER_RULE_IDS)
@@ -708,7 +810,47 @@ MEMORY_LIBRARY_ENTRY_IDS = frozenset(
 )
 AUTHORED_RULE_IDS = frozenset(
     choice.rule_event_id for choice in DEMO_STORY_CHOICES if choice.rule_event_id
-)
+) | WARNING_RULE_IDS
+
+
+def pending_warning_choices(state: GameState) -> tuple[DemoStoryChoiceDefinition, ...]:
+    """警告事件 W：篡奪值第一次達 75 後的下一回合強制出現，只發生一次。
+
+    維塔源頭有自己的篡夢警告流程（veta_usurp_warning），那裡不另外插入 W。
+    """
+
+    node_id = state.story_progress.node_id
+    if (
+        state.game_status != "active"
+        or not state.warning_triggered
+        or state.flags.get("warning_event_done")
+        or node_id.startswith("veta_")
+    ):
+        return ()
+    guide_id = max(
+        (npc_id for npc_id in ("andre", "vidalia", "menmesvento") if npc_id in state.npc_states),
+        key=lambda npc_id: state.npc_states[npc_id].relation,
+    )
+    guide = CHARACTER_PROFILES[guide_id].name
+    sight = (
+        f"{guide}帶你走到林地邊緣。樹幹表面泛著金屬的冷光，泉水沿著溝渠倒流回源頭。"
+        f"{guide}看著你：「異象是從你去過的地方開始的。」"
+    )
+    chapter = state.story_progress.chapter_title
+    return (
+        _choice(
+            "warning_witness", node_id, state.current_scene_id,
+            "記下眼前的異象", "我記下眼前的異象，沒有多說什麼。",
+            sight + "你把這一幕記在心裡。若那些符印真與異象有關，現在拆除還來得及。",
+            node_id, chapter, rule_event_id="W", narrate_response=True,
+        ),
+        _choice(
+            "warning_expose_elders", node_id, state.current_scene_id,
+            "當場揭發長老會", "我把長老會在各地動的手腳全部說出來。",
+            sight + "你說出長老會的裝置與他們的打算。消息很快傳開，長老會不得不暫時收手。",
+            node_id, chapter, rule_event_id="W_expose_elders", narrate_response=True,
+        ),
+    )
 
 
 def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefinition, ...]:
@@ -716,6 +858,9 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
 
     if state.game_status != "active":
         return ()
+    warning = pending_warning_choices(state)
+    if warning:
+        return warning
     completed = set(state.story_progress.completed_choice_ids)
     visited_both_regions = {"enter_lieyi_plains", "enter_liuchen_valley"}.issubset(
         completed
@@ -737,6 +882,11 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
             not border_resolution
             or state.story_progress.node_id != "demo_complete"
             or choice.choice_id in MEMORY_LIBRARY_ENTRY_IDS
+            or choice.choice_id in SIDE_EVENT_ENTRY_IDS
+        )
+        and (
+            choice.choice_id not in SIDE_EVENT_ENTRY_IDS
+            or (border_resolution and choice.choice_id not in completed)
         )
         and (choice.ending_id is None or choice.ending_id in available_endings)
         and not (

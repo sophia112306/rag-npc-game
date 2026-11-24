@@ -345,6 +345,10 @@ class ProposalResolver:
                 state.warning_cooldown_turns = 0
             StateRules.apply_delta(state, axis_delta=rule.get("axis", 0), usurp_delta=rule.get("usurp", 0), relation_deltas=rule.get("relation", {}), is_event=True)
             state.flags.update(rule.get("flags", {}))
+            if choice.rune_site and choice.rule_event_id == "E2-4_place":
+                placed_runes = state.flags.setdefault("placed_runes", [])
+                if choice.rune_site not in placed_runes:
+                    placed_runes.append(choice.rune_site)
             state.truth_level = min(3, state.truth_level + rule.get("truth_delta", 0))
             for npc_id in choice.witness_npc_ids:
                 state.npc_states.setdefault(npc_id, NPCState(npc_id=npc_id, name=CHARACTER_PROFILES[npc_id].name)).met = True

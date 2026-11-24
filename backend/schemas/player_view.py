@@ -37,7 +37,7 @@ def project_navigation(state: GameState) -> PlayerNavigationView:
     """Public map and exact validated actions; no private rules or memory."""
     # Imported at projection time because schemas are re-exported by __init__.
     from backend.orchestration.player_choices import build_player_choices
-    from backend.content.demo_story import BORDER_RESOLUTION_IDS, available_demo_story_choices
+    from backend.content.demo_story import BORDER_RESOLUTION_IDS, SIDE_EVENT_ENTRY_IDS, available_demo_story_choices
     from backend.content.characters import CHARACTER_PROFILES
 
     choices = build_player_choices(state, [])
@@ -58,8 +58,10 @@ def project_navigation(state: GameState) -> PlayerNavigationView:
         name = CHARACTER_PROFILES[decisions[0].target_npc_id].name
         objective = f"下一步：走近{name}，在交談選項做出邊境決定。"
     elif state.story_progress.node_id == "demo_complete":
+        side_trips = "、".join(c.label for c in choices if c.choice_id in SIDE_EVENT_ENTRY_IDS)
         objective = (
             "邊境的選擇已保存，可前往古老記憶藏庫追查下一層真相。"
+            + (f"也可以先{side_trips}。" if side_trips else "")
             if BORDER_RESOLUTION_IDS.intersection(state.story_progress.completed_choice_ids) and "memory_library" in routes else
             "兩地線索已帶回議會，可前往邊境廢墟與兩名旅人交談。"
             if "border_ruins" in routes else

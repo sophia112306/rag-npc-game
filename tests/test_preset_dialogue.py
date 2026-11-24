@@ -7,6 +7,7 @@ import pytest
 
 from fastapi.testclient import TestClient
 
+from backend.content.demo_story import SIDE_EVENT_ENTRY_IDS
 from backend.content.npc_dialogue import NPC_DIALOGUE_CHOICES
 from backend.main import create_app
 from backend.rules.event_rules import EventRules
@@ -172,7 +173,10 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
             "border_report": "enter_memory_library_with_elders",
             "border_ignore": "enter_memory_library_alone",
         }[choice_id]
-        assert option_ids == {expected_entry}
+        # 進圖書館的入口之外，只多出階段二的選做支線
+        assert expected_entry in option_ids
+        assert option_ids - {expected_entry} == SIDE_EVENT_ENTRY_IDS
+        assert options[0]["choice_id"] == expected_entry
         saved = client.get(f"/api/game/{choice_id}/state").json()
         assert saved["player"]["inventory"] == expected_inventory
 

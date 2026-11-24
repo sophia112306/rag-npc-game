@@ -89,6 +89,14 @@ def _submit_choice(
     return response.json()
 
 
+_TO_BORDER_RESOLUTION = (
+    "travel_to_minglin_life_spring", "study_spring_ash", "enter_lieyi_plains",
+    "observe_sacred_fire", "return_with_fire_findings",
+    "travel_to_minglin_rune_grove", "trace_dust_runes", "enter_liuchen_valley",
+    "listen_to_forgotten_names", "return_with_dust_findings", "preview_border_ruins",
+)
+
+
 def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
     """Keep every authored branch connected to a playable route through the API."""
 
@@ -235,6 +243,23 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "seek_menmesvento_after_truths", "decline_dust_return_token",
             "return_to_minglin_for_veta", "enter_veta_source", "veta_q1_recurring_life",
             "veta_q2_control", "confirm_usurp_after_warning", "choose_usurp",
+        ),
+        # 階段二選做支線：E2-1 抽泉裝置與 E2-4 觀測符印的每個選項
+        "side-events-place": (
+            *_TO_BORDER_RESOLUTION, "border_help_both", "return_after_border_choice",
+            "side_spring_anomaly", "pump_prevent", "rune_place_spring",
+            "side_fire_reactor", "rune_place_fire",
+            "side_dust_fissure", "rune_place_dust",
+        ),
+        "side-events-refuse": (
+            *_TO_BORDER_RESOLUTION, "border_report", "return_after_border_choice",
+            "side_spring_anomaly", "pump_assist", "rune_refuse_spring",
+            "side_fire_reactor", "rune_refuse_fire",
+            "side_dust_fissure", "rune_refuse_dust",
+        ),
+        "side-events-ignore": (
+            *_TO_BORDER_RESOLUTION, "border_ignore", "return_after_border_choice",
+            "side_spring_anomaly", "pump_ignore", "rune_refuse_spring",
         ),
     }
     expected_edges = {

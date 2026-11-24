@@ -38,8 +38,8 @@ class EventRules:
         "Truth_C_reject_alan": {"axis": 0, "usurp": -10, "relation": {}, "flags": {"rejected_alan": True}},  # [新增] 真相C後明確拒絕艾倫
 
         # 警告事件 W
-        "W": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"warning_triggered": True}},
-        "W_expose_elders": {"axis": 0, "usurp": -10, "relation": {}, "flags": {}},
+        "W": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"warning_triggered": True, "warning_event_done": True}},
+        "W_expose_elders": {"axis": 0, "usurp": -10, "relation": {}, "flags": {"warning_triggered": True, "warning_event_done": True}},
 
         # 階段三事件
         "E3-1_accept": {"axis": 0, "usurp": 20, "relation": {}, "flags": {"elder_cooperation": True}},
