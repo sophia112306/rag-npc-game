@@ -4,7 +4,11 @@ import pytest
 import pytest_asyncio
 
 from backend.content.characters import CHARACTER_DEFINITIONS
-from backend.content.context_repository import CharacterDefinitionNotFoundError, NPCContextRepository
+from backend.content.context_repository import (
+    MAX_CONTEXT_MEMORIES,
+    CharacterDefinitionNotFoundError,
+    NPCContextRepository,
+)
 from backend.database import create_async_session_factory, create_database_engine, create_schema
 from backend.database.repository import SqlAlchemyGameRepository
 from backend.schemas.content import DisclosureScope, KnowledgeRecordInput, MemoryRecordInput
@@ -148,6 +152,29 @@ async def test_context_only_contains_active_memories_for_the_target_npc(context_
     context = await repository.get_generation_context("context-session", "vidalia", 1)
 
     assert [item.content for item in context.memories] == ["維達利亞親眼看見玩家抵達。"]
+
+
+@pytest.mark.asyncio
+async def test_context_keeps_only_the_most_recent_memories_in_order(context_repository) -> None:
+    """記憶隨對話累積；全部帶入會讓 prompt 超過模型長度上限。"""
+
+    for turn in range(1, MAX_CONTEXT_MEMORIES + 5):
+        await context_repository.add_memory(
+            MemoryRecordInput(
+                session_id="context-session",
+                npc_id="vidalia",
+                content=f"第 {turn} 回合的對話。",
+                memory_type="interaction",
+                occurred_turn=turn,
+                provenance={"test": "recent"},
+            )
+        )
+
+    context = await context_repository.get_generation_context(
+        "context-session", "vidalia", MAX_CONTEXT_MEMORIES + 4
+    )
+
+    assert [item.occurred_turn for item in context.memories] == list(range(5, MAX_CONTEXT_MEMORIES + 5))
 
 
 @pytest.mark.asyncio

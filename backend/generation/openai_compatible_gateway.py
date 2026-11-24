@@ -96,7 +96,6 @@ class OpenAICompatibleChatGateway:
                             {
                                 "target_npc_id": request.target_context.npc_id,
                                 "信任度": request.npc_trust,
-                                "角色狀態": request.npc_mode,
                                 "player_inventory": request.player_inventory,
                                 "missing_or_unconfirmed_topics": (
                                     request.target_context.missing_data
