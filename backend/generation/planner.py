@@ -19,6 +19,7 @@ from backend.generation.gateway import (
     TurnGuidanceAction,
 )
 from backend.orchestration.player_choices import build_player_choices
+from backend.rules.state_rules import npc_behavior_mode, npc_trust_tier
 from backend.schemas.content import NPCGenerationContext
 from backend.schemas.game_state import GameState
 from backend.schemas.parsed_action import ParsedAction
@@ -133,6 +134,18 @@ class GatewayStoryPlanner:
             action_mode=action.action_mode,
             parsed_action=parsed_action,
             target_context=target_context,
+            npc_trust=(
+                npc_trust_tier(npc_id, state.npc_states[npc_id].relation)
+                if npc_id in state.npc_states
+                else None
+            ),
+            npc_mode=(
+                npc_behavior_mode(
+                    npc_id, state.npc_states[npc_id].relation, state.axis, state.story_phase
+                )
+                if npc_id in state.npc_states
+                else None
+            ),
             turn_guidance=turn_guidance or _build_turn_guidance(state, npc_id),
             allowed_operations=allowed_operations,
             generation_budget=GenerationBudget(max_model_calls=self._max_attempts),

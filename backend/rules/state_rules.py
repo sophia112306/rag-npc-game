@@ -13,6 +13,65 @@ DIALOGUE_USURP_LIMIT = 2            # 篡奪值：刻意激怒或逼迫 NPC 每�
 PHASE_USURP_DIALOGUE_CAP = 10       # 篡奪值：靠激怒每階段最多 +10
 RECENT_DIALOGUE_WINDOW = 3          # 同一句話 3 回合內只計一次
 
+# 關係值 → NPC prompt 的信任度（與訓練資料的「信任度：低／中／高／至高信任」一致）。
+# 只有規格定義關係值的三個角色有信任度；其他角色的關係值不會變動，不傳。
+# 每個角色是 (上限, 等級) 由低到高排列；超過最後一個上限的是最高等級。
+TRUST_TIERS: Dict[str, Tuple[Tuple[int, str], ...]] = {
+    # 40 起會援助主角，60 解鎖隱藏洞穴與引薦
+    "andre": ((39, "低"), (59, "中"), (100, "高")),
+    # 維達利亞角色規範與訓練資料：t<40 低、40～59 中、≥60 高
+    "vidalia": ((39, "低"), (59, "中"), (100, "高")),
+    # 門梅司文托角色規範：≤10 閉門期、11～59 觀察期、60～79 解鎖期、≥80 結局交付期
+    "menmesvento": ((10, "低"), (59, "中"), (79, "高"), (100, "至高")),
+}
+
+# 角色規範的行為模式（傳給 NPC 的文字描述，不含數值）
+MENMESVENTO_MODES = {
+    "低": "閉門期：態度冰冷、戒備且排斥，拒絕提供任何關鍵情報或協助，直接下逐客令。",
+    "中": "觀察期：冷靜、疏離，帶隱者的超然與疲憊；只談宏觀世界觀與思辨，不透露生死簿的秘密，被索求真相時會說出信任條件。",
+    "高": "解鎖期：沉穩、凝重並帶一絲寄望，認可主角是打破循環的同行者，願意坦承對無盡輪迴的厭倦與對涅槃的追求。",
+    "至高": "結局交付期：悲憫、託付與決絕，把打破循環的希望寄託於主角；探討生命的真實與死亡的必要，但把抉擇交給主角，不斷言結局。",
+}
+VIDALIA_MODES = {
+    "ending": "結局期：平靜、釋懷，溫柔中帶一絲宿命的蒼涼；不斷言結局，把選擇權交給主角。",
+    "attached": "依附：從疏離轉為脆弱、溫柔，試圖把主角留在夢境中，反對破壞結界。",
+    "wavering": "動搖：從抵抗轉為困惑，吐露其實不想讓世界改變的真心，卻對主角的選擇感到迷茫。",
+    "observer": "好奇的觀察者：千年歲月的倦怠與旁觀，優雅而疏離、回應簡短；主角索取核心情報時會笑著點出信任條件。",
+}
+
+
+def npc_trust_tier(npc_id: str, relation: int) -> str | None:
+    """把關係值換算成 NPC 看得到的信任度；NPC 模型不會拿到關係值本身。"""
+
+    tiers = TRUST_TIERS.get(npc_id)
+    if tiers is None:
+        return None
+    for upper, label in tiers:
+        if relation <= upper:
+            return label
+    return tiers[-1][1]
+
+
+def npc_behavior_mode(npc_id: str, relation: int, axis: int, phase: StoryPhase) -> str | None:
+    """依角色規範推出 NPC 目前的行為模式（文字），沒有規範的角色回傳 None。
+
+    維達利亞依規格 v3「關係值 × 主軸」推出：關係 60 以上且主軸 ≤ −20 依附、
+    主軸 ≥ +20 動搖，其餘是好奇的觀察者；結局期改為交出選擇權。
+    """
+
+    if npc_id == "menmesvento":
+        tier = npc_trust_tier(npc_id, relation)
+        return MENMESVENTO_MODES.get(tier) if tier else None
+    if npc_id == "vidalia":
+        if phase == StoryPhase.ACT4_ENDING:
+            return VIDALIA_MODES["ending"]
+        if relation >= 60 and axis <= -20:
+            return VIDALIA_MODES["attached"]
+        if relation >= 60 and axis >= 20:
+            return VIDALIA_MODES["wavering"]
+        return VIDALIA_MODES["observer"]
+    return None
+
 
 @dataclass(frozen=True)
 class DialogueDeltaResult:
