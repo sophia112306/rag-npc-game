@@ -25,4 +25,7 @@ class ActionValidator:
                 # 填了清單外的非法事件，強制忽略
                 response.event_done = None
 
+        # 2. 旗標只能透過 event_done 由後端事件庫設定，敘事 AI 不能直接設
+        response.flags_set = []
+
         return response

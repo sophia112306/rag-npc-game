@@ -33,6 +33,8 @@ class GatewaySettings:
     response_format: Literal["json_schema", "json_object"] = "json_schema"
     upstream_timeout_seconds: float = 60.0
     upstream_max_attempts: int = 2
+    # 敘事 AI（/narrate）用基礎模型，不掛 NPC LoRA
+    narrator_model: str | None = DEFAULT_BASE_MODEL
 
     @classmethod
     def from_env(cls) -> "GatewaySettings":
@@ -87,6 +89,7 @@ class GatewaySettings:
             )
 
         fallback = os.getenv("NPC_FALLBACK_MODEL", DEFAULT_BASE_MODEL).strip()
+        narrator = os.getenv("NARRATOR_MODEL", DEFAULT_BASE_MODEL).strip()
         return cls(
             upstream_base_url=os.getenv(
                 "VLLM_BASE_URL", "http://127.0.0.1:8001/v1"
@@ -98,4 +101,5 @@ class GatewaySettings:
             response_format=response_format,
             upstream_timeout_seconds=timeout_seconds,
             upstream_max_attempts=max_attempts,
+            narrator_model=narrator or None,
         )
