@@ -13,6 +13,7 @@ from backend.content.story_findings import finding_report, public_findings
 from backend.content.items import ITEMS
 from backend.content.characters import CHARACTER_PROFILES, npc_is_present
 from backend.rules.event_rules import EventRules
+from backend.rules.scene_rules import SceneRules
 from backend.rules.state_rules import StateRules
 from backend.rules.ending_rules import EndingRules
 from backend.schemas.game_state import GameState, NPCState, StoryPhase
@@ -329,6 +330,8 @@ class ProposalResolver:
                 f"Story choice '{operation.story_choice_id}' is not available now.",
             )
 
+        # 先換階段再套用事件數值，讓事件受新階段的封頂限制
+        SceneRules.enter_phase(state, SceneRules.phase_after_story_choice(state, choice.choice_id))
         awarded_items = []
         if choice.rule_event_id:
             if choice.rule_event_id not in AUTHORED_RULE_IDS:
@@ -362,8 +365,6 @@ class ProposalResolver:
 
         state.story_progress.node_id = choice.next_node_id
         state.story_progress.chapter_title = choice.next_chapter_title
-        if choice.choice_id == "enter_veta_source":
-            state.story_phase = StoryPhase.ACT3_FREEDOM
         if choice.epilogue_answer_key and choice.epilogue_answer_value:
             epilogue_flags = state.flags.setdefault("epilogue_flags", {})
             epilogue_flags[choice.epilogue_answer_key] = choice.epilogue_answer_value

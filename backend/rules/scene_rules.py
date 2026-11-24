@@ -2,6 +2,27 @@ from typing import List, Optional
 from backend.schemas.game_state import GameState, StoryPhase
 
 
+# 固定選項主線（demo_story）的換階段點。主線不是用 E1～E3 事件推進，
+# 所以把規格 v3 的四個階段對應到主線的劇情節點：
+# - 階段二：兩區調查完後第一次前往邊境廢墟（E2-3 屬於中期事件）
+# - 階段三：進入記憶圖書館，開始揭露真相 A／B／C
+# - 進入維塔源頭暫時維持階段三：維塔三問目前仍會加數值，
+#   等事件接齊、拿掉三問數值後再改成階段四（結局期會鎖住主軸與篡奪值）
+STORY_CHOICE_PHASES: dict[str, StoryPhase] = {
+    "preview_border_ruins": StoryPhase.ACT2_MIDTERM,
+    "enter_memory_library_with_map": StoryPhase.ACT3_FREEDOM,
+    "enter_memory_library_with_elders": StoryPhase.ACT3_FREEDOM,
+    "enter_memory_library_alone": StoryPhase.ACT3_FREEDOM,
+    "enter_veta_source": StoryPhase.ACT3_FREEDOM,
+}
+PHASE_ORDER = (
+    StoryPhase.ACT1_APPROACHING,
+    StoryPhase.ACT2_MIDTERM,
+    StoryPhase.ACT3_FREEDOM,
+    StoryPhase.ACT4_ENDING,
+)
+
+
 class SceneRules:
     """階段推進與真相保底規則 (草案 v3 規格)"""
 
@@ -63,6 +84,31 @@ class SceneRules:
                 return StoryPhase.ACT4_ENDING
 
         return phase
+
+    @staticmethod
+    def phase_after_story_choice(game_state: GameState, choice_id: str) -> StoryPhase:
+        """主線選項完成後應處的階段。階段只會往前走；篡夢倒數與結局期不受影響。"""
+
+        current = game_state.story_phase
+        target = STORY_CHOICE_PHASES.get(choice_id)
+        if target is None or current not in PHASE_ORDER:
+            return current
+        if PHASE_ORDER.index(target) <= PHASE_ORDER.index(current):
+            return current
+        return target
+
+    @staticmethod
+    def enter_phase(game_state: GameState, phase: StoryPhase) -> bool:
+        """切換階段並重置階段回合數與「每階段」防刷分計數器。回傳是否有切換。"""
+
+        if phase == game_state.story_phase:
+            return False
+        from backend.rules.state_rules import StateRules
+
+        game_state.story_phase = phase
+        game_state.phase_turns = 0
+        StateRules.reset_dialogue_counters(game_state)
+        return True
 
     @staticmethod
     def check_truth_fallbacks(game_state: GameState) -> List[str]:
