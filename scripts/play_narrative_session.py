@@ -73,7 +73,7 @@ def main() -> int:
                 **payload,
             })
             if response.status_code != 200:
-                raise SystemExit(f"回合失敗 {response.status_code}：{response.text}")
+                raise RuntimeError(f"回合失敗 {response.status_code}：{response.text}")
             return response.json()
 
         client.post("/api/game/start", json={"session_id": session_id}).raise_for_status()
@@ -89,7 +89,12 @@ def main() -> int:
         npc_id = args.npc
         for number, line in enumerate(args.line or DEFAULT_LINES, start=1):
             before = state()
-            turn = submit(message=line, target_npc_id=npc_id, action_mode="dialogue")
+            try:
+                turn = submit(message=line, target_npc_id=npc_id, action_mode="dialogue")
+            except RuntimeError as exc:
+                # 回合失敗時不會儲存任何變更（包含敘事 AI 的數值），繼續下一句
+                print(f"── 第 {number} 回合 ──\n玩家：{line}\n  {exc}\n")
+                continue
             after = state()
             npc = after.npc_states[npc_id]
             replies = [d["text"] for d in turn["story"]["dialogue"]] or ["（沒有回覆）"]
