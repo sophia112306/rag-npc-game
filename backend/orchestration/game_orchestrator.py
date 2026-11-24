@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from collections.abc import Sequence
+import logging
 from typing import Protocol
 from uuid import UUID
 
@@ -17,7 +18,9 @@ from backend.database.repository import (
     action_request_digest,
 )
 from backend.generation.gateway import TurnGuidance
+from backend.modules.action_validator import ActionValidator
 from backend.modules.proposal_resolver import ProposalResolution, ProposalResolver
+from backend.rules.state_rules import DIALOGUE_RELATION_NPCS, StateRules
 from backend.orchestration.player_choices import (
     npc_available_in_state,
     build_turn_guidance,
@@ -29,8 +32,9 @@ from backend.orchestration.demo_story_director import (
     match_typed_story_dialogue,
     story_choice_action_matches,
 )
-from backend.schemas.api_response import GameTurnResponse
+from backend.schemas.api_response import GameTurnResponse, NarrativeAIResponse
 from backend.schemas.game_state import GameState, PlayerState
+from backend.schemas.narrative_ai import NarrativeAIRequest
 from backend.schemas.parsed_action import ActionType, ParsedAction
 from backend.schemas.player_action import ActionMode, PlayerAction
 from backend.schemas.player_choice import PlayerChoice
@@ -43,6 +47,9 @@ from backend.schemas.story import (
     SpeakerType,
     StoryProposal,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class SessionNotFoundError(LookupError):
@@ -117,6 +124,12 @@ class StoryPlanner(Protocol):
     ) -> StoryProposal: ...
 
 
+class NarrativeJudge(Protocol):
+    """規格 v3 的敘事 AI：判讀一句玩家發言，提出數值變化（只是提案）。"""
+
+    async def judge(self, request: NarrativeAIRequest) -> NarrativeAIResponse: ...
+
+
 class GameOrchestrator:
     """Coordinate input parsing, story generation, and state updates."""
 
@@ -125,10 +138,13 @@ class GameOrchestrator:
         repository: GameRepository,
         story_planner: StoryPlanner,
         proposal_resolver: ProposalResolver | None = None,
+        narrative_judge: NarrativeJudge | None = None,
     ) -> None:
         self._repository = repository
         self._story_planner = story_planner
         self._proposal_resolver = proposal_resolver or ProposalResolver()
+        # None：沒有設定敘事 AI，自由對話不改數值（與先前行為相同）
+        self.narrative_judge = narrative_judge
 
     async def start_game(self, session_id: str) -> GameState:
         """Create a deterministic initial state or resume an existing session."""
@@ -215,6 +231,10 @@ class GameOrchestrator:
             typed_choice = match_typed_story_dialogue(action, state)
             confirmed_choice_id = typed_choice.choice_id if typed_choice else None
             _, turn_guidance = await self._public_turn_guidance(state)
+            if typed_choice is None and action.action_mode == ActionMode.DIALOGUE:
+                # 規格 v3 每回合流程 3～5：敘事 AI 先判讀、程式套用數值，
+                # NPC 再依更新後的狀態說話。固定選項的數值仍由事件表決定。
+                state = await self._apply_narrative_judgement(action, state, turn_guidance)
             proposal = (
                 build_demo_story_proposal(action, state, typed_choice)
                 if typed_choice else await self._story_planner.propose(
@@ -255,6 +275,61 @@ class GameOrchestrator:
             raise SessionNotFoundError(str(exc)) from exc
         except PersistentStateVersionConflictError as exc:
             raise StateVersionConflictError(exc.expected, exc.actual) from exc
+
+    async def _apply_narrative_judgement(
+        self,
+        action: PlayerAction,
+        state: GameState,
+        turn_guidance: TurnGuidance,
+    ) -> GameState:
+        """Return a copy of state with the clamped dialogue delta applied.
+
+        Any narrative-AI failure leaves the state unchanged (delta 0), so a
+        missing or broken endpoint never blocks the NPC's reply.
+        """
+
+        if self.narrative_judge is None:
+            return state
+        target = state.npc_states.get(action.target_npc_id or "")
+        request = NarrativeAIRequest(
+            player_message=action.message,
+            target_npc_id=action.target_npc_id,
+            target_npc_name=target.name if target else None,
+            scene_id=state.current_scene_id,
+            scene_name=turn_guidance.scene_name,
+            story_phase=state.story_phase,
+            axis=state.axis,
+            usurp=state.usurp,
+            truth_level=state.truth_level,
+            relations={
+                npc_id: state.npc_states[npc_id].relation
+                for npc_id in DIALOGUE_RELATION_NPCS
+                if npc_id in state.npc_states
+            },
+        )
+        try:
+            judgement = await self.narrative_judge.judge(request)
+        except Exception:  # noqa: BLE001 - the turn must continue without the judgement
+            logger.warning("Narrative AI unavailable; dialogue delta treated as 0", exc_info=True)
+            return state
+        judgement = ActionValidator.validate_narrative_response(judgement, allowed_events=[])
+        judged_state = state.model_copy(deep=True)
+        applied = StateRules.apply_dialogue_delta(
+            judged_state,
+            axis_delta=judgement.delta.axis,
+            usurp_delta=judgement.delta.usurp,
+            relation_deltas=judgement.delta.relation,
+            player_message=action.message,
+        )
+        logger.info(
+            "Narrative delta session=%s proposed=%s applied=%s duplicate=%s reason=%s",
+            state.session_id,
+            judgement.delta.model_dump(),
+            {"axis": applied.axis, "usurp": applied.usurp, "relation": applied.relation},
+            applied.duplicate_message,
+            judgement.reason,
+        )
+        return judged_state
 
     @staticmethod
     def _validate_opening_sequence(action: PlayerAction, state: GameState) -> None:

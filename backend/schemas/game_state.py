@@ -89,6 +89,8 @@ class GameState(BaseModel):
     phase_relation_dialogue_gain: Dict[str, int] = Field(
         default_factory=lambda: {"andre": 0, "vidalia": 0, "menmesvento": 0}
     )                                    # 本階段各角色靠對話累積的關係值 (各上限 +40)
+    recent_dialogue_messages: List[str] = Field(default_factory=list)  # 最近 3 次對話判讀的玩家原句（正規化後）；同一句話 3 回合內只計一次
+    dialogue_counters_phase: Optional[StoryPhase] = None  # phase_*_dialogue_gain 計數器所屬的階段；階段改變時歸零
     
     # 草案 v3 三大核心結局數值
     axis: int = Field(default=0, ge=-100, le=100)    # 主軸傾向值 (-100 ~ +100)

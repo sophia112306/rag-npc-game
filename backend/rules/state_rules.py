@@ -1,5 +1,41 @@
+from dataclasses import dataclass, field
+import re
 from typing import Dict, Tuple
 from backend.schemas.game_state import GameState, StoryPhase
+
+
+# 規格 v3「數值規格」與「防呆與保底」中，只適用於自由對話（敘事 AI 判讀）的限制。
+# 事件的數值由 EventRules 直接套用，不受這些限制，但仍受 apply_delta 的階段封頂。
+DIALOGUE_RELATION_NPCS = ("andre", "vidalia", "menmesvento")  # 規格只定義這三個關係值
+DIALOGUE_AXIS_LIMIT = 5             # 主軸：對話每回合 ±0～5
+DIALOGUE_RELATION_LIMIT = 10        # 關係值：對話每回合 ±0～10
+DIALOGUE_USURP_LIMIT = 2            # 篡奪值：刻意激怒或逼迫 NPC 每回合 +2
+PHASE_USURP_DIALOGUE_CAP = 10       # 篡奪值：靠激怒每階段最多 +10
+RECENT_DIALOGUE_WINDOW = 3          # 同一句話 3 回合內只計一次
+
+
+@dataclass(frozen=True)
+class DialogueDeltaResult:
+    """一次對話判讀實際生效的數值（經過所有限制之後）。"""
+
+    axis: int = 0
+    usurp: int = 0
+    relation: Dict[str, int] = field(default_factory=dict)
+    duplicate_message: bool = False
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.axis or self.usurp or any(self.relation.values()))
+
+
+def _clamp(value: int, low: int, high: int) -> int:
+    return max(low, min(high, int(value)))
+
+
+def normalize_dialogue_message(message: str) -> str:
+    """去掉空白與標點後比對「同一句話」；中文字元保留。"""
+
+    return re.sub(r"[\W_]+", "", message or "").lower()
 
 
 class StateRules:
@@ -126,3 +162,77 @@ class StateRules:
                 npc.relation = max(0, min(100, npc.relation + actual_delta))
 
         return game_state, phase_gained_relations
+
+    @staticmethod
+    def reset_dialogue_counters(game_state: GameState) -> None:
+        """換階段時把「每階段」的對話防刷分計數器歸零。"""
+
+        game_state.phase_usurp_dialogue_gain = 0
+        game_state.phase_relation_dialogue_gain = {npc_id: 0 for npc_id in DIALOGUE_RELATION_NPCS}
+        game_state.dialogue_counters_phase = game_state.story_phase
+
+    @staticmethod
+    def apply_dialogue_delta(
+        game_state: GameState,
+        axis_delta: int = 0,
+        usurp_delta: int = 0,
+        relation_deltas: Dict[str, int] | None = None,
+        player_message: str = "",
+    ) -> DialogueDeltaResult:
+        """
+        套用敘事 AI 對一句玩家發言提出的數值變化。AI 的數字只是提案，這裡依規格 v3 執行：
+        1. 單回合上限：主軸 ±5、關係值 ±10、篡奪值 0～+2（對話不會降低篡奪值）
+        2. 只接受安德烈、維達利亞、門梅司文托三個關係值，其他 ID 一律忽略
+        3. 同一句話 3 回合內只計一次（同一立場由 apply_delta 的主軸符號規則處理）
+        4. 每階段靠對話：每個角色關係值最多 +40、篡奪值最多 +10
+        5. 再交給 apply_delta 執行階段封頂、75 攔截與倒數規則
+        """
+
+        if game_state.dialogue_counters_phase != game_state.story_phase:
+            StateRules.reset_dialogue_counters(game_state)
+
+        normalized = normalize_dialogue_message(player_message)
+        duplicate = bool(normalized) and normalized in game_state.recent_dialogue_messages
+        if normalized:
+            game_state.recent_dialogue_messages = (
+                game_state.recent_dialogue_messages + [normalized]
+            )[-RECENT_DIALOGUE_WINDOW:]
+
+        axis = _clamp(axis_delta, -DIALOGUE_AXIS_LIMIT, DIALOGUE_AXIS_LIMIT)
+        usurp = _clamp(usurp_delta, 0, DIALOGUE_USURP_LIMIT)
+        usurp = min(usurp, max(0, PHASE_USURP_DIALOGUE_CAP - game_state.phase_usurp_dialogue_gain))
+        relations = {
+            npc_id: _clamp(delta, -DIALOGUE_RELATION_LIMIT, DIALOGUE_RELATION_LIMIT)
+            for npc_id, delta in (relation_deltas or {}).items()
+            if npc_id in DIALOGUE_RELATION_NPCS and npc_id in game_state.npc_states and delta
+        }
+        if duplicate:
+            axis, usurp, relations = 0, 0, {}
+
+        before_axis = game_state.axis
+        before_usurp = game_state.usurp
+        before_relations = {npc_id: game_state.npc_states[npc_id].relation for npc_id in relations}
+
+        _, gained = StateRules.apply_delta(
+            game_state,
+            axis_delta=axis,
+            usurp_delta=usurp,
+            relation_deltas=relations,
+            phase_gained_relations=dict(game_state.phase_relation_dialogue_gain),
+            is_event=False,
+        )
+        game_state.phase_relation_dialogue_gain = gained
+
+        applied_usurp = game_state.usurp - before_usurp
+        if applied_usurp > 0:
+            game_state.phase_usurp_dialogue_gain += applied_usurp
+
+        return DialogueDeltaResult(
+            axis=game_state.axis - before_axis,
+            usurp=applied_usurp,
+            relation={
+                npc_id: game_state.npc_states[npc_id].relation - before
+                for npc_id, before in before_relations.items()
+            },
+            duplicate_message=duplicate,
+        )
