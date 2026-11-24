@@ -231,6 +231,13 @@ class StateRules:
         return game_state, phase_gained_relations
 
     @staticmethod
+    def tick_warning_cooldown(game_state: GameState) -> None:
+        """規格 v3：警告事件 W 之後至少 5 回合，篡奪值最高只到 89。每過一回合倒數一次。"""
+
+        if game_state.warning_cooldown_turns > 0:
+            game_state.warning_cooldown_turns -= 1
+
+    @staticmethod
     def reset_dialogue_counters(game_state: GameState) -> None:
         """換階段時把「每階段」的對話防刷分計數器歸零。"""
 

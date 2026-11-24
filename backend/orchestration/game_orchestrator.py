@@ -251,6 +251,9 @@ class GameOrchestrator:
         ):
             resolution.updated_state.npc_states[action.target_npc_id].met = True
         updated_state = self._advance_turn(resolution.updated_state)
+        if state.flags.get("warning_event_done"):
+            # W 發生之後的回合才開始倒數（W 當回合不算），倒數期間篡奪值最高 89
+            StateRules.tick_warning_cooldown(updated_state)
         story = self._render_resolved_story(proposal, resolution)
         response = GameTurnResponse(
             session_id=action.session_id,

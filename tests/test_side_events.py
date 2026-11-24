@@ -17,6 +17,7 @@ from backend.main import create_app
 from backend.orchestration.game_orchestrator import GameOrchestrator
 from backend.schemas.game_state import GameState, PlayerState, StoryPhase
 from backend.schemas.player_action import PlayerAction
+from backend.schemas.story import DialogueLine, SpeakerType, StoryProposal
 from test_demo_story_flow import _start, _submit_choice
 
 
@@ -137,7 +138,7 @@ async def test_exposing_the_elders_during_the_warning_lowers_usurp(tmp_path) -> 
     await create_schema(engine)
     session_factory = create_async_session_factory(engine)
     repository = SqlAlchemyGameRepository(session_factory)
-    await repository.create_or_get_session(_warning_state())
+    await repository.create_or_get_session(_warning_state(warning_cooldown_turns=5))
     orchestrator = GameOrchestrator(repository, story_planner=RuleBasedStoryPlanner(None))
     choice = next(
         choice for choice in await orchestrator.get_player_choices("warning")
@@ -160,3 +161,37 @@ async def test_exposing_the_elders_during_the_warning_lowers_usurp(tmp_path) -> 
     assert stored.flags["warning_event_done"] is True
     assert stored.story_progress.node_id == "memory_truths_complete"
     assert pending_warning_choices(stored) == ()
+    assert stored.warning_cooldown_turns == 5  # W 當回合不算進冷卻
+
+
+class PlainReplyPlanner:
+    async def propose(self, action, parsed_action, state, turn_guidance) -> StoryProposal:
+        return StoryProposal(
+            session_id=action.session_id,
+            turn_number=state.turn_count + 1,
+            proposed_dialogue=[DialogueLine(
+                speaker_type=SpeakerType.NPC, speaker_id=action.target_npc_id,
+                speaker_name=state.npc_states[action.target_npc_id].name, text="……嗯。",
+            )],
+        )
+
+
+@pytest.mark.asyncio
+async def test_cooldown_counts_down_on_each_turn_after_the_warning(tmp_path) -> None:
+    engine = create_database_engine(f"sqlite+aiosqlite:///{tmp_path / 'cooldown.db'}")
+    await create_schema(engine)
+    repository = SqlAlchemyGameRepository(create_async_session_factory(engine))
+    state = _warning_state(warning_cooldown_turns=5)
+    state.flags["warning_event_done"] = True
+    await repository.create_or_get_session(state)
+    orchestrator = GameOrchestrator(repository, story_planner=PlainReplyPlanner())
+
+    remaining = []
+    for version in range(1, 7):
+        await orchestrator.process_turn(PlayerAction(
+            session_id="warning", action_id=uuid4(), message=f"第 {version} 句話",
+            target_npc_id="vidalia", expected_state_version=version,
+        ))
+        remaining.append((await repository.get_state("warning")).warning_cooldown_turns)
+
+    assert remaining == [4, 3, 2, 1, 0, 0]
