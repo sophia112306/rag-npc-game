@@ -11,8 +11,11 @@
 """
 
 import argparse
+import json
 import os
 import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 from uuid import uuid4
 
@@ -42,6 +45,19 @@ def main() -> int:
     args = parser.parse_args()
 
     base = args.gateway.rstrip("/")
+    try:
+        with urllib.request.urlopen(f"{base}/health", timeout=10) as response:
+            ready = json.loads(response.read().decode("utf-8")).get("status") == "ready"
+    except (urllib.error.URLError, OSError, ValueError):
+        ready = False
+    if not ready:
+        print(
+            f"連不到 {base}/health：gateway 還沒啟動或還沒準備好。請先在容器內執行：\n"
+            "  NPC_GATEWAY_HOST=127.0.0.1 NPC_GATEWAY_PORT=8010 nohup bash scripts/start_npc_gateway.sh "
+            "> /tmp/narrative-gateway.log 2>&1 &\n"
+            "等約 8 秒後再執行這支腳本。"
+        )
+        return 1
     os.environ["MODEL_GATEWAY_PROVIDER"] = "contract_http"
     os.environ["MODEL_GATEWAY_URL"] = f"{base}/generate"
     os.environ["NARRATIVE_GATEWAY_URL"] = f"{base}/narrate"

@@ -68,6 +68,16 @@ def main() -> int:
     parser.add_argument("--api-key", default=None)
     args = parser.parse_args()
 
+    health_url = args.url.rsplit("/narrate", 1)[0].rstrip("/") + "/health"
+    try:
+        with urllib.request.urlopen(health_url, timeout=10) as response:
+            ready = json.loads(response.read().decode("utf-8")).get("status") == "ready"
+    except (urllib.error.URLError, OSError, ValueError):
+        ready = False
+    if not ready:
+        print(f"連不到 {health_url}：gateway 還沒啟動或還沒準備好，請先啟動 8010 的 gateway。")
+        return 1
+
     checks = 0
     for npc_id, message, axis_expect, relation_expect, usurp_expect in SAMPLES:
         try:
