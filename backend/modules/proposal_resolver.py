@@ -356,6 +356,12 @@ class ProposalResolver:
                 if item.award_rule_event_id == choice.rule_event_id and item.item_id not in state.player.inventory:
                     state.player.inventory.append(item.item_id)
                     awarded_items.append(item.item_id)
+        if choice.removes_placed_runes:
+            # 規格 v3：拆除已放置的符印，每處篡奪值 −10（仍受倒數不下降規則限制）
+            remove_rule = EventRules.get_event_effect("E2-4_remove")
+            for _site in list(state.flags.get("placed_runes", [])):
+                StateRules.apply_delta(state, usurp_delta=remove_rule.get("usurp", 0), is_event=True)
+            state.flags["placed_runes"] = []
 
         previous_node_id = state.story_progress.node_id
         if choice.choice_id not in state.story_progress.completed_choice_ids:

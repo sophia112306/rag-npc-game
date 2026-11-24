@@ -45,8 +45,9 @@ class EventRules:
         "E3-1_accept": {"axis": 0, "usurp": 20, "relation": {}, "flags": {"elder_cooperation": True}},
         "E3-2_agree": {"axis": 10, "usurp": 0, "relation": {"menmesvento": 10}, "flags": {}},
         "E3-2_receive_dust_token": {"axis": 0, "usurp": 0, "relation": {"menmesvento": 10}, "flags": {"has_dust_token": True}},
-        "E3-3_accept_transformation": {"axis": -20, "usurp": 0, "relation": {"vidalia": 10}, "flags": {"is_transformed": True}},
-        "E3-4": {"axis": 0, "usurp": 0, "relation": {"andre": 10}, "flags": {"hidden_cave_unlocked": True}},
+        # 規格 v3：接受織夢只設「已轉化」與主軸 −20；E3-4 無數值
+        "E3-3_accept_transformation": {"axis": -20, "usurp": 0, "relation": {}, "flags": {"is_transformed": True, "transformed_race": "elf"}},
+        "E3-4": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"hidden_cave_unlocked": True}},
 
         # 終局維塔三問；數值只由固定選項套用，不交給模型自行推測。
         "VETA_Q1_EACH_LIFE": {"axis": 10, "usurp": 0, "relation": {"menmesvento": 20}, "flags": {}},

@@ -40,6 +40,14 @@ class DemoStoryChoiceDefinition:
     epilogue_answer_key: str | None = None
     epilogue_answer_value: str | None = None
     rune_site: str | None = None  # E2-4：放置觀測符印的地點（寫入 flags["placed_runes"]，供之後拆除）
+    # 觸發條件（規格 v3 事件清單）：全部符合才會出現
+    min_relations: tuple[tuple[str, int], ...] = ()  # 例如 (("vidalia", 60),)
+    axis_min: int | None = None
+    axis_max: int | None = None
+    required_any_flags: tuple[str, ...] = ()  # 任一旗標為真即可
+    requires_placed_runes: bool = False
+    once_group: str | None = None  # 同群組任一選項做過後，整組不再出現
+    removes_placed_runes: bool = False  # 依已放置的符印數，每處套用一次 E2-4_remove
     ending_id: str | None = None
 
     def to_player_choice(self) -> PlayerChoice:
@@ -797,6 +805,123 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     ),
 )
 
+
+_E3_CHOICES = (
+    # -----------------------------------------------------------------
+    # 階段三：真相之後、前往維塔之前的事件（規格 v3 E3-2～E3-4、真相 C 後拒絕艾倫、拆除符印）
+    # 關係值門檻主要靠敘事 AI 判讀對話累積；條件不符時不會出現，不影響主線。
+    # -----------------------------------------------------------------
+    _choice(
+        "reject_alan_after_truths", "memory_truths_complete", "memory_library",
+        "明確拒絕艾倫", "我不會再替外界評議會做任何事，艾倫。",
+        "通訊另一端安靜了很久。艾倫最後只留下一句：「你會後悔的。」視網膜上的數字停止跳動，雜音一點一點退去。",
+        "memory_truths_complete", "真相三：夢境之外", rule_event_id="Truth_C_reject_alan",
+        narrate_response=True, once_group="reject_alan",
+    ),
+    _choice(
+        "agree_wake_veta", "dust_token_decided", "liuchen_valley",
+        "答應他喚醒維塔的請求", "我答應你，會去喚醒維塔。",
+        "門梅司文托閉上眼，像是終於放下了千年的重量：「那就去吧。讓他醒來，親眼看看這個世界。」",
+        "dust_token_decided", "門梅司文托的請求", rule_event_id="E3-2_agree",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="menmesvento", witness_npc_ids=("menmesvento",),
+        min_relations=(("menmesvento", 60),), once_group="e3_2",
+    ),
+    _choice(
+        "refuse_wake_veta", "dust_token_decided", "liuchen_valley",
+        "婉拒他喚醒維塔的請求", "這件事，我還不能答應你。",
+        "門梅司文托沒有追問，只是把視線移回生死之書：「無妨。每個人都該自己決定要叫醒誰。」",
+        "dust_token_decided", "門梅司文托的請求",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="menmesvento", witness_npc_ids=("menmesvento",),
+        min_relations=(("menmesvento", 60),), once_group="e3_2",
+    ),
+    # E3-3 維達利亞的感情節點：依主軸三選一，只發生一次
+    _choice(
+        "vidalia_offer_weaving", "veta_route_ready", "minglin",
+        "聽維達利亞想說的話", "維達利亞，妳想對我說什麼？",
+        "維達利亞的聲音比平常輕：「留下來吧。我可以用織夢術讓你成為精靈，從此不必再回到那個會死去的世界。」"
+        "她頓了頓，又說：「但你要想清楚，一旦織成，就再也回不去了。」",
+        "side_vidalia_offer", "織夢之約",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+        min_relations=(("vidalia", 60),), axis_max=-20, once_group="e3_3",
+    ),
+    _choice(
+        "accept_dream_weaving", "side_vidalia_offer", "minglin",
+        "接受織夢，成為精靈", "我願意留下來，成為精靈。",
+        "維達利亞牽起你的手，林間的霧絲纏上你的指尖。等霧散去，你聽見的風聲已經和她一樣。你成了鳴霖的精靈，再也不是外來者。",
+        "veta_route_ready", "命脈之泉源頭", rule_event_id="E3-3_accept_transformation",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+    ),
+    _choice(
+        "decline_dream_weaving", "side_vidalia_offer", "minglin",
+        "婉拒織夢", "謝謝妳，但我還不能留下。",
+        "維達利亞收回手，笑得有些勉強：「我知道。只是……想問問看而已。」",
+        "veta_route_ready", "命脈之泉源頭",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+    ),
+    _choice(
+        "vidalia_confides_wavering", "veta_route_ready", "minglin",
+        "聽維達利亞想說的話", "維達利亞，妳想對我說什麼？",
+        "維達利亞望著議會庭外的雨霧，很久才開口：「我一直以為，只要什麼都不改變就好。可是看著你，我開始不確定了……我其實不想讓這個世界改變，這樣是錯的嗎？」",
+        "veta_route_ready", "命脈之泉源頭",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+        min_relations=(("vidalia", 60),), axis_min=20, once_group="e3_3",
+    ),
+    _choice(
+        "vidalia_asks_outside", "veta_route_ready", "minglin",
+        "聽維達利亞想說的話", "維達利亞，妳想對我說什麼？",
+        "維達利亞歪著頭看你：「外面的世界是什麼樣子？那裡的雨，也會這樣下個不停嗎？」你說起那個一切都會結束的世界，她安靜地聽到最後。",
+        "veta_route_ready", "命脈之泉源頭",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+        min_relations=(("vidalia", 60),), axis_min=-19, axis_max=19, once_group="e3_3",
+    ),
+    _choice(
+        "andre_shows_breach", "veta_route_ready", "minglin",
+        "跟安德烈去看屏障裂縫", "安德烈，你想給我看什麼？",
+        "安德烈帶你回到屏障破裂的地方。裂縫比你醒來那天寬了許多，邊緣還在緩慢地剝落。「我查過了，」他說，「裂縫開始擴大的時間，和你出現的那天完全吻合。」"
+        "他另外告訴你，裂縫附近有一處隱藏的採集洞穴，危急時可以躲進去。",
+        "veta_route_ready", "命脈之泉源頭", rule_event_id="E3-4",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="andre",
+        min_relations=(("andre", 60),), once_group="e3_4",
+    ),
+    _choice(
+        "remove_placed_runes", "veta_route_ready", "minglin",
+        "拆除各地的觀測符印", "我要把先前放下的觀測符印全部拆掉。",
+        "你回到每一處放過符印的地方，把它們一一剝下。符印離開岩面時發出細微的碎裂聲，視網膜角落的數字也跟著往回跳。",
+        "veta_route_ready", "命脈之泉源頭", narrate_response=True,
+        requires_placed_runes=True, required_any_flags=("warning_event_done", "truth_c_unlocked"),
+        removes_placed_runes=True, once_group="remove_runes",
+    ),
+)
+
+DEMO_STORY_CHOICES = DEMO_STORY_CHOICES + _E3_CHOICES
+
+# 一次性群組：同群組任一選項做過後，整組不再出現
+ONCE_GROUP_MEMBERS: dict[str, frozenset[str]] = {
+    group: frozenset(choice.choice_id for choice in DEMO_STORY_CHOICES if choice.once_group == group)
+    for group in {choice.once_group for choice in DEMO_STORY_CHOICES if choice.once_group}
+}
+
+
+def _choice_conditions_met(choice: DemoStoryChoiceDefinition, state: GameState, completed: set[str]) -> bool:
+    """規格 v3 事件的觸發條件：關係值、主軸、旗標、已放置的符印與一次性。"""
+
+    for npc_id, minimum in choice.min_relations:
+        npc = state.npc_states.get(npc_id)
+        if npc is None or npc.relation < minimum:
+            return False
+    if choice.axis_min is not None and state.axis < choice.axis_min:
+        return False
+    if choice.axis_max is not None and state.axis > choice.axis_max:
+        return False
+    if choice.required_any_flags and not any(state.flags.get(flag) for flag in choice.required_any_flags):
+        return False
+    if choice.requires_placed_runes and not state.flags.get("placed_runes"):
+        return False
+    if choice.once_group and ONCE_GROUP_MEMBERS[choice.once_group] & completed:
+        return False
+    return True
+
+
 # 階段二選做支線的入口；每處只能去一次，只在解決邊境廢墟之後出現
 SIDE_EVENT_ENTRY_IDS = frozenset(("side_spring_anomaly", "side_fire_reactor", "side_dust_fissure"))
 
@@ -889,6 +1014,7 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
             or (border_resolution and choice.choice_id not in completed)
         )
         and (choice.ending_id is None or choice.ending_id in available_endings)
+        and _choice_conditions_met(choice, state, completed)
         and not (
             state.story_progress.node_id == "minglin_briefed"
             and choice.destination_scene_id is None

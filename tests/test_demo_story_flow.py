@@ -261,11 +261,24 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             *_TO_BORDER_RESOLUTION, "border_ignore", "return_after_border_choice",
             "side_spring_anomaly", "pump_ignore", "rune_refuse_spring",
         ),
+        # 階段三：真相 C 後拒絕艾倫、拆除符印，再走到塵歸結局
+        "reject-alan-and-remove-runes": (
+            *_TO_BORDER_RESOLUTION, "border_help_both", "return_after_border_choice",
+            "side_spring_anomaly", "pump_ignore", "rune_place_spring",
+            "enter_memory_library_with_map", "inspect_invasion_archive", "inspect_life_death_book",
+            "contact_alan_observer", "reject_alan_after_truths", "seek_menmesvento_after_truths",
+            "accept_dust_return_token", "return_to_minglin_for_veta", "remove_placed_runes",
+            "enter_veta_source", "veta_q1_recurring_life", "veta_q2_release", "choose_dust_return",
+        ),
     }
     expected_edges = {
         (choice.choice_id, choice.source_node_id, choice.source_scene_id)
         for choice in DEMO_STORY_CHOICES
         if choice.source_node_id != "fissure_arrival"
+        # 需要關係值 ≥ 60 的事件（E3-2～E3-4）靠對話累積，固定選項路線走不到，
+        # 改由 test_act3_events.py 以指定狀態驗證
+        and not choice.min_relations
+        and choice.source_node_id != "side_vidalia_offer"
     }
     visited_edges: set[tuple[str, str, str]] = {
         ("meet_andre", "minglin_arrival", "minglin"),
