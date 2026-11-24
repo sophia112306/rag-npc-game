@@ -33,6 +33,11 @@ from backend.schemas.progression import (
 )
 
 
+# 每次生成只帶最近幾筆記憶：記憶會隨對話累積，全部帶入會讓 prompt 超過
+# vLLM 的 max_model_len（目前 4096），之後每次 NPC 生成都被拒絕（HTTP 400）。
+MAX_CONTEXT_MEMORIES = 8
+
+
 class CharacterDefinitionNotFoundError(LookupError):
     """Raised when generation is requested for an unregistered character."""
 
@@ -210,10 +215,12 @@ class NPCContextRepository:
                     MemoryRecord.is_active.is_(True),
                     MemoryRecord.occurred_turn <= current_turn,
                 )
-                .order_by(MemoryRecord.occurred_turn, MemoryRecord.memory_id)
+                .order_by(MemoryRecord.occurred_turn.desc(), MemoryRecord.memory_id.desc())
+                .limit(MAX_CONTEXT_MEMORIES)
             )
             knowledge = list(knowledge_result.scalars())
-            memories = list(memory_result.scalars())
+            # 取最近的幾筆，再依時間先後排回去
+            memories = list(reversed(list(memory_result.scalars())))
             goals_result = await database.execute(
                 select(NPCGoalRecord)
                 .where(
