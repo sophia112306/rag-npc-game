@@ -1,7 +1,7 @@
 """Provider-neutral request, response, and error contracts for story generation."""
 
 from collections.abc import Mapping
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -61,6 +61,10 @@ class ModelTurnRequest(BaseModel):
     action_mode: ActionMode
     parsed_action: ParsedAction
     target_context: NPCGenerationContext
+    # 目標 NPC 對主角的信任度（由關係值換算，不含數值本身）；None 表示此角色不追蹤關係值
+    npc_trust: Literal["低", "中", "高", "至高"] | None = None
+    # 角色規範中的目前行為模式（文字，不含數值）；None 表示此角色沒有對應規範
+    npc_mode: str | None = Field(default=None, max_length=200)
     turn_guidance: TurnGuidance = Field(default_factory=TurnGuidance)
     allowed_operations: list[OperationType]
     generation_budget: GenerationBudget = Field(default_factory=GenerationBudget)
