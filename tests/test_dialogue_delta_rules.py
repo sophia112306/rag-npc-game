@@ -21,10 +21,10 @@ def test_per_turn_limits_clamp_ai_proposal() -> None:
 
     assert result.axis == 5
     assert result.usurp == 2
-    assert result.relation == {"andre": 10, "vidalia": -10}
+    assert result.relation == {"andre": 6, "vidalia": -10}
     assert state.axis == 5
     assert state.usurp == 2
-    assert state.npc_states["andre"].relation == 30
+    assert state.npc_states["andre"].relation == 26
     assert state.npc_states["vidalia"].relation == 20
 
 
@@ -186,9 +186,9 @@ def test_counters_reset_when_phase_changes() -> None:
     )
 
     assert result.usurp == 2
-    assert result.relation == {"andre": 10}
+    assert result.relation == {"andre": 6}
     assert state.dialogue_counters_phase == StoryPhase.ACT2_MIDTERM
-    assert state.phase_relation_dialogue_gain == {"andre": 10, "vidalia": 0, "menmesvento": 0}
+    assert state.phase_relation_dialogue_gain == {"andre": 6, "vidalia": 0, "menmesvento": 0}
 
 
 def test_normalize_ignores_spacing_and_punctuation() -> None:

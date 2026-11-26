@@ -8,7 +8,8 @@ from backend.schemas.game_state import GameState, StoryPhase
 # 事件的數值由 EventRules 直接套用，不受這些限制，但仍受 apply_delta 的階段封頂。
 DIALOGUE_RELATION_NPCS = ("andre", "vidalia", "menmesvento")  # 規格只定義這三個關係值
 DIALOGUE_AXIS_LIMIT = 5             # 主軸：對話每回合 ±0～5
-DIALOGUE_RELATION_LIMIT = 10        # 關係值：對話每回合 ±0～10
+DIALOGUE_RELATION_GAIN_LIMIT = 6    # 關係值：對話每回合最多 +6，避免一句升階
+DIALOGUE_RELATION_LOSS_LIMIT = 10   # 嚴重嘲弄或威脅每回合最多 -10
 DIALOGUE_USURP_LIMIT = 2            # 篡奪值：刻意激怒或逼迫 NPC 每回合 +2
 PHASE_USURP_DIALOGUE_CAP = 10       # 篡奪值：靠激怒每階段最多 +10
 RECENT_DIALOGUE_WINDOW = 3          # 同一句話 3 回合內只計一次
@@ -256,7 +257,7 @@ class StateRules:
     ) -> DialogueDeltaResult:
         """
         套用敘事 AI 對一句玩家發言提出的數值變化。AI 的數字只是提案，這裡依規格 v3 執行：
-        1. 單回合上限：主軸 ±5、關係值 ±10、篡奪值 0～+2（對話不會降低篡奪值）
+        1. 單回合上限：主軸 ±5、關係值 +6／-10、篡奪值 0～+2（對話不會降低篡奪值）
         2. 只接受安德烈、維達利亞、門梅司文托三個關係值，其他 ID 一律忽略
         3. 同一句話 3 回合內只計一次；同一立場（有類別時看類別，否則看正負號）3 回合內只計一次主軸
         4. 每階段靠對話：每個角色關係值最多 +40、篡奪值最多 +10
@@ -277,7 +278,11 @@ class StateRules:
         usurp = _clamp(usurp_delta, 0, DIALOGUE_USURP_LIMIT)
         usurp = min(usurp, max(0, PHASE_USURP_DIALOGUE_CAP - game_state.phase_usurp_dialogue_gain))
         relations = {
-            npc_id: _clamp(delta, -DIALOGUE_RELATION_LIMIT, DIALOGUE_RELATION_LIMIT)
+            npc_id: _clamp(
+                delta,
+                -DIALOGUE_RELATION_LOSS_LIMIT,
+                DIALOGUE_RELATION_GAIN_LIMIT,
+            )
             for npc_id, delta in (relation_deltas or {}).items()
             if npc_id in DIALOGUE_RELATION_NPCS and npc_id in game_state.npc_states and delta
         }
