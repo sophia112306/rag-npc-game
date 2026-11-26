@@ -6,7 +6,7 @@ import json
 from typing import Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.generation.gateway import (
     ModelGatewayPermanentError,
@@ -71,6 +71,14 @@ class SemanticReviewResult(BaseModel):
     reason: str = Field(min_length=1, max_length=160)
     dialogue: str = Field(min_length=1, max_length=240)
     emotion: str | None = Field(default=None, max_length=40)
+
+    @model_validator(mode="after")
+    def decision_matches_issue(self) -> "SemanticReviewResult":
+        if self.decision == "accept" and self.issue != "none":
+            raise ValueError("accept decisions cannot report a semantic issue")
+        if self.decision == "rewrite" and self.issue == "none":
+            raise ValueError("rewrite decisions must identify a semantic issue")
+        return self
 
     def to_story_output(self) -> ModelStoryOutput:
         return ModelStoryOutput.model_validate(

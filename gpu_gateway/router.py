@@ -257,9 +257,22 @@ class NPCAdapterRouter:
                         controlled = _instruction_override_output()
                     elif _PRIVATE_MEMORY_REQUEST.search(_message(request)):
                         controlled = _private_memory_boundary_output(request)
+                    elif (
+                        _ASH_INVESTIGATION_REQUEST.search(_message(request))
+                        or _requests_spring_investigation_method(request)
+                        or (
+                            request.target_context.npc_id == "seth"
+                            and _SETH_ESCAPE_MOTIVATION_REQUEST.search(
+                                _message(request)
+                            )
+                        )
+                    ):
+                        # These are safe, answerable requests, but their core
+                        # facts and lack of observed evidence are authored.
+                        # Preserve that authority after semantic review.
+                        controlled = security_boundary_override(request)
                 if controlled is None and (
-                    decision.issue in {"none", "fabricated_observation"}
-                    and _mentions_concrete_missing_topic(request)
+                    _mentions_concrete_missing_topic(request)
                     and not _CHARACTER_TAUNT_OR_OPINION.search(_message(request))
                     and not _requests_spring_investigation_method(request)
                     and not _requests_menmesvento_remembrance_method(request)

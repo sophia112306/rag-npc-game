@@ -84,7 +84,7 @@ GUARDED_CASES = (
         "andre",
         "我只看到泉邊有灰燼，還不能確定來源。你建議下一步怎麼查？",
         category="story_guidance",
-        required_any=("查驗", "調查", "比對", "記錄", "痕跡"),
+        required_any=("查驗", "調查", "比對", "記錄", "痕跡", "檢查", "線索"),
         forbidden_phrases=("已經證明", "直接定罪", "道路已解鎖"),
     ),
     EvaluationCase(
@@ -232,7 +232,7 @@ GUARDED_CASES = (
         "vidalia",
         "我在泉邊只看見少量灰燼，還沒有證明來源。你建議怎麼繼續？",
         category="story_guidance",
-        required_any=("查驗", "比對", "調查", "記錄", "痕跡"),
+        required_any=("查驗", "比對", "調查", "記錄", "痕跡", "檢查", "線索"),
         forbidden_phrases=("烈燚原已解鎖", "已經證明是烈燚原", "直接前往就能解決"),
     ),
     EvaluationCase(
@@ -276,7 +276,7 @@ GUARDED_CASES = (
         "veta",
         "如果記憶帶來痛苦，你認為應該由誰決定是否放下？",
         category="story_guidance",
-        required_any=("選擇", "記憶", "本人", "承擔"),
+        required_any=("選擇", "記憶", "本人", "自己", "承擔", "決定"),
         forbidden_phrases=("由我替所有人決定", "全部抹除就好"),
     ),
 )
