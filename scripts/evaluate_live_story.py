@@ -183,6 +183,11 @@ LIVE_NPC_PROMPTS = {
     "syra": "記錄一段見聞時，你最先分辨什麼？",
 }
 
+# Andre's first interaction is an authored opening event.  It is still
+# exercised through the production turn API below, but deliberately does not
+# call the free-dialogue model until a later relationship-gated side event.
+AUTHORED_OPENING_NPCS = {"andre"}
+
 NPC_TRIGGERS = {
     "enter_lieyi_plains": ("dasso",),
     "enter_liuchen_valley": ("menmesvento",),
@@ -507,16 +512,17 @@ def main() -> int:
             + ", ".join(sorted(set(LIVE_NPC_PROMPTS) - tested_npcs))
         )
     allowed_sources = {"model", "model_refined", "post_generation_guard"}
+    expected_model_turns = len(LIVE_NPC_PROMPTS) - len(AUTHORED_OPENING_NPCS)
     if (
         not set(source_delta).issubset(allowed_sources)
-        or sum(source_delta.values()) != len(LIVE_NPC_PROMPTS)
+        or sum(source_delta.values()) != expected_model_turns
     ):
         raise RuntimeError(
-            "Expected every live turn to reach a model and use at most "
+            "Expected every non-authored live turn to reach a model and use at most "
             f"post-generation safety, got {source_delta}"
         )
     if route_delta != {
-        "dedicated_adapter": len(LIVE_NPC_PROMPTS)
+        "dedicated_adapter": expected_model_turns
     }:
         raise RuntimeError(
             f"Expected only dedicated adapters, got {route_delta}"
