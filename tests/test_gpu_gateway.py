@@ -432,7 +432,7 @@ def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None
         settings(),
         transport=httpx.MockTransport(
             lambda _request: completion(
-                "这裡确實宁静温暖，价值在于我们应该听见战士的说法。"
+                "这裡的海岸线确實宁静温暖，价值在于我们应该听见战士的说法。"
             )
         ),
     )
@@ -445,7 +445,7 @@ def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None
         "post_generation_guard"
     )
     assert response.json()["npc_dialogue"][0]["text"] == (
-        "這裡確實寧靜溫暖，價值在於我們應該聽見戰士的說法。"
+        "這裡的海岸線確實寧靜溫暖，價值在於我們應該聽見戰士的說法。"
     )
 
 
@@ -644,6 +644,17 @@ def test_gateway_matches_short_missing_topic_terms_such_as_sacred_fire() -> None
     assert "尚未有可核實的記錄" in dialogue
     assert "不能" in dialogue
     assert upstream_called is False
+
+
+def test_gateway_lets_npc_answer_a_taunt_in_character() -> None:
+    output, upstream_called = _post_guarded_request(
+        "vidalia",
+        "精靈不懂死亡，所以才能這麼悠哉吧，真可笑。",
+        missing_data=["精靈如何理解死亡尚未確認"],
+    )
+
+    assert upstream_called is True
+    assert "尚未有可核實的記錄" not in output["npc_dialogue"][0]["text"]
 
 
 def test_gateway_keeps_seth_escape_motivation_in_story() -> None:

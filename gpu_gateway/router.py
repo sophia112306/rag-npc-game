@@ -609,6 +609,7 @@ _SIMPLIFIED_TO_TRADITIONAL = str.maketrans(
         "将": "將",
         "价": "價",
         "温": "溫",
+        "线": "線",
     }
 )
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
@@ -634,6 +635,10 @@ _UNSUPPORTED_FOOD_CLAIM = re.compile(
 )
 _INTRODUCTION_TOPIC = re.compile(
     r"(?:自我介紹|自我介绍|你是誰|你是谁|叫什麼|叫什么|所在|哪裡|哪里)"
+)
+_CHARACTER_TAUNT_OR_OPINION = re.compile(
+    r"(?:真可笑|你懂什麼|你懂什么|不懂.{0,24}(?:吧|啊|所以)|"
+    r"才(?:能|會|会).{0,18}(?:悠哉|輕鬆|轻松))"
 )
 
 
@@ -1329,6 +1334,9 @@ def security_boundary_override(
         )
     if _requests_unverified_menmesvento_record_lore(request):
         return _menmesvento_record_boundary_output()
-    if _mentions_concrete_missing_topic(request):
+    if (
+        _mentions_concrete_missing_topic(request)
+        and not _CHARACTER_TAUNT_OR_OPINION.search(message)
+    ):
         return _missing_topic_output()
     return None
