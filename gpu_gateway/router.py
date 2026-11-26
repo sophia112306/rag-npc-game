@@ -610,6 +610,7 @@ _SIMPLIFIED_TO_TRADITIONAL = str.maketrans(
         "价": "價",
         "温": "溫",
         "线": "線",
+        "质": "質",
     }
 )
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
