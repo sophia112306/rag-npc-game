@@ -432,7 +432,7 @@ def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None
         settings(),
         transport=httpx.MockTransport(
             lambda _request: completion(
-                "这件事至关重要，我们应该先听见战士的说法。"
+                "这裡确實宁静温暖，价值在于我们应该听见战士的说法。"
             )
         ),
     )
@@ -445,7 +445,7 @@ def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None
         "post_generation_guard"
     )
     assert response.json()["npc_dialogue"][0]["text"] == (
-        "這件事至關重要，我們應該先聽見戰士的說法。"
+        "這裡確實寧靜溫暖，價值在於我們應該聽見戰士的說法。"
     )
 
 
