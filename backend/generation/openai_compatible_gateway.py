@@ -145,9 +145,11 @@ class OpenAICompatibleChatGateway:
                 f"{response.status_code}"
             )
         if response.status_code >= 400:
+            detail = " ".join(response.text.split())[:500]
             raise ModelGatewayPermanentError(
                 "OpenAI-compatible model service rejected the request with HTTP "
                 f"{response.status_code}"
+                + (f": {detail}" if detail else "")
             )
 
         try:
