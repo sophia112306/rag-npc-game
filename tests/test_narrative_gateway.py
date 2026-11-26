@@ -221,6 +221,31 @@ def test_adapter_rejudges_nonzero_axis_without_valid_stance() -> None:
     assert result.stance == "肯定永生或輪迴"
 
 
+def test_adapter_verifies_a_zero_effect_decision_once() -> None:
+    payloads = []
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        payloads.append(json.loads(request.content))
+        return completion(json.dumps({
+            "reason": "閒聊，與角色喜好無關",
+            "axis": 0,
+            "stance": None,
+            "usurp": 0,
+            "relation": {},
+        }, ensure_ascii=False))
+
+    adapter = NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=3),
+        transport=httpx.MockTransport(upstream),
+    )
+
+    result = asyncio.run(adapter.judge(REQUEST))
+
+    assert len(payloads) == 2
+    assert "確認這句話真的與關係值無關" in payloads[1]["messages"][-1]["content"]
+    assert result.delta.relation == {}
+
+
 def test_narrate_endpoint_returns_judgement() -> None:
     app = create_app(
         GatewaySettings(),

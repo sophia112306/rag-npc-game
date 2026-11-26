@@ -205,24 +205,39 @@ class NarrativeAdapter:
                     last_result = parse_narrator_output(raw_output, request)
                     last_no_effect_conflict = _declares_no_effect(last_result) and _has_effect(last_result)
                     invalid_axis = _proposed_axis_has_no_valid_stance(raw_output)
-                    if not (last_no_effect_conflict or invalid_axis):
+                    # The small base model is most likely to confuse NPC
+                    # affinity with the ending axis, or to declare a targeted
+                    # statement irrelevant too quickly.  Verify either claim
+                    # once with a focused follow-up before accepting it.
+                    verify_axis = attempt == 0 and last_result.delta.axis != 0
+                    verify_no_effect = attempt == 0 and _declares_no_effect(last_result)
+                    if not (
+                        last_no_effect_conflict
+                        or invalid_axis
+                        or verify_axis
+                        or verify_no_effect
+                    ):
                         return last_result
                     if attempt + 1 < self.settings.upstream_max_attempts:
-                        correction = (
-                            "上一份 JSON 的 reason 說無關、無變化或不影響，卻給了非零數值。"
-                            "請重新判讀原句：若其實有影響就修正 reason；若確實無關，"
-                            "axis、usurp 與所有 relation 都必須是 0。"
-                            if last_no_effect_conflict
-                            else
-                            "上一份 JSON 給了非零 axis，卻沒有方向一致且完全符合定義的 stance。"
-                            "請重新判讀原句：若主角有明確世界觀立場，選一個合法 stance；"
-                            "否則 axis 必須是 0、stance 必須是 null。"
-                        )
+                        corrections = []
+                        if verify_no_effect or last_no_effect_conflict:
+                            corrections.append(
+                                "請再比對對話對象的喜好，確認這句話真的與關係值無關；"
+                                "詢問角色本人的經歷、支持或反對其重視的事，都不是一般閒聊。"
+                                "若仍判定無關，axis、usurp 與所有 relation 必須是 0。"
+                            )
+                        if verify_axis or invalid_axis:
+                            corrections.append(
+                                "請確認主角是否明確表達永生、輪迴、死亡、保存記憶、"
+                                "維持現狀或打破循環的世界觀；角色好惡、提問、調查態度或情緒不算。"
+                                "只有明確表態才能給非零 axis，且必須選方向一致的合法 stance；"
+                                "否則 axis 是 0、stance 是 null。"
+                            )
                         messages.extend([
                             {"role": "assistant", "content": raw_output},
                             {
                                 "role": "user",
-                                "content": correction + "只輸出修正後 JSON。",
+                                "content": "".join(corrections) + "重新判讀原句，只輸出修正後 JSON。",
                             },
                         ])
             # Persistent contradiction is fail-closed: the dialogue can still
