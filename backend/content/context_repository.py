@@ -37,8 +37,8 @@ from backend.schemas.progression import (
 
 # 每次生成只帶最近幾筆記憶：記憶會隨對話累積，全部帶入會讓 prompt 超過
 # vLLM 的 max_model_len（目前 4096），之後每次 NPC 生成都被拒絕（HTTP 400）。
-MAX_CONTEXT_MEMORIES = 6
-MAX_RECENT_DIALOGUE_MESSAGES = 8
+MAX_CONTEXT_MEMORIES = 4
+MAX_RECENT_DIALOGUE_MESSAGES = 4
 
 
 class CharacterDefinitionNotFoundError(LookupError):
@@ -238,7 +238,7 @@ class NPCContextRepository:
                     DialogueRecord.turn_number.desc(),
                     DialogueRecord.position.desc(),
                 )
-                .limit(4)
+                .limit(2)
             )
             npc_replies = list(dialogue_result.scalars())
             goals_result = await database.execute(
@@ -404,7 +404,7 @@ class NPCContextRepository:
             )
             for item in memories
             if item.memory_type == "interaction"
-        ][-4:]
+        ][-2:]
         messages.extend(
             ConversationMessage(
                 role="npc",

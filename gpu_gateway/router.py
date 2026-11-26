@@ -596,6 +596,12 @@ _SIMPLIFIED_TO_TRADITIONAL = str.maketrans(
         "细": "細",
         "释": "釋",
         "战": "戰",
+        "静": "靜",
+        "许": "許",
+        "驻": "駐",
+        "于": "於",
+        "离": "離",
+        "处": "處",
     }
 )
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
