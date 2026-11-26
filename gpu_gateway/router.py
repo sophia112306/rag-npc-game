@@ -688,6 +688,15 @@ _SIMPLIFIED_TO_TRADITIONAL = str.maketrans(
         "谨": "謹",
         "检": "檢",
         "须": "須",
+        "写": "寫",
+        "虽": "雖",
+        "无": "無",
+        "凭": "憑",
+        "编": "編",
+        "虚": "虛",
+        "构": "構",
+        "节": "節",
+        "诺": "諾",
     }
 )
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (

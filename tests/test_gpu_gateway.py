@@ -475,6 +475,7 @@ def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None
                 "这裡的海岸线确實宁静温暖，价值在于我们应该听见战士的说法，"
                 "本质仍需要继续调查，这份记录十分珍贵；观察痕迹和传來的声响，"
                 "圣卷记载亲历的流尘谜题，复杂证据仍须谨慎检验。"
+                "虽无凭据，也不能编写虚构细节或承诺。"
             )
         ),
     )
@@ -490,6 +491,7 @@ def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None
         "這裡的海岸線確實寧靜溫暖，價值在於我們應該聽見戰士的說法，"
         "本質仍需要繼續調查，這份記錄十分珍貴；觀察痕跡和傳來的聲響，"
         "聖卷記載親歷的流塵謎題，複雜證據仍須謹慎檢驗。"
+        "雖無憑據，也不能編寫虛構細節或承諾。"
     )
 
 
