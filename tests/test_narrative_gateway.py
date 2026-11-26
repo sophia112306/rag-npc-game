@@ -110,6 +110,66 @@ def test_adapter_rejects_truncated_output() -> None:
         asyncio.run(adapter.judge(REQUEST))
 
 
+def test_adapter_rejudges_reason_delta_contradiction() -> None:
+    payloads = []
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        payloads.append(json.loads(request.content))
+        if len(payloads) == 1:
+            return completion(json.dumps({
+                "reason": "閒聊，與立場和角色喜好無關",
+                "axis": 0,
+                "usurp": 0,
+                "relation": {"vidalia": 5},
+            }, ensure_ascii=False))
+        return completion(json.dumps({
+            "reason": "閒聊，與立場和角色喜好無關",
+            "axis": 0,
+            "usurp": 0,
+            "relation": {},
+        }, ensure_ascii=False))
+
+    adapter = NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=2),
+        transport=httpx.MockTransport(upstream),
+    )
+
+    result = asyncio.run(adapter.judge(REQUEST))
+
+    assert len(payloads) == 2
+    assert len(payloads[1]["messages"]) == 4
+    assert "重新判讀" in payloads[1]["messages"][-1]["content"]
+    assert result.delta.relation == {}
+
+
+def test_adapter_fail_closes_persistent_reason_delta_contradiction() -> None:
+    calls = 0
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return completion(json.dumps({
+            "reason": "無變化",
+            "axis": 4,
+            "stance": "主張打破循環",
+            "usurp": 2,
+            "relation": {"vidalia": 8},
+        }, ensure_ascii=False))
+
+    adapter = NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=2),
+        transport=httpx.MockTransport(upstream),
+    )
+
+    result = asyncio.run(adapter.judge(REQUEST))
+
+    assert calls == 2
+    assert result.delta.axis == 0
+    assert result.delta.usurp == 0
+    assert result.delta.relation == {}
+    assert result.stance is None
+
+
 def test_narrate_endpoint_returns_judgement() -> None:
     app = create_app(
         GatewaySettings(),

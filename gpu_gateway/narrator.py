@@ -130,6 +130,18 @@ def parse_narrator_output(text: str, request: NarrativeAIRequest) -> NarrativeAI
     )
 
 
+def _declares_no_effect(response: NarrativeAIResponse) -> bool:
+    """Catch the model's clearest reason/delta contradiction before state changes."""
+
+    reason = response.reason.replace(" ", "")
+    return any(marker in reason for marker in ("無關", "無變化", "不影響"))
+
+
+def _has_effect(response: NarrativeAIResponse) -> bool:
+    delta = response.delta
+    return bool(delta.axis or delta.usurp or any(delta.relation.values()))
+
+
 class NarrativeAdapter:
     def __init__(self, settings: GatewaySettings, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self.settings = settings
@@ -142,29 +154,53 @@ class NarrativeAdapter:
         headers = {"Content-Type": "application/json"}
         if self.settings.upstream_api_key:
             headers["Authorization"] = f"Bearer {self.settings.upstream_api_key}"
+        messages = [
+            {"role": "system", "content": NARRATOR_SYSTEM_PROMPT},
+            {"role": "user", "content": build_narrator_user_prompt(request)},
+        ]
+        last_result: NarrativeAIResponse | None = None
         try:
             async with httpx.AsyncClient(
                 transport=self.transport, timeout=self.settings.upstream_timeout_seconds
             ) as client:
-                response = await client.post(
-                    self.settings.upstream_base_url.rstrip("/") + "/chat/completions",
-                    headers=headers,
-                    json={
-                        "model": model,
-                        "temperature": 0.1,
-                        "top_p": 0.9,
-                        "max_tokens": 256,
-                        "response_format": {"type": "json_object"},
-                        "messages": [
-                            {"role": "system", "content": NARRATOR_SYSTEM_PROMPT},
-                            {"role": "user", "content": build_narrator_user_prompt(request)},
-                        ],
-                    },
-                )
-            response.raise_for_status()
-            choice = response.json()["choices"][0]
-            if choice.get("finish_reason") == "length":
-                raise ValueError("Narrator response was truncated")
-            return parse_narrator_output(choice["message"]["content"], request)
+                for attempt in range(self.settings.upstream_max_attempts):
+                    response = await client.post(
+                        self.settings.upstream_base_url.rstrip("/") + "/chat/completions",
+                        headers=headers,
+                        json={
+                            "model": model,
+                            "temperature": 0.1,
+                            "top_p": 0.9,
+                            "max_tokens": 256,
+                            "response_format": {"type": "json_object"},
+                            "messages": messages,
+                        },
+                    )
+                    response.raise_for_status()
+                    choice = response.json()["choices"][0]
+                    if choice.get("finish_reason") == "length":
+                        raise ValueError("Narrator response was truncated")
+                    raw_output = choice["message"]["content"]
+                    last_result = parse_narrator_output(raw_output, request)
+                    if not (_declares_no_effect(last_result) and _has_effect(last_result)):
+                        return last_result
+                    if attempt + 1 < self.settings.upstream_max_attempts:
+                        messages.extend([
+                            {"role": "assistant", "content": raw_output},
+                            {
+                                "role": "user",
+                                "content": (
+                                    "上一份 JSON 的 reason 說無關、無變化或不影響，卻給了非零數值。"
+                                    "請重新判讀原句：若其實有影響就修正 reason；若確實無關，"
+                                    "axis、usurp 與所有 relation 都必須是 0。只輸出修正後 JSON。"
+                                ),
+                            },
+                        ])
+            # Persistent contradiction is fail-closed: the dialogue can still
+            # continue, but this turn cannot mutate relationship/story values.
+            assert last_result is not None
+            return last_result.model_copy(
+                update={"delta": DeltaPayload(), "stance": None}, deep=True
+            )
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:
             raise ModelGatewayTransientError("Narrator model inference failed") from exc

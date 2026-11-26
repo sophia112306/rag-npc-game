@@ -103,7 +103,7 @@ def main() -> int:
             f"　（{seconds:.1f} 秒）\n  理由：{body.get('reason', '')}\n"
         )
     print(f"共 {len(SAMPLES)} 筆，{len(SAMPLES) - checks} 筆符合預期，{checks} 筆需要檢查。")
-    return 0
+    return 1 if checks else 0
 
 
 if __name__ == "__main__":
