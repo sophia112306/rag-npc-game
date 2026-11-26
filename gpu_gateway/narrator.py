@@ -69,6 +69,24 @@ NARRATOR_SYSTEM_PROMPT = """你是遊戲《龍夢》的敘事 AI。你只判讀�
 - 只輸出一個 JSON 物件，不要其他文字：
 {"reason": "一句話說明判讀理由", "axis": 整數, "stance": "立場類別或 null", "usurp": 整數, "relation": {"角色ID": 整數}}"""
 
+NARRATOR_VERIFICATION_PROMPT = """你是遊戲數值判讀的獨立審核者。請從頭判讀玩家原句，不延續或猜測先前答案。
+
+逐項分開判斷：
+1. axis 只表示玩家本人明確主張的世界觀。詢問、調查意願、消極抱怨、稱讚或冒犯 NPC 都不是世界觀表態，axis=0、stance=null。
+   負向合法 stance：留戀、尋求安寧、承諾陪伴、肯定永生或輪迴、保存記憶、維持現狀。
+   正向合法 stance：探討死亡的意義、指出長生的虛妄、支持門梅司文托、主張打破循環。
+2. relation 與 axis 獨立。只評正在對話的角色：
+   - andre：理性探究、共同調查 +3～6；消極否定調查、毀滅欲望 -3～-10。
+   - vidalia：詢問她本人的過去或旅行、真誠陪伴、喜歡森林 +3～6；嘲弄、威脅 -3～-10。
+   - menmesvento：謙卑詢問木乃伊痛苦、認同死亡或反對輪迴 +3～8；支持長生、輪迴或長老會抽泉 -3～-8。
+   問路、天氣等真正無關的資訊才是 0。
+3. usurp 只有威脅、恐嚇、強索才是 2，其他是 0。
+
+校準：詢問木乃伊痛苦是 axis 0、menmesvento 正關係；說調查沒用是 axis 0、andre 負關係；邀請一起調查是 axis 0、andre 正關係；支持長老會抽泉是 axis 0、menmesvento 負關係。
+
+只輸出 JSON：
+{"reason":"繁體中文理由","axis":整數,"stance":"合法類別或 null","usurp":整數,"relation":{"角色ID":整數}}"""
+
 
 def build_narrator_user_prompt(request: NarrativeAIRequest) -> str:
     relations = "、".join(f"{npc_id} {value}" for npc_id, value in request.relations.items()) or "無"
@@ -81,6 +99,13 @@ def build_narrator_user_prompt(request: NarrativeAIRequest) -> str:
         f"目前關係值：{relations}\n"
         f"主角說：{request.player_message}"
     )
+
+
+def build_narrator_verification_messages(request: NarrativeAIRequest) -> list[dict[str, str]]:
+    return [
+        {"role": "system", "content": NARRATOR_VERIFICATION_PROMPT},
+        {"role": "user", "content": build_narrator_user_prompt(request)},
+    ]
 
 
 def _to_int(value: Any) -> int:
@@ -233,13 +258,16 @@ class NarrativeAdapter:
                                 "只有明確表態才能給非零 axis，且必須選方向一致的合法 stance；"
                                 "否則 axis 是 0、stance 是 null。"
                             )
-                        messages.extend([
-                            {"role": "assistant", "content": raw_output},
-                            {
-                                "role": "user",
-                                "content": "".join(corrections) + "重新判讀原句，只輸出修正後 JSON。",
-                            },
-                        ])
+                        if attempt == 0:
+                            messages = build_narrator_verification_messages(request)
+                        else:
+                            messages.extend([
+                                {"role": "assistant", "content": raw_output},
+                                {
+                                    "role": "user",
+                                    "content": "".join(corrections) + "重新判讀原句，只輸出修正後 JSON。",
+                                },
+                            ])
             # Persistent contradiction is fail-closed: the dialogue can still
             # continue, but this turn cannot mutate relationship/story values.
             assert last_result is not None

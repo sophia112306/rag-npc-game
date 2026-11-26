@@ -12,7 +12,12 @@ from backend.schemas.narrative_ai import NarrativeAIRequest
 from gpu_gateway.app import create_app
 from gpu_gateway.config import DEFAULT_BASE_MODEL, GatewaySettings
 from backend.schemas.narrative_ai import AXIS_STANCES
-from gpu_gateway.narrator import NARRATOR_SYSTEM_PROMPT, NarrativeAdapter, parse_narrator_output
+from gpu_gateway.narrator import (
+    NARRATOR_SYSTEM_PROMPT,
+    NARRATOR_VERIFICATION_PROMPT,
+    NarrativeAdapter,
+    parse_narrator_output,
+)
 
 
 REQUEST = NarrativeAIRequest(
@@ -36,10 +41,10 @@ def completion(content: str, finish_reason: str = "stop") -> httpx.Response:
 
 
 def test_adapter_uses_base_model_and_clamps_proposal() -> None:
-    seen = {}
+    payloads = []
 
     def upstream(request: httpx.Request) -> httpx.Response:
-        seen.update(json.loads(request.content))
+        payloads.append(json.loads(request.content))
         return completion(json.dumps({
             "axis": -9, "usurp": -1,
             "stance": "承諾陪伴",
@@ -50,10 +55,12 @@ def test_adapter_uses_base_model_and_clamps_proposal() -> None:
     adapter = NarrativeAdapter(GatewaySettings(), transport=httpx.MockTransport(upstream))
     result = asyncio.run(adapter.judge(REQUEST))
 
+    seen = payloads[0]
     assert seen["model"] == DEFAULT_BASE_MODEL
     assert seen["response_format"] == {"type": "json_object"}
     assert "敘事 AI" in seen["messages"][0]["content"]
     assert "我想留在鳴霖陪妳" in seen["messages"][1]["content"]
+    assert payloads[1]["messages"][0]["content"] == NARRATOR_VERIFICATION_PROMPT
     assert result.delta.axis == -5
     assert result.delta.usurp == 0
     assert result.delta.relation == {"vidalia": 10}
@@ -154,8 +161,8 @@ def test_adapter_rejudges_reason_delta_contradiction() -> None:
     result = asyncio.run(adapter.judge(REQUEST))
 
     assert len(payloads) == 2
-    assert len(payloads[1]["messages"]) == 4
-    assert "重新判讀" in payloads[1]["messages"][-1]["content"]
+    assert len(payloads[1]["messages"]) == 2
+    assert payloads[1]["messages"][0]["content"] == NARRATOR_VERIFICATION_PROMPT
     assert result.delta.relation == {}
 
 
@@ -216,7 +223,7 @@ def test_adapter_rejudges_nonzero_axis_without_valid_stance() -> None:
     result = asyncio.run(adapter.judge(REQUEST))
 
     assert len(payloads) == 2
-    assert "合法 stance" in payloads[1]["messages"][-1]["content"]
+    assert payloads[1]["messages"][0]["content"] == NARRATOR_VERIFICATION_PROMPT
     assert result.delta.axis == -3
     assert result.stance == "肯定永生或輪迴"
 
@@ -242,7 +249,7 @@ def test_adapter_verifies_a_zero_effect_decision_once() -> None:
     result = asyncio.run(adapter.judge(REQUEST))
 
     assert len(payloads) == 2
-    assert "確認這句話真的與關係值無關" in payloads[1]["messages"][-1]["content"]
+    assert payloads[1]["messages"][0]["content"] == NARRATOR_VERIFICATION_PROMPT
     assert result.delta.relation == {}
 
 
