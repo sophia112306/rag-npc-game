@@ -187,6 +187,38 @@ def _proposed_axis_has_no_valid_stance(text: str) -> bool:
     ) is None
 
 
+def _relation_reason_conflicts(
+    response: NarrativeAIResponse,
+    request: NarrativeAIRequest,
+) -> bool:
+    """Detect a signed relation delta that contradicts the model's own reason."""
+
+    target = request.target_npc_id
+    amount = response.delta.relation.get(target or "", 0)
+    if not amount or target != "menmesvento":
+        return False
+    reason = response.reason.replace(" ", "")
+    positive_markers = (
+        "死亡的意義",
+        "死亡有重量",
+        "輪迴的虛妄",
+        "反對輪迴",
+        "打破循環",
+        "木乃伊的痛苦",
+        "謙卑請教",
+    )
+    negative_markers = (
+        "長生不老",
+        "支持長生",
+        "支持輪迴",
+        "支持長老會",
+        "維持輪迴",
+    )
+    return (amount < 0 and any(marker in reason for marker in positive_markers)) or (
+        amount > 0 and any(marker in reason for marker in negative_markers)
+    )
+
+
 class NarrativeAdapter:
     def __init__(self, settings: GatewaySettings, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self.settings = settings
@@ -205,6 +237,7 @@ class NarrativeAdapter:
         ]
         last_result: NarrativeAIResponse | None = None
         last_no_effect_conflict = False
+        last_relation_conflict = False
         try:
             async with httpx.AsyncClient(
                 transport=self.transport, timeout=self.settings.upstream_timeout_seconds
@@ -229,6 +262,7 @@ class NarrativeAdapter:
                     raw_output = choice["message"]["content"]
                     last_result = parse_narrator_output(raw_output, request)
                     last_no_effect_conflict = _declares_no_effect(last_result) and _has_effect(last_result)
+                    last_relation_conflict = _relation_reason_conflicts(last_result, request)
                     invalid_axis = _proposed_axis_has_no_valid_stance(raw_output)
                     # The small base model is most likely to confuse NPC
                     # affinity with the ending axis, or to declare a targeted
@@ -238,6 +272,7 @@ class NarrativeAdapter:
                     verify_no_effect = attempt == 0 and _declares_no_effect(last_result)
                     if not (
                         last_no_effect_conflict
+                        or last_relation_conflict
                         or invalid_axis
                         or verify_axis
                         or verify_no_effect
@@ -258,6 +293,12 @@ class NarrativeAdapter:
                                 "只有明確表態才能給非零 axis，且必須選方向一致的合法 stance；"
                                 "否則 axis 是 0、stance 是 null。"
                             )
+                        if last_relation_conflict:
+                            corrections.append(
+                                "上一份 relation 的正負方向與 reason 自己描述的角色喜好相反。"
+                                "門梅司文托認同死亡的意義、反對長生與無盡輪迴；"
+                                "請依 reason 的實際語意修正 relation 方向。"
+                            )
                         if attempt == 0:
                             messages = build_narrator_verification_messages(request)
                         else:
@@ -274,6 +315,17 @@ class NarrativeAdapter:
             if last_no_effect_conflict:
                 return last_result.model_copy(
                     update={"delta": DeltaPayload(), "stance": None}, deep=True
+                )
+            if last_relation_conflict and request.target_npc_id:
+                safe_relations = dict(last_result.delta.relation)
+                safe_relations.pop(request.target_npc_id, None)
+                return last_result.model_copy(
+                    update={
+                        "delta": last_result.delta.model_copy(
+                            update={"relation": safe_relations}
+                        )
+                    },
+                    deep=True,
                 )
             return last_result
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:

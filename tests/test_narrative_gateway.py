@@ -253,6 +253,58 @@ def test_adapter_verifies_a_zero_effect_decision_once() -> None:
     assert result.delta.relation == {}
 
 
+def test_adapter_rejudges_relation_that_conflicts_with_its_own_reason() -> None:
+    request = REQUEST.model_copy(update={
+        "target_npc_id": "menmesvento",
+        "target_npc_name": "門梅司文托",
+        "player_message": "死亡讓生命有重量，沒有終點的輪迴只是逃避。",
+    })
+    calls = 0
+
+    def upstream(http_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        relation = -8 if calls < 3 else 6
+        return completion(json.dumps({
+            "reason": "肯定死亡的意義，指出輪迴的虛妄",
+            "axis": 0,
+            "stance": None,
+            "usurp": 0,
+            "relation": {"menmesvento": relation},
+        }, ensure_ascii=False))
+
+    adapter = NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=3),
+        transport=httpx.MockTransport(upstream),
+    )
+
+    result = asyncio.run(adapter.judge(request))
+
+    assert calls == 3
+    assert result.delta.relation == {"menmesvento": 6}
+
+
+def test_adapter_drops_persistent_relation_reason_conflict() -> None:
+    request = REQUEST.model_copy(update={
+        "target_npc_id": "menmesvento",
+        "target_npc_name": "門梅司文托",
+    })
+    adapter = NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=2),
+        transport=httpx.MockTransport(lambda _: completion(json.dumps({
+            "reason": "支持長生不老",
+            "axis": 0,
+            "stance": None,
+            "usurp": 0,
+            "relation": {"menmesvento": 7},
+        }, ensure_ascii=False))),
+    )
+
+    result = asyncio.run(adapter.judge(request))
+
+    assert result.delta.relation == {}
+
+
 def test_narrate_endpoint_returns_judgement() -> None:
     app = create_app(
         GatewaySettings(),
