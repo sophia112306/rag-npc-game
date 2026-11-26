@@ -375,6 +375,145 @@ def test_semantic_review_preserves_safe_character_dialogue() -> None:
     assert calls == 2
 
 
+def test_semantic_review_rewrites_an_evasive_related_non_answer() -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return completion("這個問題……我也想過，但我沒有答案。")
+        return semantic_review_completion(
+            "應由承受這段記憶的人自己決定是否放下。",
+            decision="rewrite",
+            issue="off_topic",
+        )
+
+    request = make_request("vidalia")
+    request["action_message"] = "痛苦的記憶應由誰決定是否放下？"
+    app = create_app(
+        replace(settings(), semantic_review_enabled=True),
+        transport=httpx.MockTransport(handler),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == "model_refined"
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "應由承受這段記憶的人自己決定是否放下。"
+    )
+
+
+def test_semantic_review_audit_records_model_and_guard_decision(tmp_path) -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return completion("泉水已經完全恢復，可以放心了。")
+        return semantic_review_completion(
+            "目前沒有足夠跡象確認泉水已恢復。",
+            decision="rewrite",
+            issue="unknown_lore",
+        )
+
+    audit_path = tmp_path / "review-audit.jsonl"
+    app = create_app(
+        replace(
+            settings(),
+            semantic_review_enabled=True,
+            review_audit_path=str(audit_path),
+            review_audit_hmac_key="gateway-audit-test-key",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_request("vidalia"))
+
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    assert response.status_code == 200
+    assert audit["reviewer_result"]["issue"] == "unknown_lore"
+    assert audit["review_output_dialogue"] == [
+        "這件事尚未有可核實的記錄。我不能把你的說法當成正式歷史。"
+    ]
+    assert audit["policy_reason"] == "review_issue:unknown_lore"
+    assert "gateway-test" not in audit_path.read_text(encoding="utf-8")
+
+
+def test_audit_records_when_adapter_fails_before_semantic_review(tmp_path) -> None:
+    audit_path = tmp_path / "review-audit.jsonl"
+    app = create_app(
+        replace(
+            settings(),
+            semantic_review_enabled=True,
+            upstream_max_attempts=1,
+            review_audit_path=str(audit_path),
+            review_audit_hmac_key="gateway-audit-test-key",
+        ),
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(500)
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/generate",
+            json=make_false_inventory_request(),
+        )
+
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == (
+        "post_generation_guard"
+    )
+    assert audit["review_status"] == "not_run"
+    assert audit["adapter_draft"] == []
+    assert audit["reviewer_attempts"] == 0
+    assert audit["review_error"] == (
+        "adapter_generation:ModelGatewayTransientError"
+    )
+
+
+def test_audit_classifies_reviewer_contract_failures(tmp_path) -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return completion("我會先確認親眼所見的痕跡。")
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"content": "not-json"}}
+                ]
+            },
+        )
+
+    audit_path = tmp_path / "review-audit.jsonl"
+    app = create_app(
+        replace(
+            settings(),
+            semantic_review_enabled=True,
+            review_audit_path=str(audit_path),
+            review_audit_hmac_key="gateway-audit-test-key",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_request("vidalia"))
+
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    assert response.status_code == 200
+    assert audit["review_status"] == "failed"
+    assert audit["review_error"] == "review_invalid_contract"
+    assert calls == 4
+
+
 def test_semantic_review_retries_third_person_speaker_narration() -> None:
     calls = 0
 

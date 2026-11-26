@@ -38,6 +38,23 @@ class GatewaySettings:
     # Production enables a base-model semantic review after each NPC draft.
     # Directly constructed test settings remain opt-in for focused unit tests.
     semantic_review_enabled: bool = False
+    # Raw dialogue may contain personal data.  Auditing is therefore disabled
+    # unless both an absolute destination and an HMAC key are configured.
+    review_audit_path: str | None = None
+    review_audit_hmac_key: str | None = None
+
+    def __post_init__(self) -> None:
+        if bool(self.review_audit_path) != bool(self.review_audit_hmac_key):
+            raise ValueError(
+                "review_audit_path and review_audit_hmac_key "
+                "must be configured together"
+            )
+        if self.review_audit_path and not os.path.isabs(self.review_audit_path):
+            raise ValueError("review_audit_path must be absolute")
+        if self.review_audit_hmac_key and len(self.review_audit_hmac_key) < 16:
+            raise ValueError(
+                "review_audit_hmac_key must contain at least 16 characters"
+            )
 
     @classmethod
     def from_env(cls) -> "GatewaySettings":
@@ -101,6 +118,21 @@ class GatewaySettings:
                 "NPC_SEMANTIC_REVIEW_ENABLED must be true or false"
             )
         semantic_review_enabled = semantic_review_text in {"1", "true", "yes"}
+        review_audit_path = os.getenv("NPC_REVIEW_AUDIT_PATH", "").strip()
+        review_audit_hmac_key = os.getenv(
+            "NPC_REVIEW_AUDIT_HMAC_KEY", ""
+        ).strip()
+        if bool(review_audit_path) != bool(review_audit_hmac_key):
+            raise ValueError(
+                "NPC_REVIEW_AUDIT_PATH and NPC_REVIEW_AUDIT_HMAC_KEY "
+                "must be configured together"
+            )
+        if review_audit_path and not os.path.isabs(review_audit_path):
+            raise ValueError("NPC_REVIEW_AUDIT_PATH must be absolute")
+        if review_audit_hmac_key and len(review_audit_hmac_key) < 16:
+            raise ValueError(
+                "NPC_REVIEW_AUDIT_HMAC_KEY must contain at least 16 characters"
+            )
         return cls(
             upstream_base_url=os.getenv(
                 "VLLM_BASE_URL", "http://127.0.0.1:8001/v1"
@@ -114,4 +146,6 @@ class GatewaySettings:
             upstream_max_attempts=max_attempts,
             narrator_model=narrator or None,
             semantic_review_enabled=semantic_review_enabled,
+            review_audit_path=review_audit_path or None,
+            review_audit_hmac_key=review_audit_hmac_key or None,
         )

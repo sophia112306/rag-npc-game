@@ -29,6 +29,8 @@ services:
       NPC_VLLM_MAX_CPU_LORAS: "${NPC_VLLM_MAX_CPU_LORAS:-8}"
       VLLM_UPSTREAM_MAX_ATTEMPTS: "${VLLM_UPSTREAM_MAX_ATTEMPTS:-3}"
       NPC_SEMANTIC_REVIEW_ENABLED: "${NPC_SEMANTIC_REVIEW_ENABLED:-true}"
+      NPC_REVIEW_AUDIT_PATH: "${NPC_REVIEW_AUDIT_PATH:-}"
+      NPC_REVIEW_AUDIT_HMAC_KEY: "${NPC_REVIEW_AUDIT_HMAC_KEY:-}"
     volumes:
       - ../..:/workspace/rag-npc-game
       - "${HF_CACHE_DIR:-/home/team115_1/.cache/huggingface}:/models/huggingface"

@@ -58,3 +58,6 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime sh -lc '
 標準化資料不會自動改變現有 LoRA 權重。只有在人工抽查情境沒有被錯誤改寫後，才把 `TRAINING_DATA_FILE` 指向標準化副本並於 Docker 訓練環境重訓。重訓完成後仍須保留舊權重、記錄新權重雜湊，並分開比較原始模型探針與 Gateway 守門後成績。
 
 GitHub 的 `train` 分支是另一套無共同祖先的 RAG 實驗，不是這八份 NPC LoRA 資料的統一格式來源，不應直接合併到 `main`。
+
+語意審查的資料蒐集、人工標註與獨立 Judge 資料集流程見
+[`REVIEW_DATA.md`](REVIEW_DATA.md)。

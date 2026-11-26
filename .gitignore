@@ -23,6 +23,8 @@ logs/
 
 # NPC 微調模型輸出
 training/outputs/
+training/review_audit/
+review-audit*.jsonl
 
 .venv_train/
 .venv-gpu/

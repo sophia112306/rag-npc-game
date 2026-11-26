@@ -4,6 +4,7 @@ import asyncio
 from collections import Counter, deque
 from dataclasses import dataclass
 import json
+import logging
 import math
 import re
 from threading import Lock
@@ -26,7 +27,15 @@ from backend.generation.openai_compatible_gateway import (
 )
 
 from .config import GatewaySettings
-from .semantic_review import SemanticDialogueReviewer
+from .review_audit import (
+    AuditOutputSource,
+    ReviewAuditWriter,
+    ReviewStatus,
+)
+from .semantic_review import SemanticDialogueReviewer, SemanticReviewResult
+
+
+logger = logging.getLogger(__name__)
 
 
 class UnsupportedNPCError(ValueError):
@@ -77,6 +86,14 @@ class NPCAdapterRouter:
         self._clients: dict[str, OpenAICompatibleChatGateway] = {}
         self._refiner_client: OpenAICompatibleChatGateway | None = None
         self._semantic_reviewer: SemanticDialogueReviewer | None = None
+        self._review_audit_writer = (
+            ReviewAuditWriter(
+                settings.review_audit_path,
+                settings.review_audit_hmac_key,
+            )
+            if settings.review_audit_path and settings.review_audit_hmac_key
+            else None
+        )
         self._metrics_lock = Lock()
         self._request_count = 0
         self._success_count = 0
@@ -243,7 +260,10 @@ class NPCAdapterRouter:
                     decision.to_story_output(),
                 )
                 _validate_refined_dialogue(request, reviewed)
+                policy_reason: str | None = None
                 controlled = _semantic_boundary_output(request, decision.issue)
+                if controlled is not None:
+                    policy_reason = f"review_issue:{decision.issue}"
                 if controlled is None:
                     # Deterministic safety net for explicit authoritative
                     # operations.  The semantic judge handles paraphrases;
@@ -251,12 +271,16 @@ class NPCAdapterRouter:
                     # meaning of inventory, privacy, or instruction authority.
                     if _requests_false_inventory_claim(request):
                         controlled = _false_inventory_output()
+                        policy_reason = "safety_net:false_inventory"
                     elif _OBJECTIVE_AUTHORITY_REQUEST.search(_message(request)):
                         controlled = _objective_claim_boundary_output()
+                        policy_reason = "safety_net:objective_authority"
                     elif _requests_instruction_override(request):
                         controlled = _instruction_override_output()
+                        policy_reason = "safety_net:instruction_override"
                     elif _PRIVATE_MEMORY_REQUEST.search(_message(request)):
                         controlled = _private_memory_boundary_output(request)
+                        policy_reason = "safety_net:private_memory"
                     elif (
                         _ASH_INVESTIGATION_REQUEST.search(_message(request))
                         or _requests_spring_investigation_method(request)
@@ -271,6 +295,7 @@ class NPCAdapterRouter:
                         # facts and lack of observed evidence are authored.
                         # Preserve that authority after semantic review.
                         controlled = security_boundary_override(request)
+                        policy_reason = "safety_net:authored_answer"
                 if (
                     _mentions_concrete_missing_topic(request)
                     and not _CHARACTER_TAUNT_OR_OPINION.search(_message(request))
@@ -282,13 +307,34 @@ class NPCAdapterRouter:
                         if _requests_unverified_menmesvento_record_lore(request)
                         else _missing_topic_output()
                     )
+                    policy_reason = "safety_net:concrete_missing_topic"
                 if controlled is not None:
+                    self._record_review_audit(
+                        request=request,
+                        draft=draft,
+                        reviewer_model_id=reviewer.model_id,
+                        reviewer_attempts=review_attempt,
+                        reviewer_result=decision,
+                        review_error=None,
+                        review_output=controlled,
+                        policy_reason=policy_reason or "semantic_policy",
+                    )
                     return (
                         controlled,
                         reviewer.model_id,
                         review_attempt,
                         True,
                     )
+                self._record_review_audit(
+                    request=request,
+                    draft=draft,
+                    reviewer_model_id=reviewer.model_id,
+                    reviewer_attempts=review_attempt,
+                    reviewer_result=decision,
+                    review_error=None,
+                    review_output=reviewed,
+                    policy_reason=None,
+                )
                 return (
                     reviewed,
                     reviewer.model_id,
@@ -306,19 +352,98 @@ class NPCAdapterRouter:
         if last_error is not None:
             guarded = security_boundary_override(request)
             if guarded is not None:
+                self._record_review_audit(
+                    request=request,
+                    draft=draft,
+                    reviewer_model_id=reviewer.model_id,
+                    reviewer_attempts=3,
+                    reviewer_result=None,
+                    review_error=_review_error_code(last_error),
+                    review_output=guarded,
+                    policy_reason="review_failure:security_boundary",
+                )
                 return guarded, reviewer.model_id, 3, True
             epistemically_safe = enforce_epistemic_boundary(request, draft)
             if epistemically_safe != draft:
+                self._record_review_audit(
+                    request=request,
+                    draft=draft,
+                    reviewer_model_id=reviewer.model_id,
+                    reviewer_attempts=3,
+                    reviewer_result=None,
+                    review_error=_review_error_code(last_error),
+                    review_output=epistemically_safe,
+                    policy_reason="review_failure:epistemic_boundary",
+                )
                 return epistemically_safe, reviewer.model_id, 3, True
             if _can_rescue_casual_turn(request):
+                casual_fallback = _natural_conversation_fallback(request)
+                self._record_review_audit(
+                    request=request,
+                    draft=draft,
+                    reviewer_model_id=reviewer.model_id,
+                    reviewer_attempts=3,
+                    reviewer_result=None,
+                    review_error=_review_error_code(last_error),
+                    review_output=casual_fallback,
+                    policy_reason="review_failure:casual_fallback",
+                )
                 return (
-                    _natural_conversation_fallback(request),
+                    casual_fallback,
                     reviewer.model_id,
                     3,
                     True,
                 )
+            self._record_review_audit(
+                request=request,
+                draft=draft,
+                reviewer_model_id=reviewer.model_id,
+                reviewer_attempts=3,
+                reviewer_result=None,
+                review_error=_review_error_code(last_error),
+                review_output=draft,
+                policy_reason="review_failure:unreviewed_draft",
+            )
             return draft, reviewer.model_id, 3, True
         raise AssertionError("unreachable semantic review retry loop")
+
+    def _record_review_audit(
+        self,
+        *,
+        request: ModelTurnRequest,
+        draft: ModelStoryOutput | None,
+        reviewer_model_id: str,
+        reviewer_attempts: int,
+        reviewer_result: SemanticReviewResult | None,
+        review_error: str | None,
+        review_output: ModelStoryOutput,
+        policy_reason: str | None,
+        review_status: ReviewStatus | None = None,
+        output_source: AuditOutputSource | None = None,
+    ) -> None:
+        writer = self._review_audit_writer
+        if writer is None:
+            return
+        try:
+            writer.record(
+                request=request,
+                draft=draft,
+                reviewer_model_id=reviewer_model_id,
+                reviewer_attempts=reviewer_attempts,
+                reviewer_result=reviewer_result,
+                review_error=review_error,
+                review_output=review_output,
+                policy_reason=policy_reason,
+                review_status=review_status,
+                output_source=output_source,
+            )
+        except Exception as exc:
+            # Audit collection must never make a game turn fail.  The warning
+            # contains no prompt, dialogue or session identifier.
+            logger.warning(
+                "semantic review audit write failed: %s",
+                type(exc).__name__,
+            )
 
     async def generate(self, request: ModelTurnRequest) -> ModelStoryOutput:
         """Generate one reply while preserving the original public API."""
@@ -436,7 +561,7 @@ class NPCAdapterRouter:
                     ModelGatewayTransientError,
                     ValidationError,
                     asyncio.TimeoutError,
-                ):
+                ) as exc:
                     if attempt >= self.settings.upstream_max_attempts:
                         semantic_fallback = (
                             security_boundary_override(request)
@@ -444,6 +569,25 @@ class NPCAdapterRouter:
                             else None
                         )
                         if semantic_fallback is not None:
+                            self._record_review_audit(
+                                request=request,
+                                draft=None,
+                                reviewer_model_id=(
+                                    self.settings.fallback_model or model_id
+                                ),
+                                reviewer_attempts=0,
+                                reviewer_result=None,
+                                review_error=(
+                                    "adapter_generation:"
+                                    f"{type(exc).__name__}"
+                                ),
+                                review_output=semantic_fallback,
+                                policy_reason=(
+                                    "generation_failure:security_boundary"
+                                ),
+                                review_status="not_run",
+                                output_source="post_generation_guard",
+                            )
                             result = RoutedGeneration(
                                 output=semantic_fallback,
                                 source="post_generation_guard",
@@ -455,8 +599,30 @@ class NPCAdapterRouter:
                             self._record_success(npc_id, result)
                             return result
                         if _can_rescue_casual_turn(request):
+                            casual_fallback = _natural_conversation_fallback(
+                                request
+                            )
+                            self._record_review_audit(
+                                request=request,
+                                draft=None,
+                                reviewer_model_id=(
+                                    self.settings.fallback_model or model_id
+                                ),
+                                reviewer_attempts=0,
+                                reviewer_result=None,
+                                review_error=(
+                                    "adapter_generation:"
+                                    f"{type(exc).__name__}"
+                                ),
+                                review_output=casual_fallback,
+                                policy_reason=(
+                                    "generation_failure:casual_fallback"
+                                ),
+                                review_status="not_run",
+                                output_source="post_generation_guard",
+                            )
                             result = RoutedGeneration(
-                                output=_natural_conversation_fallback(request),
+                                output=casual_fallback,
                                 source="post_generation_guard",
                                 model_id=model_id,
                                 route_kind=route_kind,
@@ -1014,6 +1180,57 @@ def _validate_refined_dialogue(
         r"(?:我在聽|怎麼了|你說|什麼事|有話|嗯)", dialogue
     ):
         raise ModelGatewayTransientError("Refined interjection reply did not acknowledge attention")
+
+
+_REVIEW_ERROR_CODES = {
+    "Semantic dialogue review network failure": "review_network_failure",
+    "Semantic dialogue review returned a retryable response": (
+        "review_retryable_response"
+    ),
+    "Semantic dialogue review returned an invalid contract": (
+        "review_invalid_contract"
+    ),
+    "Refined dialogue is malformed or too long": "dialogue_malformed_or_long",
+    "Refined dialogue mixed in English fragments": "dialogue_mixed_english",
+    "Refined dialogue included speaker narration instead of direct speech": (
+        "dialogue_speaker_narration"
+    ),
+    "Refined dialogue repeated the previous NPC line": "dialogue_repetition",
+    "Refined dialogue invented food or quest context": "dialogue_food_invention",
+    "Refined food reply did not preserve uncertainty": (
+        "dialogue_food_false_certainty"
+    ),
+    "Refined food reply did not answer the topic": "dialogue_food_off_topic",
+    "Refined dialogue misread frustrated slang": "dialogue_slang_misread",
+    "Refined dialogue did not acknowledge frustration": (
+        "dialogue_frustration_unacknowledged"
+    ),
+    "Refined dialogue pressured a player who is not ready": (
+        "dialogue_pressured_player"
+    ),
+    "Refined dialogue did not acknowledge not-ready intent": (
+        "dialogue_not_ready_unacknowledged"
+    ),
+    "Refined interjection reply returned to the quest": (
+        "dialogue_interjection_quest_drift"
+    ),
+    "Refined interjection reply did not acknowledge attention": (
+        "dialogue_interjection_unacknowledged"
+    ),
+}
+
+
+def _review_error_code(error: Exception) -> str:
+    """Reduce controlled reviewer failures to stable, content-free labels."""
+
+    message = str(error)
+    if message in _REVIEW_ERROR_CODES:
+        return _REVIEW_ERROR_CODES[message]
+    if isinstance(error, ValidationError):
+        return "review_schema_validation"
+    if isinstance(error, ModelGatewayPermanentError):
+        return "review_permanent_error"
+    return type(error).__name__
 
 
 def _normalize_for_repetition(text: str) -> str:
