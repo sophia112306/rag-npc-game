@@ -22,6 +22,14 @@ from backend.generation.planner import GatewayStoryPlanner  # noqa: E402
 from backend.main import create_app  # noqa: E402
 
 
+OPENING_CHOICES = (
+    "meet_andre",
+    "walk_to_council",
+    "meet_vidalia",
+    "ask_for_task",
+)
+
+
 ENDING_ROUTES: dict[str, tuple[str, ...]] = {
     "long_sleep": (
         "ask_location",
@@ -51,7 +59,6 @@ ENDING_ROUTES: dict[str, tuple[str, ...]] = {
         "choose_long_sleep",
     ),
     "wake": (
-        "ask_for_task",
         "travel_to_minglin_rune_grove",
         "read_ember_runes",
         "enter_lieyi_plains",
@@ -369,6 +376,17 @@ def main() -> int:
             for route_name, choice_ids in ENDING_ROUTES.items():
                 session_id = f"live-story-{route_name}"
                 state = _start(client, session_id)
+
+                # Every ending starts after the player-visible authored
+                # opening.  Keep this explicit so the evaluator cannot skip
+                # the same gates enforced by the production turn API.
+                for choice_id in OPENING_CHOICES:
+                    state, _ = _submit_choice(
+                        client,
+                        session_id,
+                        state,
+                        choice_id,
+                    )
 
                 if route_name == "long_sleep":
                     for npc_id in ("vidalia", "andre"):
