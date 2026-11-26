@@ -319,11 +319,14 @@ class GameOrchestrator:
         judged_state = state.model_copy(deep=True)
         applied = StateRules.apply_dialogue_delta(
             judged_state,
-            axis_delta=judgement.delta.axis,
+            # Free-form model judgement may shape affinity and hostility, but
+            # it is not authoritative for story direction.  Axis, phase and
+            # endings advance only through validated authored choices/events.
+            axis_delta=0,
             usurp_delta=judgement.delta.usurp,
             relation_deltas=judgement.delta.relation,
             player_message=action.message,
-            axis_stance=judgement.stance,
+            axis_stance=None,
         )
         logger.info(
             "Narrative delta session=%s proposed=%s stance=%s applied=%s duplicate=%s reason=%s",

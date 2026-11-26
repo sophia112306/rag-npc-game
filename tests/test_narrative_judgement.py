@@ -92,7 +92,7 @@ def talk(message: str, npc_id: str = "vidalia", version: int = 1) -> PlayerActio
 
 
 @pytest.mark.asyncio
-async def test_free_dialogue_applies_clamped_delta_before_npc_reply(tmp_path) -> None:
+async def test_free_dialogue_applies_affinity_but_not_story_axis_before_npc_reply(tmp_path) -> None:
     judge = StubJudge(judgement(axis=-3, relation={"vidalia": 5, "seth": 9}))
     planner = RecordingPlanner()
     repository, orchestrator = await make_orchestrator(tmp_path, judge, planner)
@@ -100,7 +100,7 @@ async def test_free_dialogue_applies_clamped_delta_before_npc_reply(tmp_path) ->
     await orchestrator.process_turn(talk("我想留在鳴霖陪妳"))
 
     stored = await repository.get_state("narrative-session")
-    assert stored.axis == -3
+    assert stored.axis == 0
     assert stored.npc_states["vidalia"].relation == 35
     assert stored.npc_states["seth"].relation == 30
     assert stored.phase_relation_dialogue_gain["vidalia"] == 5
@@ -121,7 +121,7 @@ class SequenceJudge:
 
 
 @pytest.mark.asyncio
-async def test_different_stances_accumulate_on_the_axis(tmp_path) -> None:
+async def test_free_dialogue_stances_cannot_accumulate_on_story_axis(tmp_path) -> None:
     judge = SequenceJudge(
         judgement(axis=-3, stance="尋求安寧"),
         judgement(axis=-3, stance="承諾陪伴"),
@@ -132,12 +132,12 @@ async def test_different_stances_accumulate_on_the_axis(tmp_path) -> None:
     await orchestrator.process_turn(talk("我想留下來陪妳", version=2))
 
     stored = await repository.get_state("narrative-session")
-    assert stored.axis == -6
-    assert stored.recent_axis_stances == ["尋求安寧", "承諾陪伴"]
+    assert stored.axis == 0
+    assert stored.recent_axis_stances == [None, None]
 
 
 @pytest.mark.asyncio
-async def test_invalid_stance_falls_back_to_the_sign_rule(tmp_path) -> None:
+async def test_invalid_stance_still_cannot_change_authoritative_axis(tmp_path) -> None:
     judge = SequenceJudge(
         judgement(axis=-3, stance="喜歡下雨"),
         judgement(axis=-3, stance="主張打破循環"),  # 方向與主軸不符
@@ -148,7 +148,7 @@ async def test_invalid_stance_falls_back_to_the_sign_rule(tmp_path) -> None:
     await orchestrator.process_turn(talk("我想一直待在這裡", version=2))
 
     stored = await repository.get_state("narrative-session")
-    assert stored.axis == -3  # 兩次都沒有有效類別，同一方向只算第一次
+    assert stored.axis == 0
 
 
 @pytest.mark.asyncio
