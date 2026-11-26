@@ -177,6 +177,21 @@ class NPCAdapterRouter:
                 if refiner_attempt < 3:
                     await asyncio.sleep(0.05)
         if last_error is not None:
+            if self.settings.semantic_review_enabled:
+                guarded = security_boundary_override(request)
+                if guarded is not None:
+                    return guarded, model_id, 3, True
+                epistemically_safe = enforce_epistemic_boundary(request, draft)
+                if epistemically_safe != draft:
+                    return epistemically_safe, model_id, 3, True
+                if _can_rescue_casual_turn(request):
+                    return (
+                        _natural_conversation_fallback(request),
+                        model_id,
+                        3,
+                        True,
+                    )
+                return draft, model_id, 3, True
             return _natural_conversation_fallback(request), model_id, 3, True
         raise AssertionError("unreachable refiner retry loop")
 
@@ -201,7 +216,16 @@ class NPCAdapterRouter:
         )
         upstream_attempts = 0
         try:
-            security_override = security_boundary_override(request)
+            # In production, semantic review replaces keyword-based preemption:
+            # the NPC adapter drafts the reply and the shared base model judges
+            # paraphrases, negation and context before anything is displayed.
+            # The deterministic override remains a fail-closed fallback when
+            # semantic review is disabled or the model service is exhausted.
+            security_override = (
+                None
+                if self.settings.semantic_review_enabled
+                else security_boundary_override(request)
+            )
             if security_override is not None:
                 result = RoutedGeneration(
                     output=security_override,
@@ -226,7 +250,10 @@ class NPCAdapterRouter:
                     refiner_model_id = None
                     refiner_attempts = 0
                     refiner_degraded = False
-                    if _needs_dialogue_refinement(request, sanitized_output):
+                    if (
+                        self.settings.semantic_review_enabled
+                        or _needs_dialogue_refinement(request, sanitized_output)
+                    ):
                         refined = await self._refine_dialogue(request, sanitized_output)
                         if refined is not None:
                             (
@@ -270,6 +297,22 @@ class NPCAdapterRouter:
                     asyncio.TimeoutError,
                 ):
                     if attempt >= self.settings.upstream_max_attempts:
+                        semantic_fallback = (
+                            security_boundary_override(request)
+                            if self.settings.semantic_review_enabled
+                            else None
+                        )
+                        if semantic_fallback is not None:
+                            result = RoutedGeneration(
+                                output=semantic_fallback,
+                                source="post_generation_guard",
+                                model_id=model_id,
+                                route_kind=route_kind,
+                                upstream_attempts=attempt,
+                                latency_ms=(perf_counter() - started_at) * 1000,
+                            )
+                            self._record_success(npc_id, result)
+                            return result
                         if _can_rescue_casual_turn(request):
                             result = RoutedGeneration(
                                 output=_natural_conversation_fallback(request),

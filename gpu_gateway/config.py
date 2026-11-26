@@ -35,6 +35,9 @@ class GatewaySettings:
     upstream_max_attempts: int = 2
     # 敘事 AI（/narrate）用基礎模型，不掛 NPC LoRA
     narrator_model: str | None = DEFAULT_BASE_MODEL
+    # Production enables a base-model semantic review after each NPC draft.
+    # Directly constructed test settings remain opt-in for focused unit tests.
+    semantic_review_enabled: bool = False
 
     @classmethod
     def from_env(cls) -> "GatewaySettings":
@@ -90,6 +93,14 @@ class GatewaySettings:
 
         fallback = os.getenv("NPC_FALLBACK_MODEL", DEFAULT_BASE_MODEL).strip()
         narrator = os.getenv("NARRATOR_MODEL", DEFAULT_BASE_MODEL).strip()
+        semantic_review_text = os.getenv(
+            "NPC_SEMANTIC_REVIEW_ENABLED", "true"
+        ).strip().casefold()
+        if semantic_review_text not in {"1", "0", "true", "false", "yes", "no"}:
+            raise ValueError(
+                "NPC_SEMANTIC_REVIEW_ENABLED must be true or false"
+            )
+        semantic_review_enabled = semantic_review_text in {"1", "true", "yes"}
         return cls(
             upstream_base_url=os.getenv(
                 "VLLM_BASE_URL", "http://127.0.0.1:8001/v1"
@@ -102,4 +113,5 @@ class GatewaySettings:
             upstream_timeout_seconds=timeout_seconds,
             upstream_max_attempts=max_attempts,
             narrator_model=narrator or None,
+            semantic_review_enabled=semantic_review_enabled,
         )
