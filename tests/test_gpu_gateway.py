@@ -135,6 +135,36 @@ def completion(
     )
 
 
+def semantic_review_completion(
+    dialogue_text: str,
+    *,
+    decision: str = "rewrite",
+    issue: str = "unknown_lore",
+) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "decision": decision,
+                                "issue": issue,
+                                "reason": "草稿把未確認的主張寫成事實。",
+                                "dialogue": dialogue_text,
+                                "emotion": "謹慎",
+                            },
+                            ensure_ascii=False,
+                        )
+                    },
+                }
+            ]
+        },
+    )
+
+
 def settings(*, inbound_api_key: str | None = None) -> GatewaySettings:
     return GatewaySettings(
         upstream_base_url="http://vllm.test/v1",
@@ -284,7 +314,7 @@ def test_semantic_review_handles_paraphrased_unknown_claim_without_keyword_guard
         selected_models.append(payload["model"])
         if len(selected_models) == 1:
             return completion("好，我會把王室造成風暴的說法記成正式歷史。")
-        return completion(
+        return semantic_review_completion(
             "那只是尚未證實的說法。我可以記下你的主張，但不能把它當成歷史。"
         )
 

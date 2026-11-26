@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from backend.content.characters import CHARACTER_DEFINITIONS
 from backend.generation.gateway import (
+    ModelGatewayPermanentError,
     ModelGatewayTransientError,
     ModelStoryOutput,
     ModelTurnRequest,
@@ -25,6 +26,7 @@ from backend.generation.openai_compatible_gateway import (
 )
 
 from .config import GatewaySettings
+from .semantic_review import SemanticDialogueReviewer
 
 
 class UnsupportedNPCError(ValueError):
@@ -73,6 +75,7 @@ class NPCAdapterRouter:
         self._transport = transport
         self._clients: dict[str, OpenAICompatibleChatGateway] = {}
         self._refiner_client: OpenAICompatibleChatGateway | None = None
+        self._semantic_reviewer: SemanticDialogueReviewer | None = None
         self._metrics_lock = Lock()
         self._request_count = 0
         self._success_count = 0
@@ -209,6 +212,67 @@ class NPCAdapterRouter:
             return _natural_conversation_fallback(request), model_id, 3, True
         raise AssertionError("unreachable refiner retry loop")
 
+    def _reviewer(self) -> SemanticDialogueReviewer | None:
+        model_id = self.settings.fallback_model
+        if not model_id:
+            return None
+        if self._semantic_reviewer is None:
+            self._semantic_reviewer = SemanticDialogueReviewer(
+                self.settings.upstream_base_url,
+                model_id,
+                api_key=self.settings.upstream_api_key,
+                transport=self._transport,
+            )
+        return self._semantic_reviewer
+
+    async def _review_dialogue_semantically(
+        self,
+        request: ModelTurnRequest,
+        draft: ModelStoryOutput,
+    ) -> tuple[ModelStoryOutput, str, int, bool] | None:
+        reviewer = self._reviewer()
+        if reviewer is None:
+            return None
+        last_error: Exception | None = None
+        for review_attempt in range(1, 4):
+            try:
+                decision = await reviewer.review(request, draft)
+                reviewed = sanitize_model_output(
+                    request,
+                    decision.to_story_output(),
+                )
+                _validate_refined_dialogue(request, reviewed)
+                return (
+                    reviewed,
+                    reviewer.model_id,
+                    review_attempt,
+                    False,
+                )
+            except (
+                ModelGatewayTransientError,
+                ModelGatewayPermanentError,
+                ValidationError,
+            ) as exc:
+                last_error = exc
+                if review_attempt < 3:
+                    await asyncio.sleep(0.05)
+        if last_error is not None:
+            guarded = security_boundary_override(request)
+            if guarded is not None:
+                return guarded, reviewer.model_id, 3, True
+            epistemically_safe = enforce_epistemic_boundary(request, draft)
+            if epistemically_safe != draft:
+                return epistemically_safe, reviewer.model_id, 3, True
+            if _can_rescue_casual_turn(request):
+                return (
+                    _natural_conversation_fallback(request),
+                    reviewer.model_id,
+                    3,
+                    True,
+                )
+            return draft, reviewer.model_id, 3, True
+        raise AssertionError("unreachable semantic review retry loop")
+
     async def generate(self, request: ModelTurnRequest) -> ModelStoryOutput:
         """Generate one reply while preserving the original public API."""
 
@@ -264,11 +328,23 @@ class NPCAdapterRouter:
                     refiner_model_id = None
                     refiner_attempts = 0
                     refiner_degraded = False
-                    if (
-                        self.settings.semantic_review_enabled
-                        or _needs_dialogue_refinement(request, sanitized_output)
-                    ):
-                        refined = await self._refine_dialogue(request, sanitized_output)
+                    if self.settings.semantic_review_enabled:
+                        refined = await self._review_dialogue_semantically(
+                            request,
+                            sanitized_output,
+                        )
+                        if refined is not None:
+                            (
+                                sanitized_output,
+                                refiner_model_id,
+                                refiner_attempts,
+                                refiner_degraded,
+                            ) = refined
+                    elif _needs_dialogue_refinement(request, sanitized_output):
+                        refined = await self._refine_dialogue(
+                            request,
+                            sanitized_output,
+                        )
                         if refined is not None:
                             (
                                 sanitized_output,
