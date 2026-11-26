@@ -187,6 +187,40 @@ def test_adapter_fail_closes_persistent_reason_delta_contradiction() -> None:
     assert result.stance is None
 
 
+def test_adapter_rejudges_nonzero_axis_without_valid_stance() -> None:
+    payloads = []
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        payloads.append(json.loads(request.content))
+        if len(payloads) == 1:
+            return completion(json.dumps({
+                "reason": "想要長生，偏守夢",
+                "axis": -3,
+                "stance": None,
+                "usurp": 0,
+                "relation": {"menmesvento": -5},
+            }, ensure_ascii=False))
+        return completion(json.dumps({
+            "reason": "想要長生，偏守夢",
+            "axis": -3,
+            "stance": "肯定永生或輪迴",
+            "usurp": 0,
+            "relation": {"menmesvento": -5},
+        }, ensure_ascii=False))
+
+    adapter = NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=2),
+        transport=httpx.MockTransport(upstream),
+    )
+
+    result = asyncio.run(adapter.judge(REQUEST))
+
+    assert len(payloads) == 2
+    assert "合法 stance" in payloads[1]["messages"][-1]["content"]
+    assert result.delta.axis == -3
+    assert result.stance == "肯定永生或輪迴"
+
+
 def test_narrate_endpoint_returns_judgement() -> None:
     app = create_app(
         GatewaySettings(),

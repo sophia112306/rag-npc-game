@@ -49,7 +49,7 @@ NARRATOR_SYSTEM_PROMPT = """你是遊戲《龍夢》的敘事 AI。你只判讀�
 
 關係值 relation（每個角色 -10～+10），只能使用 andre、vidalia、menmesvento。通常只評價正在對話的角色。幅度：一般友善或符合角色喜好 +3～5，非常契合 +6～10；輕微冒犯 -3～-5，嘲弄、威脅等嚴重冒犯 -6～-10。問路、客觀資訊、閒聊、與角色喜好無關的話一律 0，不要為了禮貌加分。詢問角色本人的過去、旅行經歷或感受是深入對話，不是一般問資訊。
 - andre（安德烈）：鳴霖的精靈，理性務實的調查者。上升：理性探究、一起調查真相、談現實與屏障的邊界。下降：逃避消極（例如「反正都會毀掉」「調查沒用」）、毀滅欲望。
-- vidalia（維達利亞）：鳴霖的古老精靈，習慣森林永恆的靜謐，對外來者與未記載之物好奇。上升：真誠深入的對話與陪伴、聊她的過去與旅行、說出她不知道的事、喜歡鳴霖的平靜或想留下來。下降：冷漠、嘲弄（例如嘲笑精靈不懂死亡）、威脅、急著破壞結界。
+- vidalia（維達利亞）：鳴霖的古老精靈，習慣森林永恆的靜謐，對外來者與未記載之物好奇。上升：真誠深入的對話與陪伴、聊她的過去與旅行、說出她不知道的事、喜歡鳴霖的平靜或想留下來。下降：冷漠、嘲弄（例如嘲笑精靈不懂死亡）、威脅、急著破壞結界。特別注意：真誠詢問她本人去過哪裡、旅行見聞或過去經歷，relation 應為 +3～5，不得判成一般問資訊或閒聊。
 - menmesvento（門梅司文托）：流塵谷的隱者，主張打破無盡輪迴、追求真實的死亡與涅槃，反對長生。上升：同理死亡的必然與生命的沉重、批判長生與輪迴的虛妄、支持打破循環、謙卑地請教（例如問木乃伊的痛苦或生死簿）。下降：嚮往長生不老、主張維持輪迴、支持長老會抽泉或科技操控、傲慢地命令。
 
 範例（只示範格式與幅度）：
@@ -148,6 +148,17 @@ def _has_effect(response: NarrativeAIResponse) -> bool:
     return bool(delta.axis or delta.usurp or any(delta.relation.values()))
 
 
+def _proposed_axis_has_no_valid_stance(text: str) -> bool:
+    payload = _extract_json_object(text)
+    delta = payload.get("delta") if isinstance(payload.get("delta"), dict) else payload
+    proposed_axis = _clamp(_to_int(delta.get("axis", 0)), -5, 5)
+    if proposed_axis == 0:
+        return False
+    return valid_axis_stance(
+        payload.get("stance", delta.get("stance")), proposed_axis
+    ) is None
+
+
 class NarrativeAdapter:
     def __init__(self, settings: GatewaySettings, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self.settings = settings
@@ -165,6 +176,7 @@ class NarrativeAdapter:
             {"role": "user", "content": build_narrator_user_prompt(request)},
         ]
         last_result: NarrativeAIResponse | None = None
+        last_no_effect_conflict = False
         try:
             async with httpx.AsyncClient(
                 transport=self.transport, timeout=self.settings.upstream_timeout_seconds
@@ -188,25 +200,35 @@ class NarrativeAdapter:
                         raise ValueError("Narrator response was truncated")
                     raw_output = choice["message"]["content"]
                     last_result = parse_narrator_output(raw_output, request)
-                    if not (_declares_no_effect(last_result) and _has_effect(last_result)):
+                    last_no_effect_conflict = _declares_no_effect(last_result) and _has_effect(last_result)
+                    invalid_axis = _proposed_axis_has_no_valid_stance(raw_output)
+                    if not (last_no_effect_conflict or invalid_axis):
                         return last_result
                     if attempt + 1 < self.settings.upstream_max_attempts:
+                        correction = (
+                            "上一份 JSON 的 reason 說無關、無變化或不影響，卻給了非零數值。"
+                            "請重新判讀原句：若其實有影響就修正 reason；若確實無關，"
+                            "axis、usurp 與所有 relation 都必須是 0。"
+                            if last_no_effect_conflict
+                            else
+                            "上一份 JSON 給了非零 axis，卻沒有方向一致且完全符合定義的 stance。"
+                            "請重新判讀原句：若主角有明確世界觀立場，選一個合法 stance；"
+                            "否則 axis 必須是 0、stance 必須是 null。"
+                        )
                         messages.extend([
                             {"role": "assistant", "content": raw_output},
                             {
                                 "role": "user",
-                                "content": (
-                                    "上一份 JSON 的 reason 說無關、無變化或不影響，卻給了非零數值。"
-                                    "請重新判讀原句：若其實有影響就修正 reason；若確實無關，"
-                                    "axis、usurp 與所有 relation 都必須是 0。只輸出修正後 JSON。"
-                                ),
+                                "content": correction + "只輸出修正後 JSON。",
                             },
                         ])
             # Persistent contradiction is fail-closed: the dialogue can still
             # continue, but this turn cannot mutate relationship/story values.
             assert last_result is not None
-            return last_result.model_copy(
-                update={"delta": DeltaPayload(), "stance": None}, deep=True
-            )
+            if last_no_effect_conflict:
+                return last_result.model_copy(
+                    update={"delta": DeltaPayload(), "stance": None}, deep=True
+                )
+            return last_result
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:
             raise ModelGatewayTransientError("Narrator model inference failed") from exc
