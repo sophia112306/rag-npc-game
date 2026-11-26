@@ -545,6 +545,12 @@ def test_next_model_turn_receives_committed_memory_and_commitment(tmp_path) -> N
         "observed_event",
     }
     assert any("我答應帶回地圖碎片" in memory.content for memory in next_context.memories)
+    assert [message.role for message in next_context.recent_dialogue] == [
+        "player",
+        "npc",
+    ]
+    assert next_context.recent_dialogue[0].text == "我答應帶回地圖碎片"
+    assert next_context.recent_dialogue[1].text == "我會記得你的承諾。"
 
 
 def test_dynamic_quest_is_offered_persisted_and_carried_forward(tmp_path) -> None:

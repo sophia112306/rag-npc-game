@@ -7,6 +7,7 @@ from backend.content.rag_corpus import public_knowledge_for_npc
 from backend.database.models import (
     CharacterDefinitionRecord,
     CommitmentRecord,
+    DialogueRecord,
     KnowledgeRecord,
     MemoryRecord,
     NPCGoalRecord,
@@ -14,6 +15,7 @@ from backend.database.models import (
 )
 from backend.schemas.content import (
     CharacterDefinition,
+    ConversationMessage,
     KnowledgeItem,
     KnowledgeRecordInput,
     MemoryItem,
@@ -214,6 +216,22 @@ class NPCContextRepository:
             )
             knowledge = list(knowledge_result.scalars())
             memories = list(memory_result.scalars())
+            dialogue_result = await database.execute(
+                select(DialogueRecord)
+                .where(
+                    DialogueRecord.session_id == session_id,
+                    DialogueRecord.speaker_id == npc_id,
+                    DialogueRecord.speaker_type == "npc",
+                    DialogueRecord.visibility == "player",
+                    DialogueRecord.turn_number <= current_turn,
+                )
+                .order_by(
+                    DialogueRecord.turn_number.desc(),
+                    DialogueRecord.position.desc(),
+                )
+                .limit(6)
+            )
+            npc_replies = list(dialogue_result.scalars())
             goals_result = await database.execute(
                 select(NPCGoalRecord)
                 .where(
@@ -312,6 +330,7 @@ class NPCContextRepository:
                 )
                 for item in memories
             ],
+            recent_dialogue=self._recent_dialogue(memories, npc_replies),
             active_goals=[
                 NPCGoalItem(
                     goal_id=item.goal_id,
@@ -360,3 +379,39 @@ class NPCContextRepository:
             ],
             missing_data=missing_data,
         )
+
+    @staticmethod
+    def _recent_dialogue(
+        memories: list[MemoryRecord],
+        npc_replies: list[DialogueRecord],
+    ) -> list[ConversationMessage]:
+        """Pair recent player input with persisted NPC replies in turn order."""
+
+        messages = [
+            ConversationMessage(
+                role="player",
+                text=NPCContextRepository._player_text(item.content)[:1_000],
+                turn_number=item.occurred_turn,
+            )
+            for item in memories
+            if item.memory_type == "interaction"
+        ][-6:]
+        messages.extend(
+            ConversationMessage(
+                role="npc",
+                text=item.text[:1_000],
+                turn_number=item.turn_number,
+            )
+            for item in npc_replies
+        )
+        messages.sort(
+            key=lambda item: (item.turn_number, 0 if item.role == "player" else 1)
+        )
+        return messages[-12:]
+
+    @staticmethod
+    def _player_text(memory: str) -> str:
+        prefix, suffix = "玩家說：「", "」"
+        if memory.startswith(prefix) and memory.endswith(suffix):
+            return memory[len(prefix) : -len(suffix)]
+        return memory

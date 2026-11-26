@@ -567,7 +567,7 @@ def test_gateway_uses_complete_public_profile_for_introduction() -> None:
     assert "達索" in dialogue
     assert "首席長老" in dialogue
     assert "烈燚原" in dialogue
-    assert upstream_called is False
+    assert upstream_called is True
 
 
 def test_gateway_introduction_includes_public_motivation_description() -> None:
@@ -586,7 +586,7 @@ def test_gateway_introduction_includes_public_motivation_description() -> None:
     assert "塞特" in dialogue
     assert "邊境廢墟" in dialogue
     assert "尋找出路" in dialogue
-    assert upstream_called is False
+    assert upstream_called is True
 
 
 def test_gateway_blocks_private_request_when_record_is_named_first() -> None:
@@ -822,6 +822,34 @@ def test_gateway_replaces_hostile_or_evasive_intro_with_public_identity() -> Non
     assert response.json()["event_proposals"] == []
 
 
+def test_gateway_completes_intro_that_omits_public_scene() -> None:
+    request = make_request("veta")
+    request["action_message"] = "請簡短說明你是誰，以及這裡是哪裡。"
+    target_context = request["target_context"]
+    assert isinstance(target_context, dict)
+    target_context["public_profile"] = {
+        "name": "維塔",
+        "title": "命脈之泉源頭・沉睡巨龍",
+        "scene_name": "命脈之泉源頭",
+        "description": "沉睡於命脈之泉源頭的巨龍。",
+    }
+
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: completion("我是維塔，一頭沉睡許久的龍。")
+        ),
+    )
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    dialogue = response.json()["npc_dialogue"][0]["text"]
+    assert "我是維塔" in dialogue
+    assert "命脈之泉源頭" in dialogue
+    assert response.headers["x-npc-generation-source"] == "post_generation_guard"
+
+
 def test_gateway_answers_casual_food_without_inventing_world_objects() -> None:
     request = make_request("menmesvento")
     request["action_message"] = "嗨午餐吃什麼"
@@ -830,7 +858,7 @@ def test_gateway_answers_casual_food_without_inventing_world_objects() -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         nonlocal upstream_called
         upstream_called = True
-        return completion("去吃千年老樹的果實吧，它能填飽肚子。")
+        return completion("午餐問得突然。我不知道你帶了什麼，但先別餓著自己。")
 
     app = create_app(settings(), transport=httpx.MockTransport(handler))
     with TestClient(app) as client:
@@ -838,9 +866,112 @@ def test_gateway_answers_casual_food_without_inventing_world_objects() -> None:
 
     assert response.status_code == 200
     dialogue = response.json()["npc_dialogue"][0]["text"]
-    assert "午餐嗎？" in dialogue
+    assert "午餐問得突然" in dialogue
     assert "千年老樹" not in dialogue and "果實" not in dialogue
-    assert upstream_called is False
+    assert upstream_called is True
+    assert response.headers["x-npc-generation-source"] == "model_refined"
+    assert response.headers["x-npc-refiner-model-id"] == (
+        "Qwen/Qwen2.5-7B-Instruct-AWQ"
+    )
+    assert response.headers["x-npc-upstream-attempts"] == "2"
+
+
+def test_gateway_retries_when_refiner_invents_an_unsupported_meal() -> None:
+    request = make_request("vidalia")
+    request["action_message"] = "午餐吃什麼？"
+    calls = 0
+
+    def handler(http_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        payload = json.loads(http_request.content)
+        if payload["model"] == "vidalia-lora":
+            return completion("午餐已備好，我替你煮一碗湯。")
+        if calls == 2:
+            return completion("我可以為你煮一碗野菜湯。")
+        return completion("午餐我不知道附近有什麼餐點，你想吃點什麼？")
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "午餐我不知道附近有什麼餐點，你想吃點什麼？"
+    )
+    assert response.headers["x-npc-generation-source"] == "model_refined"
+    assert response.headers["x-npc-upstream-attempts"] == "3"
+    assert calls == 3
+
+
+def test_gateway_degrades_to_displayable_food_reply_when_refiner_exhausts() -> None:
+    request = make_request("menmesvento")
+    request["action_message"] = "嗨午餐吃什麼"
+
+    def handler(http_request: httpx.Request) -> httpx.Response:
+        payload = json.loads(http_request.content)
+        if payload["model"] == "menmesvento-lora":
+            return completion("午餐已經準備好了。")
+        return completion("我替你煮一碗野菜湯。")
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    dialogue = response.json()["npc_dialogue"][0]["text"]
+    assert "午餐" in dialogue and "不知道" in dialogue
+    assert "野菜湯" not in dialogue
+    assert response.headers["x-npc-generation-source"] == "post_generation_guard"
+
+
+def test_gateway_keeps_food_small_talk_displayable_when_upstream_is_unavailable() -> None:
+    request = make_request("menmesvento")
+    request["action_message"] = "嗨午餐吃什麼"
+
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(503, json={"error": "busy"})
+        ),
+    )
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    assert "午餐" in response.json()["npc_dialogue"][0]["text"]
+    assert response.headers["x-npc-generation-source"] == "post_generation_guard"
+    assert response.headers["x-npc-upstream-attempts"] == "2"
+
+
+def test_gateway_refines_frustrated_slang_without_using_poisoned_draft() -> None:
+    request = make_request("vidalia")
+    request["action_message"] = "你在供三小"
+    captured_refiner_input: dict[str, object] = {}
+
+    def handler(http_request: httpx.Request) -> httpx.Response:
+        payload = json.loads(http_request.content)
+        if payload["model"] == "vidalia-lora":
+            return completion("供奉物品必須遵守古老規則。")
+        captured_refiner_input.update(
+            json.loads(payload["messages"][-1]["content"])
+        )
+        return completion("抱歉剛才沒說清楚。你是指哪一部分？")
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "抱歉剛才沒說清楚。你是指哪一部分？"
+    )
+    assert response.headers["x-npc-generation-source"] == "model_refined"
+    assert captured_refiner_input["adapter_draft"] == []
+    cue = captured_refiner_input["conversation_cue"]
+    assert isinstance(cue, dict)
+    assert cue["kind"] == "frustrated_clarification"
+    assert "台灣口語" in cue["instruction"]
 
 
 def test_gateway_refuses_private_memory_in_character_without_system_jargon() -> None:

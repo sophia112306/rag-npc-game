@@ -4,6 +4,7 @@ from .api_response import ApiError, DeltaPayload, GameTurnResponse, NarrativeAIR
 from .character import CharacterProfile
 from .content import (
     CharacterDefinition,
+    ConversationMessage,
     DisclosureScope,
     KnowledgeItem,
     KnowledgeRecordInput,
@@ -58,6 +59,7 @@ __all__ = [
     "CommitmentItem",
     "CommitmentRecordInput",
     "CommitmentStatus",
+    "ConversationMessage",
     "DisclosureScope",
     "DeltaPayload",
     "DialogueLine",
