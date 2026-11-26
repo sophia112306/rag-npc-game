@@ -460,7 +460,7 @@ def main() -> int:
             "Not every physical map NPC received a live model turn: "
             + ", ".join(sorted(set(LIVE_NPC_PROMPTS) - tested_npcs))
         )
-    allowed_sources = {"model", "post_generation_guard"}
+    allowed_sources = {"model", "model_refined", "post_generation_guard"}
     if (
         not set(source_delta).issubset(allowed_sources)
         or sum(source_delta.values()) != len(LIVE_NPC_PROMPTS)

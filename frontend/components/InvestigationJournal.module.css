@@ -23,4 +23,6 @@
 .inventory li { display:flex;gap:14px;align-items:center;padding:10px 14px;border:1px solid #a8946966;font-size:13px; }
 .inventory img { object-fit:contain;flex-shrink:0; }
 .inventory strong { font-weight:400;color:#e8ddbb; }
+.useButton { margin-top:8px;padding:6px 10px;border:1px solid #c2a96c99;background:#1d2a1fcc;color:#f0dca9;font-size:12px;cursor:pointer; }
+.useButton:hover { background:#2c4036;color:#fff3c9; }
 @media(max-width:640px) { .modal{padding:12px}.journal{padding:25px 18px}.journal h2{font-size:21px}.findingsGrid{grid-template-columns:1fr;max-height:48svh}.findingsGrid article{padding:13px 15px} }

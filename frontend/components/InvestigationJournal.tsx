@@ -1,4 +1,4 @@
-import type { PlayerItem, StoryFinding } from "../lib/game-api";
+import type { PlayerChoice, PlayerItem, StoryFinding } from "../lib/game-api";
 import styles from "./InvestigationJournal.module.css";
 
 type Props = {
@@ -8,9 +8,11 @@ type Props = {
   onReport?: () => void;
   near: boolean;
   inventory?: PlayerItem[];
+  itemUseChoices?: Record<string, PlayerChoice>;
+  onUseItem?: (choice: PlayerChoice) => void;
 };
 
-export default function InvestigationJournal({findings,objective,onClose,onReport,near,inventory=[]}:Props) {
+export default function InvestigationJournal({findings,objective,onClose,onReport,near,inventory=[],itemUseChoices={},onUseItem}:Props) {
   return <div className={styles.modal} onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
     <section className={styles.journal} role="dialog" aria-modal="true" aria-label="調查紀錄"
       onKeyDown={event=>{
@@ -28,7 +30,9 @@ export default function InvestigationJournal({findings,objective,onClose,onRepor
         <h3>隨身道具 · {inventory.length} 件</h3>
         {inventory.length ? <ul>{inventory.map(item=><li key={item.item_id}>
           {item.image_url && <img src={item.image_url} alt="" width={72} height={72} />}
-          <div><strong>{item.name}</strong><p>{item.description}</p></div>
+          <div><strong>{item.name}</strong><p>{item.description}</p>
+            {itemUseChoices[item.item_id] && onUseItem && <button type="button" className={styles.useButton} onClick={()=>onUseItem(itemUseChoices[item.item_id])}>{itemUseChoices[item.item_id].label}</button>}
+          </div>
         </li>)}</ul>
           : <p>目前沒有道具。調查線索請查看下方紀錄。</p>}
       </section>

@@ -1,7 +1,7 @@
 """Contracts for immutable canon, character definitions, knowledge, and memory."""
 
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -120,6 +120,16 @@ class MemoryRecordInput(BaseModel):
     provenance: dict[str, Any] = Field(default_factory=dict)
 
 
+class ConversationMessage(BaseModel):
+    """One recent player/NPC line supplied for conversational continuity."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    role: Literal["player", "npc"]
+    text: str = Field(..., min_length=1, max_length=1_000)
+    turn_number: int = Field(..., ge=1)
+
+
 class NPCGenerationContext(BaseModel):
     """Private backend-only context prepared for a future ModelGateway call."""
 
@@ -131,6 +141,10 @@ class NPCGenerationContext(BaseModel):
     private_profile: dict[str, Any]
     knowledge: list[KnowledgeItem]
     memories: list[MemoryItem]
+    recent_dialogue: list[ConversationMessage] = Field(
+        default_factory=list,
+        max_length=12,
+    )
     active_goals: list[NPCGoalItem] = Field(default_factory=list)
     active_commitments: list[CommitmentItem] = Field(default_factory=list)
     active_quests: list[QuestItem] = Field(default_factory=list)

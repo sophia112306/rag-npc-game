@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.content.npc_dialogue import NPC_DIALOGUE_CHOICES
 from backend.generation.planner import GatewayStoryPlanner, StoryGenerationUnavailableError
 from backend.main import create_app
 from test_demo_story_flow import _start as start_briefed_session
@@ -193,7 +194,7 @@ def test_new_npc_profile_choice_and_dialogue(
         state = turn.json()["state"]
     choices = client.get(f"/api/game/{session_id}/choices?npc_id={npc_id}")
     assert choices.status_code == 200
-    assert len(choices.json()) == 2
+    assert len(choices.json()) == len(NPC_DIALOGUE_CHOICES[npc_id])
     assert all(choice["target_npc_id"] == npc_id for choice in choices.json())
 
     action = action_payload(session_id, expected_state_version=state["state_version"])
@@ -570,6 +571,12 @@ def test_next_model_turn_receives_committed_memory_and_commitment(tmp_path) -> N
         "observed_event",
     }
     assert any("我答應帶回地圖碎片" in memory.content for memory in next_context.memories)
+    assert [message.role for message in next_context.recent_dialogue] == [
+        "player",
+        "npc",
+    ]
+    assert next_context.recent_dialogue[0].text == "我答應帶回地圖碎片"
+    assert next_context.recent_dialogue[1].text == "我會記得你的承諾。"
 
 
 def test_dynamic_quest_is_offered_persisted_and_carried_forward(tmp_path) -> None:

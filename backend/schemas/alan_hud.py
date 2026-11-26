@@ -11,9 +11,10 @@ AlanTone = Literal["calm", "urgent", "interference", "override", "silent"]
 class AlanHud(BaseModel):
     """Information visible only to the protagonist through the retinal HUD.
 
-    This is deliberately not a dialogue line or NPC state.  It is a compact,
+    This is deliberately not a dialogue line or NPC state. It is a compact,
     player-view signal that can be rendered without making Alan appear in the
-    world or requiring a trained character model.
+    world or requiring a trained character model. Internal progression values
+    such as ``usurp`` stay on the server and are not part of this contract.
     """
 
     model_config = ConfigDict(extra="forbid")

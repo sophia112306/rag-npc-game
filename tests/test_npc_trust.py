@@ -155,8 +155,8 @@ async def test_npc_prompt_explains_and_carries_trust_tier() -> None:
     )
     await gateway.generate_story(request)
 
-    system, user = captured["payload"]["messages"]
-    assert "npc_trust" in system["content"]
-    assert "never mention trust levels" in system["content"]
-    assert '"信任度": "低"' in user["content"]
-    assert MENMESVENTO_MODES["低"] in user["content"]
+    messages = captured["payload"]["messages"]
+    assert "npc_trust" in messages[0]["content"]
+    assert "never mention trust levels" in messages[0]["content"]
+    assert '"信任度": "低"' in messages[1]["content"]
+    assert MENMESVENTO_MODES["低"] in messages[1]["content"]

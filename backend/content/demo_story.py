@@ -40,6 +40,9 @@ class DemoStoryChoiceDefinition:
     epilogue_answer_key: str | None = None
     epilogue_answer_value: str | None = None
     ending_id: str | None = None
+    emotion: str | None = None
+    item_use_id: str | None = None
+    required_inventory_ids: tuple[str, ...] = ()
 
     def to_player_choice(self) -> PlayerChoice:
         return PlayerChoice(
@@ -50,6 +53,7 @@ class DemoStoryChoiceDefinition:
             target_npc_id=self.target_npc_id,
             action_mode=self.action_mode,
             destination_scene_id=self.destination_scene_id,
+            item_use_id=self.item_use_id,
         )
 
 
@@ -515,13 +519,31 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
     ),
     _choice(
+        "use_ember_amulet", "border_choice_resolved", "border_ruins",
+        "使用餘燼護符解讀火光",
+        "我拿出餘燼護符，對照廢墟邊緣殘留的火光。",
+        "護符裡的餘燼短暫亮起，沿著廢墟石縫映出一段被刻意抹去的火痕。你記下這條線索，沒有把它當成長老會的正式證詞。",
+        "border_choice_resolved", "餘燼護符・火光記號",
+        item_use_id="ember_amulet", required_inventory_ids=("ember_amulet",),
+        reveal_clue_ids=("ember_amulet_trace",), visual_signal="ember",
+    ),
+    _choice(
+        "use_fissure_map", "demo_complete", "minglin",
+        "使用裂隙拓印圖確認圖書館路線",
+        "我展開裂隙拓印圖，確認前往記憶圖書館的路線。",
+        "拓印圖上的暗線在鳴霖的微光下重新接合。你確認了記憶圖書館的入口，接下來可以沿著這條路出發。",
+        "demo_complete", "裂隙拓印圖・圖書館路線",
+        item_use_id="fissure_map", required_inventory_ids=("fissure_map",),
+        reveal_clue_ids=("library_route_lead",), unlock_scene_ids=("memory_library",),
+    ),
+    _choice(
         "enter_memory_library_with_map", "demo_complete", "minglin",
         "依裂隙拓印圖前往記憶圖書館", "我依照塞特與希拉交付的裂隙拓印圖前往記憶圖書館。",
         "裂隙拓印圖在暮光下顯出一條被抹去的路。石門之後，封存輪迴記錄的古老藏庫重新出現在你面前。",
         "memory_library_arrival", "記憶圖書館",
         action_mode=ActionMode.MOVEMENT, destination_scene_id="memory_library",
         unlock_scene_ids=("memory_library",), special_scene_transition=True,
-        required_completed_choice_ids=("border_help_both",),
+        required_completed_choice_ids=("use_fissure_map",),
     ),
     _choice(
         "enter_memory_library_with_elders", "demo_complete", "minglin",
@@ -540,6 +562,15 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         action_mode=ActionMode.MOVEMENT, destination_scene_id="memory_library",
         unlock_scene_ids=("memory_library",), special_scene_transition=True,
         required_completed_choice_ids=("border_ignore",),
+    ),
+    _choice(
+        "use_cloth_fragment_archive", "memory_library_arrival", "memory_library",
+        "用麻布殘片對照入侵紀錄",
+        "我拿出麻布殘片，對照藏庫裡的入侵紀錄。",
+        "麻布上的織紋與入侵紀錄邊角的封存記號相互吻合。你確認這不是普通的遺物，而是有人刻意留下的見證，並把對照結果寫進手記。",
+        "memory_library_arrival", "麻布殘片・入侵見證",
+        item_use_id="cloth_fragment", required_inventory_ids=("cloth_fragment",),
+        reveal_clue_ids=("cloth_fragment_archive",),
     ),
     _choice(
         "inspect_life_death_book", "memory_library_arrival", "memory_library",
@@ -717,6 +748,11 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
     if state.game_status != "active":
         return ()
     completed = set(state.story_progress.completed_choice_ids)
+    used_item_ids = {
+        choice.item_use_id
+        for choice in DEMO_STORY_CHOICES
+        if choice.choice_id in completed and choice.item_use_id is not None
+    }
     visited_both_regions = {"enter_lieyi_plains", "enter_liuchen_valley"}.issubset(
         completed
     )
@@ -733,10 +769,13 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
         )
         and (choice.choice_id not in BORDER_RESOLUTION_IDS or not border_resolution)
         and set(choice.required_completed_choice_ids).issubset(completed)
+        and set(choice.required_inventory_ids).issubset(state.player.inventory)
+        and (choice.item_use_id is None or choice.item_use_id not in used_item_ids)
         and (
             not border_resolution
             or state.story_progress.node_id != "demo_complete"
             or choice.choice_id in MEMORY_LIBRARY_ENTRY_IDS
+            or choice.item_use_id is not None
         )
         and (choice.ending_id is None or choice.ending_id in available_endings)
         and not (
@@ -766,6 +805,7 @@ def available_npc_dialogue_choices(state: GameState, npc_id: str) -> tuple[DemoS
             definition.label, definition.message, definition.response_text,
             state.story_progress.node_id, state.story_progress.chapter_title,
             action_mode=ActionMode.DIALOGUE, target_npc_id=npc_id,
+            emotion=definition.emotion,
         )
         for definition in NPC_DIALOGUE_CHOICES.get(npc_id, ())
     )

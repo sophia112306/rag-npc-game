@@ -127,9 +127,10 @@ export type GameTurnResponse = {
   story: {
     dialogue: {
       speaker_type: "npc" | "narrator";
-      speaker_id?: string | null;
+      speaker_id: string | null;
       speaker_name: string;
       text: string;
+      emotion: string | null;
     }[];
   };
 };
@@ -142,6 +143,7 @@ export type PlayerChoice = {
   target_npc_id: string | null;
   action_mode: "dialogue" | "interaction" | "movement";
   destination_scene_id: string | null;
+  item_use_id?: string | null;
 };
 
 export type PlayerMapScene = {
@@ -229,10 +231,10 @@ export class ApiRequestError extends Error {
 }
 
 // Bump the browser session namespace after changing the canonical opening.
-// Existing sessions may already be in the old fissure or Minglin flow, so
-// reusing them would make a fresh page show the wrong opening NPC. A new
-// namespace preserves old saves while making Minglin -> Andre deterministic.
-export const GAME_SESSION_STORAGE_KEY = "vidalia-game-session-v4";
+// Existing sessions may already be in the old Minglin flow, so reusing them
+// would hide the new two-NPC opening. A new namespace preserves old saves
+// while making a fresh page start at the updated opening state.
+export const GAME_SESSION_STORAGE_KEY = "vidalia-game-session-v5";
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8300";
 
 export function resolveApiAsset(url: string): string {

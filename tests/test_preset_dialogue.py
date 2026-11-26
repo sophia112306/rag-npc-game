@@ -50,6 +50,7 @@ def test_six_scene_preset_journey_never_calls_model_and_resumes(tmp_path):
             for definition in NPC_DIALOGUE_CHOICES[npc_id]:
                 result = choose(definition.choice_id, npc_id)
                 assert result["story"]["dialogue"][0]["text"] == definition.response_text
+                assert result["story"]["dialogue"][0]["emotion"] == definition.emotion
                 assert state["story_progress"]["node_id"] == before
                 assert state["npc_states"][npc_id]["met"] is True
 
@@ -164,6 +165,10 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
 
         alternative = client.post("/api/game/turn", json={**payload, "action_id": str(uuid4()), "expected_state_version": result["state"]["state_version"]})
         assert alternative.status_code == 409
+        if choice_id == "border_help_both":
+            ember_options = client.get(f"/api/game/{choice_id}/choices").json()
+            assert "use_ember_amulet" in {c["choice_id"] for c in ember_options}
+            _advance(client, choice_id, "use_ember_amulet")
         _advance(client, choice_id, "return_after_border_choice")
         options = client.get(f"/api/game/{choice_id}/choices").json()
         option_ids = {c["choice_id"] for c in options}
@@ -172,7 +177,13 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
             "border_report": "enter_memory_library_with_elders",
             "border_ignore": "enter_memory_library_alone",
         }[choice_id]
-        assert option_ids == {expected_entry}
+        if choice_id == "border_help_both":
+            assert option_ids == {"use_fissure_map"}
+            _advance(client, choice_id, "use_fissure_map")
+            options = client.get(f"/api/game/{choice_id}/choices").json()
+            assert {c["choice_id"] for c in options} == {expected_entry}
+        else:
+            assert option_ids == {expected_entry}
         saved = client.get(f"/api/game/{choice_id}/state").json()
         assert saved["player"]["inventory"] == expected_inventory
 
@@ -230,3 +241,28 @@ def test_model_claims_cannot_replace_player_choice_or_story_rules(
 def test_cached_item_ids_recover_fixed_presentation():
     old = PlayerIdentityView.model_validate({"player_id": "player_01", "name": "旅人", "inventory": ["fissure_map"]})
     assert old.items[0].name == "裂隙拓印圖"
+
+
+def test_item_use_reveals_ember_clue_and_is_available_only_once(tmp_path):
+    database_url = f"sqlite+aiosqlite:///{tmp_path / 'item-use.db'}"
+    make_app = lambda: create_app(database_url, story_planner_factory=lambda _context: UnavailableModel())
+    with TestClient(make_app()) as client:
+        _reach_border(client, "item-use")
+        _advance(client, "item-use", "border_help_both")
+        result, _ = _advance(client, "item-use", "use_ember_amulet")
+        state = result["state"]
+        assert "ember_amulet_trace" in state["story_progress"]["public_clue_ids"]
+        assert "use_ember_amulet" not in {c["choice_id"] for c in client.get("/api/game/item-use/choices").json()}
+
+        _advance(client, "item-use", "return_after_border_choice")
+        options = client.get("/api/game/item-use/choices").json()
+        assert "use_fissure_map" in {c["choice_id"] for c in options}
+        assert "enter_memory_library_with_map" not in {c["choice_id"] for c in options}
+
+        _advance(client, "item-use", "use_fissure_map")
+        _advance(client, "item-use", "enter_memory_library_with_map")
+        library_options = client.get("/api/game/item-use/choices").json()
+        assert "use_cloth_fragment_archive" in {c["choice_id"] for c in library_options}
+        result, _ = _advance(client, "item-use", "use_cloth_fragment_archive")
+        assert "cloth_fragment_archive" in result["state"]["story_progress"]["public_clue_ids"]
+        assert "use_cloth_fragment_archive" not in {c["choice_id"] for c in client.get("/api/game/item-use/choices").json()}

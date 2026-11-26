@@ -64,6 +64,7 @@ def build_world_scene(
     scene_id: str,
     config: WorldSceneConfig | None = None,
     visible_npc_ids: Iterable[str] | None = None,
+    primary_npc_id: str | None = None,
 ) -> WorldSceneView:
     config = config or default_config(scene_id)
     rng = random.Random(config.seed)
@@ -130,7 +131,8 @@ def build_world_scene(
     npc = {"fissure": "andre", "minglin": "vidalia", "liuchen_valley": "menmesvento"}.get(scene_id)
     if scene_id == "minglin" and visible_npc_ids is not None:
         visible = set(visible_npc_ids)
-        npc = "andre" if "andre" in visible else "vidalia" if "vidalia" in visible else None
+        preferred = primary_npc_id if primary_npc_id in visible else None
+        npc = preferred or ("andre" if "andre" in visible else "vidalia" if "vidalia" in visible else None)
     scene_npcs = [
         WorldNpc(npc_id="seth", x=-3.4, z=-6, label="與塞特交談"),
         WorldNpc(npc_id="syra", x=3.4, z=-6, label="與希拉交談"),
@@ -139,7 +141,7 @@ def build_world_scene(
     ] if scene_id == "lieyi_plains" else []
     label = {
         "fissure": "與安德烈交談",
-        "minglin": "與維達利亞交談",
+        "minglin": "與安德烈交談" if npc == "andre" else "與維達利亞交談",
         "minglin_life_spring": "調查泉眼",
         "minglin_rune_grove": "調查符石",
         "liuchen_valley": "與門梅司文托交談",

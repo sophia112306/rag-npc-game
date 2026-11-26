@@ -86,6 +86,8 @@ def create_app(
             result = await adapter_router.generate_with_trace(request)
             response.headers["X-NPC-Generation-Source"] = result.source
             response.headers["X-NPC-Model-ID"] = result.model_id
+            if result.refiner_model_id:
+                response.headers["X-NPC-Refiner-Model-ID"] = result.refiner_model_id
             response.headers["X-NPC-Route-Kind"] = result.route_kind
             response.headers["X-NPC-Upstream-Attempts"] = str(
                 result.upstream_attempts

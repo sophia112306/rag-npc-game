@@ -216,12 +216,22 @@ def project_player_view(state: GameState) -> PlayerViewState:
     scene = require_scene(state.current_scene_id)
     findings = public_findings(state)
     visible_npcs = None
+    primary_npc_id = None
     if state.current_scene_id == "minglin":
-        visible_npcs = {"andre"} if state.story_progress.node_id in {"minglin_arrival", "minglin_path_open"} else {"vidalia"}
+        # Both NPCs remain visible in the same Minglin map. Story progression
+        # still controls who is interactable through npc_available_in_state;
+        # npc_id only identifies the current primary objective for the UI.
+        visible_npcs = {"andre", "vidalia"}
+        primary_npc_id = (
+            "andre"
+            if state.story_progress.node_id in {"minglin_arrival", "minglin_path_open"}
+            else "vidalia"
+        )
     world = build_world_scene(
         state.current_scene_id,
         state.world_scenes.get(state.current_scene_id),
         visible_npc_ids=visible_npcs,
+        primary_npc_id=primary_npc_id,
     )
     latest = next((finding for finding in reversed(findings)
                    if finding.scene_id == state.current_scene_id and finding.visual_signal), None)

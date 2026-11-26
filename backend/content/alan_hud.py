@@ -19,10 +19,10 @@ def _calm_message(state: GameState) -> str:
 def build_alan_hud(state: GameState) -> AlanHud:
     """Project private state into a protagonist-only Alan HUD signal.
 
-    The thresholds mirror the existing state rules: 50 marks an urgent
-    deviation, 75 is the warning/interference boundary, and 90 starts the
-    usurp countdown in Act 3.  No raw flags, NPC goals, or hidden lore are
-    exposed here.
+    The thresholds mirror the existing internal state rules: 50 marks an
+    urgent deviation, 75 is the warning/interference boundary, and 90 starts
+    the internal usurp countdown in Act 3. The HUD exposes only a player-facing
+    signal; it does not name or serialize the internal usurp metric.
     """
 
     if state.flags.get("alan_communication_severed"):
@@ -45,7 +45,7 @@ def build_alan_hud(state: GameState) -> AlanHud:
             display_value=usurp,
             tone="override",
             message=(
-                f"連線權限正在被覆寫。篡奪率 {usurp}%。"
+                "連線權限正在被覆寫。世界規則即將失去穩定。"
                 f"世界崩解倒數：{countdown} 回合。"
             ),
             persistent=True,

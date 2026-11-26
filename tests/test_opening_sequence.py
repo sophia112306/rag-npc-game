@@ -46,6 +46,7 @@ def test_opening_starts_in_minglin_with_andre_then_reveals_vidalia(tmp_path) -> 
         assert state["current_scene_id"] == "minglin"
         assert state["story_progress"]["node_id"] == "minglin_path_open"
         assert state["npc_states"]["andre"]["met"] is True
+        assert state["world_scene"]["npc_id"] == "andre"
         assert [choice["choice_id"] for choice in client.get(f"/api/game/{session_id}/choices").json()] == [
             "walk_to_council"
         ]

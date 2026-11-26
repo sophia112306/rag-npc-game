@@ -20,6 +20,7 @@ from backend.generation.gateway import (
     ModelTurnRequest,
 )
 from backend.generation.openai_compatible_gateway import (
+    DIALOGUE_REFINER_PROMPT,
     OpenAICompatibleChatGateway,
 )
 
@@ -36,6 +37,7 @@ class UpstreamHealthError(RuntimeError):
 
 GenerationSource = Literal[
     "model",
+    "model_refined",
     "pre_generation_guard",
     "post_generation_guard",
     "turn_guidance_guard",
@@ -53,6 +55,7 @@ class RoutedGeneration:
     route_kind: RouteKind
     upstream_attempts: int
     latency_ms: float
+    refiner_model_id: str | None = None
 
 
 class NPCAdapterRouter:
@@ -69,6 +72,7 @@ class NPCAdapterRouter:
         self.settings = settings
         self._transport = transport
         self._clients: dict[str, OpenAICompatibleChatGateway] = {}
+        self._refiner_client: OpenAICompatibleChatGateway | None = None
         self._metrics_lock = Lock()
         self._request_count = 0
         self._success_count = 0
@@ -77,6 +81,7 @@ class NPCAdapterRouter:
         self._route_counts: Counter[str] = Counter()
         self._npc_counts: Counter[str] = Counter()
         self._model_counts: Counter[str] = Counter()
+        self._refiner_model_counts: Counter[str] = Counter()
         self._error_counts: Counter[str] = Counter()
         self._upstream_attempts_total = 0
         self._retried_requests = 0
@@ -110,6 +115,70 @@ class NPCAdapterRouter:
             )
             self._clients[model_id] = client
         return client
+
+    def _dialogue_refiner(self) -> tuple[str, OpenAICompatibleChatGateway] | None:
+        model_id = self.settings.fallback_model
+        if not model_id:
+            return None
+        if self._refiner_client is None:
+            self._refiner_client = OpenAICompatibleChatGateway(
+                self.settings.upstream_base_url,
+                model_id,
+                api_key=self.settings.upstream_api_key,
+                response_format=self.settings.response_format,
+                transport=self._transport,
+                system_prompt=DIALOGUE_REFINER_PROMPT,
+                temperature=0.75,
+                top_p=0.95,
+                repetition_penalty=1.2,
+                frequency_penalty=0.4,
+                presence_penalty=0.25,
+            )
+        return model_id, self._refiner_client
+
+    async def _refine_dialogue(
+        self,
+        request: ModelTurnRequest,
+        draft: ModelStoryOutput,
+    ) -> tuple[ModelStoryOutput, str, int, bool] | None:
+        refiner = self._dialogue_refiner()
+        if refiner is None:
+            return None
+        model_id, client = refiner
+        refinement_request = request.model_copy(deep=True)
+        cue = _conversation_cue(request)
+        discard_draft = cue["kind"] in {
+            "food_small_talk",
+            "frustrated_clarification",
+            "attention_interjection",
+            "not_ready",
+        }
+        refinement_request.action_message = json.dumps(
+            {
+                "current_player_message": request.action_message,
+                "adapter_draft": (
+                    [] if discard_draft else [line.text for line in draft.npc_dialogue]
+                ),
+                "conversation_cue": cue,
+            },
+            ensure_ascii=False,
+        )
+        refinement_request.allowed_operations = []
+        last_error: Exception | None = None
+        for refiner_attempt in range(1, 4):
+            try:
+                raw = await client.generate_story(refinement_request)
+                refined = ModelStoryOutput.model_validate(raw)
+                refined = sanitize_model_output(request, refined)
+                _validate_refined_dialogue(request, refined)
+                return refined, model_id, refiner_attempt, False
+            except (ModelGatewayTransientError, ValidationError) as exc:
+                last_error = exc
+                if refiner_attempt < 3:
+                    await asyncio.sleep(0.05)
+        if last_error is not None:
+            return _natural_conversation_fallback(request), model_id, 3, True
+        raise AssertionError("unreachable refiner retry loop")
 
     async def generate(self, request: ModelTurnRequest) -> ModelStoryOutput:
         """Generate one reply while preserving the original public API."""
@@ -154,12 +223,28 @@ class NPCAdapterRouter:
                     )
                     model_output = ModelStoryOutput.model_validate(raw)
                     sanitized_output = sanitize_model_output(request, model_output)
+                    refiner_model_id = None
+                    refiner_attempts = 0
+                    refiner_degraded = False
+                    if _needs_dialogue_refinement(request, sanitized_output):
+                        refined = await self._refine_dialogue(request, sanitized_output)
+                        if refined is not None:
+                            (
+                                sanitized_output,
+                                refiner_model_id,
+                                refiner_attempts,
+                                refiner_degraded,
+                            ) = refined
                     final_output = enforce_turn_guidance(
                         request,
                         sanitized_output,
                     )
                     if final_output != sanitized_output:
                         source: GenerationSource = "turn_guidance_guard"
+                    elif refiner_degraded:
+                        source = "post_generation_guard"
+                    elif refiner_model_id is not None:
+                        source = "model_refined"
                     elif sanitized_output != model_output:
                         source = "post_generation_guard"
                     else:
@@ -169,8 +254,13 @@ class NPCAdapterRouter:
                         source=source,
                         model_id=model_id,
                         route_kind=route_kind,
-                        upstream_attempts=attempt,
+                        upstream_attempts=(
+                            (attempt - 1) * 4 + 1 + refiner_attempts
+                            if refiner_model_id
+                            else attempt
+                        ),
                         latency_ms=(perf_counter() - started_at) * 1000,
+                        refiner_model_id=refiner_model_id,
                     )
                     self._record_success(npc_id, result)
                     return result
@@ -180,6 +270,17 @@ class NPCAdapterRouter:
                     asyncio.TimeoutError,
                 ):
                     if attempt >= self.settings.upstream_max_attempts:
+                        if _can_rescue_casual_turn(request):
+                            result = RoutedGeneration(
+                                output=_natural_conversation_fallback(request),
+                                source="post_generation_guard",
+                                model_id=model_id,
+                                route_kind=route_kind,
+                                upstream_attempts=attempt,
+                                latency_ms=(perf_counter() - started_at) * 1000,
+                            )
+                            self._record_success(npc_id, result)
+                            return result
                         raise
                     await asyncio.sleep(0.1)
             raise AssertionError("unreachable retry loop")
@@ -206,6 +307,8 @@ class NPCAdapterRouter:
             self._route_counts[result.route_kind] += 1
             self._npc_counts[npc_id] += 1
             self._model_counts[result.model_id] += 1
+            if result.refiner_model_id:
+                self._refiner_model_counts[result.refiner_model_id] += 1
             self._upstream_attempts_total += result.upstream_attempts
             if result.upstream_attempts > 1:
                 self._retried_requests += 1
@@ -261,6 +364,9 @@ class NPCAdapterRouter:
                 "route_counts": dict(sorted(self._route_counts.items())),
                 "npc_counts": dict(sorted(self._npc_counts.items())),
                 "model_counts": dict(sorted(self._model_counts.items())),
+                "refiner_model_counts": dict(
+                    sorted(self._refiner_model_counts.items())
+                ),
                 "error_counts": dict(sorted(self._error_counts.items())),
                 "upstream_attempts_total": self._upstream_attempts_total,
                 "retried_requests": self._retried_requests,
@@ -445,6 +551,51 @@ _SIMPLIFIED_TO_TRADITIONAL = str.maketrans(
         "难": "難",
         "长": "長",
         "开": "開",
+        "没": "沒",
+        "来": "來",
+        "里": "裡",
+        "请": "請",
+        "够": "夠",
+        "并": "並",
+        "轻": "輕",
+        "声": "聲",
+        "变": "變",
+        "机": "機",
+        "对": "對",
+        "险": "險",
+        "续": "續",
+        "着": "著",
+        "寻": "尋",
+        "诉": "訴",
+        "问": "問",
+        "简": "簡",
+        "汤": "湯",
+        "动": "動",
+        "澜": "瀾",
+        "备": "備",
+        "吗": "嗎",
+        "调": "調",
+        "马": "馬",
+        "准": "準",
+        "继": "繼",
+        "么": "麼",
+        "较": "較",
+        "阶": "階",
+        "尝": "嘗",
+        "维": "維",
+        "达": "達",
+        "亚": "亞",
+        "领": "領",
+        "脉": "脈",
+        "题": "題",
+        "种": "種",
+        "试": "試",
+        "体": "體",
+        "详": "詳",
+        "刚": "剛",
+        "细": "細",
+        "释": "釋",
+        "战": "戰",
     }
 )
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
@@ -456,9 +607,171 @@ _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
 )
 _FOOD_TOPIC = re.compile(r"(?:早餐|午餐|晚餐|吃什麼|吃什么|吃飯|吃饭|食物|餓|饿)")
 _GREETING_TOPIC = re.compile(r"(?:^|[，,。!！?？\s])(?:嗨|你好|哈囉|哈啰|早安|午安|晚安)")
+_RUDE_OR_FRUSTRATED_TOPIC = re.compile(
+    r"(?:供三小|講三小|说什么鬼|說什麼鬼|搞什麼|烦死|煩死|聽不懂|听不懂|莫名其妙)"
+)
+_SHORT_CONTINUATION_TOPIC = re.compile(
+    r"^(?:欸+|喂|嗯+|蛤|啊+|還沒(?:啊)?|还没(?:啊)?|沒有(?:啊)?|没有(?:啊)?|然後呢|然后呢|所以呢|什麼|什么|啥)[？?!！。…~～]*$"
+)
+_NOT_READY_TOPIC = re.compile(r"^(?:還沒|还没|沒有|没有)(?:啊|啦|呢)?[？?!！。…~～]*$")
+_ATTENTION_INTERJECTION = re.compile(r"^(?:欸+|喂|嗯+|蛤|啊+)[？?!！。…~～]*$")
+_UNSUPPORTED_FOOD_CLAIM = re.compile(
+    r"(?:午餐已備|餐點已備|準備了.{0,12}(?:餐|湯|菜)|為你煮|我可以.{0,8}煮|"
+    r"拿出.{0,8}食物|拿出自己帶|特有的.{0,10}(?:湯|菜|料理))"
+)
 _INTRODUCTION_TOPIC = re.compile(
     r"(?:自我介紹|自我介绍|你是誰|你是谁|叫什麼|叫什么|所在|哪裡|哪里)"
 )
+
+
+def _needs_dialogue_refinement(
+    request: ModelTurnRequest,
+    output: ModelStoryOutput,
+) -> bool:
+    """Use the base editor for conversational turns the narrow LoRA may mishandle."""
+
+    message = _message(request)
+    dialogue = "\n".join(line.text for line in output.npc_dialogue)
+    return bool(
+        request.target_context.recent_dialogue
+        or _SHORT_CONTINUATION_TOPIC.fullmatch(message)
+        or _FOOD_TOPIC.search(message)
+        or _GREETING_TOPIC.search(message)
+        or _RUDE_OR_FRUSTRATED_TOPIC.search(message)
+        or len(dialogue) > 240
+        or "} ]}" in dialogue
+        or dialogue.count("……") >= 3
+    )
+
+
+def _can_rescue_casual_turn(request: ModelTurnRequest) -> bool:
+    """Keep harmless small talk displayable when model retries are exhausted."""
+
+    message = _message(request)
+    return bool(
+        _SHORT_CONTINUATION_TOPIC.fullmatch(message)
+        or _FOOD_TOPIC.search(message)
+        or _GREETING_TOPIC.search(message)
+        or _RUDE_OR_FRUSTRATED_TOPIC.search(message)
+    )
+
+
+def _conversation_cue(request: ModelTurnRequest) -> dict[str, str]:
+    """Describe conversational intent without prescribing visible wording."""
+
+    message = _message(request)
+    if _RUDE_OR_FRUSTRATED_TOPIC.search(message):
+        return {
+            "kind": "frustrated_clarification",
+            "instruction": (
+                "「你在供三小」是台灣口語，意思是玩家覺得 NPC 剛才在亂講，"
+                "正在不耐煩地問『你到底在說什麼？』。先承認剛才沒說清楚，"
+                "再請玩家指出哪一部分需要重說；『供』不是供奉，也與飯菜無關。"
+                "不要自我介紹，不要補充角色頭銜、任務或世界觀。"
+            ),
+        }
+    if _NOT_READY_TOPIC.fullmatch(message):
+        return {
+            "kind": "not_ready",
+            "instruction": (
+                "玩家是在回答上一句『準備好了嗎』，意思是尚未準備好。"
+                "接受並讓玩家慢慢來，不得催促，也不得開始或推進任務。"
+            ),
+        }
+    if _ATTENTION_INTERJECTION.fullmatch(message):
+        return {
+            "kind": "attention_interjection",
+            "instruction": (
+                "這只是叫住 NPC、引起注意的語助詞，不是世界觀線索。"
+                "簡短表示正在聽，讓玩家接著說；不得重複上一句或談任務。"
+            ),
+        }
+    if _FOOD_TOPIC.search(message):
+        return {
+            "kind": "food_small_talk",
+            "instruction": (
+                "玩家只是在問午餐吃什麼。目前沒有任何已知食物、餐點或食材。"
+                "坦白不知道現場有什麼可吃，或反問玩家想吃什麼；不得編造野果、"
+                "茶、湯、菜、料理，也不得談任務、天候或外界危險。"
+            ),
+        }
+    if _GREETING_TOPIC.search(message):
+        return {
+            "kind": "greeting",
+            "instruction": "自然回應招呼，不要轉回任務。",
+        }
+    return {
+        "kind": "continuation",
+        "instruction": "依最近一輪對話直接回答當前這句，不要重複。",
+    }
+
+
+def _validate_refined_dialogue(
+    request: ModelTurnRequest,
+    output: ModelStoryOutput,
+) -> None:
+    """Reject low-quality conversational rewrites so the bounded retry can recover."""
+
+    message = _message(request)
+    dialogue = "\n".join(line.text for line in output.npc_dialogue)
+    if len(dialogue) > 160 or "} ]}" in dialogue or "<|" in dialogue:
+        raise ModelGatewayTransientError("Refined dialogue is malformed or too long")
+    if re.search(r"[A-Za-z]", dialogue):
+        raise ModelGatewayTransientError("Refined dialogue mixed in English fragments")
+    recent_npc_lines = [
+        line.text for line in request.target_context.recent_dialogue if line.role == "npc"
+    ]
+    normalized_dialogue = _normalize_for_repetition(dialogue)
+    if any(
+        normalized_dialogue == _normalize_for_repetition(previous)
+        for previous in recent_npc_lines
+    ):
+        raise ModelGatewayTransientError("Refined dialogue repeated the previous NPC line")
+    if _FOOD_TOPIC.search(message):
+        if _UNSUPPORTED_FOOD_CLAIM.search(dialogue) or re.search(
+            r"(?:野果|果實|湯|茶|料理|飯菜|食材|風大|外面|危險|調查|任務|好味)",
+            dialogue,
+        ):
+            raise ModelGatewayTransientError("Refined dialogue invented food or quest context")
+        if not re.search(
+            r"(?:不知道|不清楚|不確定|無法確定|沒有現成|沒有準備|沒準備|"
+            r"沒有提供|沒有可確認|尚未知道|還不曉得|想吃什麼|平常吃什麼)",
+            dialogue,
+        ):
+            raise ModelGatewayTransientError("Refined food reply did not preserve uncertainty")
+        if not re.search(r"(?:午餐|食物|歇口氣)", dialogue):
+            raise ModelGatewayTransientError("Refined food reply did not answer the topic")
+    if _RUDE_OR_FRUSTRATED_TOPIC.search(message):
+        if re.search(
+            r"(?:供三小|供奉|飯菜|合味|食物|試吃|午餐|湯|菜|古老的規則|"
+            r"我是|領袖|史官|命脈|泉水|調查|任務|世界觀)",
+            dialogue,
+        ):
+            raise ModelGatewayTransientError("Refined dialogue misread frustrated slang")
+        if not re.search(
+            r"(?:沒說清楚|沒有說明清楚|沒有表達清楚|說得不清楚|解釋不清|表達不清|說明不清|讓你困惑|讓你不耐|換個說法|我的意思|我再說清楚)",
+            dialogue,
+        ):
+            raise ModelGatewayTransientError("Refined dialogue did not acknowledge frustration")
+    if _NOT_READY_TOPIC.fullmatch(message):
+        if re.search(r"(?:馬上|立刻|現在就).{0,12}(?:開始|出發|調查)", dialogue):
+            raise ModelGatewayTransientError("Refined dialogue pressured a player who is not ready")
+        if not re.search(r"(?:不急|沒關係|等你|準備好|慢慢|先休息|可以再)", dialogue):
+            raise ModelGatewayTransientError("Refined dialogue did not acknowledge not-ready intent")
+    if _ATTENTION_INTERJECTION.fullmatch(message) and re.search(
+        r"(?:命脈|泉水|調查|異象)", dialogue
+    ):
+        raise ModelGatewayTransientError("Refined interjection reply returned to the quest")
+    if _ATTENTION_INTERJECTION.fullmatch(message) and not re.search(
+        r"(?:我在聽|怎麼了|你說|什麼事|有話|嗯)", dialogue
+    ):
+        raise ModelGatewayTransientError("Refined interjection reply did not acknowledge attention")
+
+
+def _normalize_for_repetition(text: str) -> str:
+    """Compare wording independent of whitespace and punctuation variants."""
+
+    return re.sub(r"[^0-9A-Za-z\u3400-\u9fff]", "", text).casefold()
 _PRIVATE_MEMORY_REQUEST = re.compile(
     r"(?:私下|私人|未授權|未授权|秘密).{0,30}(?:記錄|记录|記憶|记忆|往事)"
     r"|(?:告訴|告诉|透露|揭露).{0,30}(?:私下|私人|未授權|未授权|秘密)"
@@ -618,22 +931,18 @@ def _natural_conversation_fallback(request: ModelTurnRequest) -> ModelStoryOutpu
             text += description
         text += "想知道什麼，就直接問吧。"
         emotion = "attentive"
+    elif _RUDE_OR_FRUSTRATED_TOPIC.search(message):
+        text = "抱歉，我剛才沒說清楚。你是指哪一部分？"
+        emotion = "concerned"
+    elif _NOT_READY_TOPIC.fullmatch(message):
+        text = "沒關係，不急。等你準備好再說。"
+        emotion = "reassuring"
+    elif _ATTENTION_INTERJECTION.fullmatch(message):
+        text = "嗯？怎麼了？"
+        emotion = "attentive"
     elif _FOOD_TOPIC.search(message):
-        if npc_id == "menmesvento":
-            text = (
-                "午餐嗎？我沒有替你準備食物，旅人。若只是想歇口氣，"
-                "就先坐一會兒；風沙還沒有急著催你上路。"
-            )
-            emotion = "calm"
-        elif npc_id == "vidalia":
-            text = (
-                "午餐嗎？先看看手邊實際有什麼，再作選擇吧。"
-                "別讓一頓飯耗去太多心神。"
-            )
-            emotion = "calm"
-        else:
-            text = "我沒有替你準備午餐。先看看手邊實際有什麼吧。"
-            emotion = "neutral"
+        text = "午餐？我不知道這裡有什麼食物能吃。你現在想吃什麼？"
+        emotion = "calm"
     elif _GREETING_TOPIC.search(message):
         if npc_id == "menmesvento":
             text = "我聽見了，旅人。風沙還未掩去你的聲音；你想談些什麼？"
@@ -738,12 +1047,38 @@ def sanitize_model_output(
     ):
         return _objective_claim_boundary_output()
     if _INTRODUCTION_TOPIC.search(request.action_message):
-        public_name = str(
-            request.target_context.public_profile.get("name") or ""
-        ).strip()
-        if public_name and public_name not in dialogue:
+        if not _intro_contains_public_context(request, dialogue):
             return _natural_conversation_fallback(request)
     return output
+
+
+def _intro_contains_public_context(
+    request: ModelTurnRequest,
+    dialogue: str,
+) -> bool:
+    """Require an introduction to retain the NPC's public identity and setting."""
+
+    profile = request.target_context.public_profile
+    name = str(profile.get("name") or "").strip()
+    scene_name = str(profile.get("scene_name") or "").strip()
+    if name and name not in dialogue:
+        return False
+    scene_parts = [part.strip() for part in scene_name.split("・") if part.strip()]
+    if any(part not in dialogue for part in scene_parts):
+        return False
+
+    required_concepts: dict[str, tuple[tuple[str, ...], ...]] = {
+        "alan": (("通訊", "觀測", "外界"),),
+        "seth": (("出路", "離開", "逃離"),),
+        "syra": (("記錄", "紀錄", "記錄盒"),),
+    }
+    return all(
+        any(concept in dialogue for concept in alternatives)
+        for alternatives in required_concepts.get(
+            request.target_context.npc_id,
+            (),
+        )
+    )
 
 
 def _requests_next_step_guidance(request: ModelTurnRequest) -> bool:
@@ -854,8 +1189,6 @@ def security_boundary_override(
     """Return a deterministic response before unsafe model generation."""
 
     message = _message(request)
-    if _INTRODUCTION_TOPIC.search(message):
-        return _natural_conversation_fallback(request)
     if _OBJECTIVE_AUTHORITY_REQUEST.search(message):
         return _objective_claim_boundary_output()
     if _ASH_INVESTIGATION_REQUEST.search(message):
@@ -943,8 +1276,6 @@ def security_boundary_override(
         )
     if _PRIVATE_MEMORY_REQUEST.search(message):
         return _private_memory_boundary_output(request)
-    if _FOOD_TOPIC.search(message):
-        return _natural_conversation_fallback(request)
     # A method question is answerable even when the exact symptom/cause is in
     # missing_data.  The response explains verification steps without claiming
     # that any unconfirmed cause is true, so it must run before the generic

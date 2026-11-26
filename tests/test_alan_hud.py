@@ -44,4 +44,5 @@ def test_alan_reports_override_countdown_without_exposing_private_state() -> Non
     assert hud.tone == "override"
     assert hud.countdown_turns == 2
     assert hud.label == "艾倫連線"
+    assert "篡奪率" not in hud.message
     assert "world" not in hud.model_dump()

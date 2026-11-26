@@ -89,4 +89,4 @@ def test_game_backend_reaches_the_vidalia_lora_through_one_gateway_url(
     assert response.status_code == 200, response.text
     assert response.json()["story"]["dialogue"][0]["speaker_id"] == "vidalia"
     assert "確認" in response.json()["story"]["dialogue"][0]["text"]
-    assert selected_models == ["vidalia-lora"]
+    assert selected_models == ["vidalia-lora", "Qwen/Qwen2.5-7B-Instruct-AWQ"]

@@ -16,6 +16,7 @@ import {
 } from "../lib/character-voice";
 import { getSceneMusic } from "../lib/scene-music";
 import { useSceneMusic } from "../lib/use-scene-music";
+import { resolveNpcReaction, type NpcReactionCue } from "../lib/npc-reactions";
 import {
   ApiRequestError,
   DEFAULT_SCENE_VISUAL_PROFILE,
@@ -48,6 +49,7 @@ type ChatMessage = {
   npcId?: NpcId;
   targetId?: InteractionTarget;
   sceneId?: string;
+  emotion?: string | null;
 };
 
 type PendingAction = {
@@ -250,6 +252,7 @@ export default function Home() {
   const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
   const [npcChoiceSet, setNpcChoiceSet] = useState<{npcId: NpcId; choices: PlayerChoice[]} | null>(null);
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
+  const [npcReaction, setNpcReaction] = useState<{npcId: NpcId; cue: NpcReactionCue; sequence: number} | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -261,12 +264,16 @@ export default function Home() {
   const storyNode = gameState?.story_progress.node_id ?? "minglin_arrival";
   const minglinOpeningAndre = scene.scene_id === "minglin" && ["minglin_arrival", "minglin_path_open"].includes(storyNode);
   const visibleNpcIds: NpcId[] = scene.scene_id === "minglin"
-    ? (minglinOpeningAndre ? ["andre"] : ["vidalia"])
+    ? ["andre", "vidalia"]
     : [...Object.keys(profiles)] as NpcId[];
+  const interactiveNpcIds: NpcId[] = scene.scene_id === "minglin"
+    ? (minglinOpeningAndre ? ["andre"] : ["vidalia"])
+    : visibleNpcIds;
   const forwardChoice = playerChoices.find(choice => choice.choice_id === "walk_to_council");
   const primaryNpc = gameState?.world_scene.npc_id ?? gameState?.world_scene.npc_interactions?.[0]?.npc_id;
   const primaryTarget: InteractionTarget = isNpcId(primaryNpc) ? primaryNpc : "landmark";
   const displayNpcId = dialogueOpen ? activeNpcId : nearTarget && nearTarget !== "landmark" ? nearTarget : activeNpcId;
+  const portraitReaction = npcReaction?.npcId === displayNpcId ? npcReaction.cue : "idle";
   const profile = profiles[displayNpcId];
   const visibleMessages = messages.filter(message => message.speaker !== "系統" && (activeLandmark
     ? message.targetId === "landmark" && message.sceneId === scene.scene_id
@@ -277,9 +284,12 @@ export default function Home() {
   const visibleChoices = activeLandmark ? playerChoices
     : activeNpcId === "vidalia" && scene.scene_id === "minglin" ? sceneChoices
       : [...sceneChoices, ...npcChoices]
-        .filter(choice => choice.choice_id !== "walk_to_council")
+        .filter(choice => choice.choice_id !== "walk_to_council" && choice.choice_id !== "meet_andre")
         .slice(0, 4);
   const reportChoice = playerChoices.find(choice => choice.choice_id === "review_demo_findings");
+  const itemUseChoices = Object.fromEntries(
+    playerChoices.filter(choice => choice.item_use_id).map(choice => [choice.item_use_id as string, choice]),
+  );
 
   useEffect(() => {
     if (!notice) return;
@@ -315,6 +325,7 @@ export default function Home() {
     setDialogueOpen(false);
     pendingApproach.current = null;
     setTrackedChoice(null);
+    setNpcReaction(null);
   }, [scene.scene_id, minglinOpeningAndre]);
 
   useEffect(() => {
@@ -465,6 +476,10 @@ export default function Home() {
 
   const openDialogue = useCallback((targetId: InteractionTarget) => {
     const landmark = targetId === "landmark";
+    if (targetId === "vidalia" && scene.scene_id === "minglin" && minglinOpeningAndre) {
+      setNotice("請先與安德烈交談，再沿著道路前往圓形廣場。維達利亞正在前方等候。");
+      return;
+    }
     setActiveLandmark(landmark);
     if (!landmark) {
       setActiveNpcId(targetId);
@@ -480,7 +495,7 @@ export default function Home() {
     setWorldMapOpen(false);
     setJournalOpen(false);
     setDialogueOpen(true);
-  }, [messages, profiles]);
+  }, [messages, profiles, scene.scene_id, minglinOpeningAndre]);
 
   function requestChoice(choice: PlayerChoice) {
     setWorldMapOpen(false);
@@ -625,7 +640,7 @@ export default function Home() {
         setDialogueOpen(false);
         setActiveLandmark(false);
         setNearTarget(null);
-        setNotice("安德烈要你沿著前方道路往前走。走到議會庭，維達利亞才會出現。");
+        setNotice("安德烈要你沿著前方道路往前走。維達利亞就在前方的圓形廣場。");
       }
       setTrackedChoice(null);
       const count = turn.state.story_progress.findings?.length ?? 0;
@@ -641,8 +656,22 @@ export default function Home() {
         setPlayerChoices(choices);
       } catch { /* The committed turn remains valid if the optional quest refresh fails. */ }
       const playerVisibleDialogue = turn.story.dialogue.filter((line) => line.speaker_name !== "系統");
+      const reactionLine = [...playerVisibleDialogue].reverse().find(
+        line => line.speaker_type === "npc" && isNpcId(line.speaker_id),
+      );
+      if (reactionLine && isNpcId(reactionLine.speaker_id)) {
+        setNpcReaction({
+          npcId: reactionLine.speaker_id,
+          cue: resolveNpcReaction(reactionLine.emotion),
+          sequence: turn.turn_number,
+        });
+      } else {
+        setNpcReaction(null);
+      }
       const nextMessages: ChatMessage[] = [...messages, playerLine, ...playerVisibleDialogue.map((line) => ({
-        id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const, npcId: messageNpcId, targetId:messageTarget, sceneId:scene.scene_id,
+        id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const,
+        npcId: isNpcId(line.speaker_id) ? line.speaker_id : messageNpcId,
+        targetId:messageTarget, sceneId:scene.scene_id, emotion: line.emotion,
       }))];
       setMessages(nextMessages);
       if (playerVisibleDialogue.length > 0) {
@@ -699,6 +728,7 @@ export default function Home() {
     setInput("");
     setInputType("text");
     setIntroOpen(true);
+    setNpcReaction(null);
     pendingActionRef.current = null;
     void initialize(id);
   }
@@ -728,7 +758,7 @@ export default function Home() {
         onError={music.onError}
       />
       <section className="map-stage" aria-label={`斜俯視的${scene.region_name}遊戲地圖`}>
-        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, profile.name])) as Record<NpcId, string>} visibleNpcIds={visibleNpcIds} forwardTriggerEnabled={storyNode === "minglin_path_open"} paused={introOpen || dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onReachForward={handleForwardReached} onZoomChange={setMapZoom} />}
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}:${scene.tilemap_url}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, profile.name])) as Record<NpcId, string>} visibleNpcIds={visibleNpcIds} interactiveNpcIds={interactiveNpcIds} forwardTriggerEnabled={storyNode === "minglin_path_open"} reaction={npcReaction} paused={introOpen || dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onReachForward={handleForwardReached} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
         <AlanHud hud={alanHud} sessionId={sessionId} stateVersion={stateVersion} onReplay={() => speakAlanMessage(alanHud)} onSpeakReply={text => speakAlanMessage(alanHud ? { ...alanHud, message: text } : null)} />
 
@@ -788,7 +818,7 @@ export default function Home() {
         </div>
 
         {dialogueOpen && <section className={`dialogue-panel is-open ${activeLandmark ? "is-landmark" : ""}`} aria-label={activeLandmark ? scene.display_name : `與${profile.name}對話`}>
-          {!activeLandmark && <div className={`dialogue-portrait npc-${displayNpcId}`}>
+          {!activeLandmark && <div key={`${displayNpcId}:${npcReaction?.sequence ?? 0}`} className={`dialogue-portrait npc-${displayNpcId} reaction-${portraitReaction}`} data-reaction={portraitReaction}>
             <Image src={profile.portrait_url} alt={`${profile.name}肖像`} fill sizes="(max-width: 640px) 90px, 175px" />
           </div>}
           <div className="dialogue-main">
@@ -826,7 +856,7 @@ export default function Home() {
           </div>
         </section>}
 
-        {journalOpen && <InvestigationJournal inventory={gameState?.player.items ?? []} findings={findings} objective={navigation?.objective ?? "走近地標開始調查。"} onClose={()=>setJournalOpen(false)} near={nearTarget===primaryTarget} onReport={reportChoice ? ()=>requestChoice(reportChoice) : undefined} />}
+        {journalOpen && <InvestigationJournal inventory={gameState?.player.items ?? []} findings={findings} objective={navigation?.objective ?? "走近地標開始調查。"} onClose={()=>setJournalOpen(false)} near={nearTarget===primaryTarget} onReport={reportChoice ? ()=>requestChoice(reportChoice) : undefined} itemUseChoices={itemUseChoices} onUseItem={(choice)=>{setJournalOpen(false);setActiveLandmark(false);setDialogueOpen(true);selectChoice(choice);}} />}
 
         {initializing && (
           <div className="game-overlay" role="status" aria-live="polite">

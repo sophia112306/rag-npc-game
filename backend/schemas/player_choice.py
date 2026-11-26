@@ -17,3 +17,4 @@ class PlayerChoice(BaseModel):
     action_mode: ActionMode = ActionMode.DIALOGUE
     destination_scene_id: str | None = Field(default=None, max_length=100)
     story_choice_id: str | None = Field(default=None, max_length=100)
+    item_use_id: str | None = Field(default=None, max_length=100)

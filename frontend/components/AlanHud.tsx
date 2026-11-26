@@ -56,7 +56,7 @@ export default function AlanHud({ hud, onReplay, onSpeakReply, sessionId, stateV
         <span>{hud.label}</span>
         <span className={styles.headerStatus}>{hud.tone === "override" ? "OVERRIDE" : hud.tone === "interference" ? "INTERFERENCE" : "ONLINE"}</span>
       </div>
-      <div className={styles.meter} aria-label={`篡奪率 ${hud.display_value}%`}>
+      <div className={styles.meter} aria-label={`因果解析度 ${hud.display_value}%`}>
         <span style={{ width: `${hud.display_value}%` }} />
       </div>
       <div className={styles.valueRow}><span>因果解析度</span><strong>{hud.display_value}%</strong></div>

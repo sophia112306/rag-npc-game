@@ -5,6 +5,7 @@ from .alan_hud import AlanHud, AlanTone
 from .character import CharacterProfile
 from .content import (
     CharacterDefinition,
+    ConversationMessage,
     DisclosureScope,
     KnowledgeItem,
     KnowledgeRecordInput,
@@ -61,6 +62,7 @@ __all__ = [
     "CommitmentItem",
     "CommitmentRecordInput",
     "CommitmentStatus",
+    "ConversationMessage",
     "DisclosureScope",
     "DeltaPayload",
     "DialogueLine",
