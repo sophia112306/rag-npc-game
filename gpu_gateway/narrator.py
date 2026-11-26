@@ -59,6 +59,9 @@ NARRATOR_SYSTEM_PROMPT = """你是遊戲《龍夢》的敘事 AI。你只判讀�
 - 主角對安德烈說「不說的話，我就燒了議會庭！」→ {"reason": "威脅逼迫角色，帶毀滅欲望", "axis": 0, "stance": null, "usurp": 2, "relation": {"andre": -8}}
 - 主角對維達利亞說「妳年輕的時候，也見過海嗎？」→ {"reason": "真心想了解她的過去，是深入的對話，不是問資訊", "axis": 0, "stance": null, "usurp": 0, "relation": {"vidalia": 4}}
 - 主角對維達利亞說「等這些事結束，我也想在森林裡住下來。」→ {"reason": "想留在森林不離開，偏守夢；維達利亞樂見", "axis": -3, "stance": "留戀", "usurp": 0, "relation": {"vidalia": 5}}
+- 主角對門梅司文托說「請教您，木乃伊為什麼忘不掉那些痛苦？」→ {"reason": "謙卑請教其關心的痛苦，但主角沒有表達自己的生死立場", "axis": 0, "stance": null, "usurp": 0, "relation": {"menmesvento": 5}}
+- 主角對門梅司文托說「長老會抽泉水也是為了大家好。」→ {"reason": "支持門梅司文托反對的長老會作法，但沒有表達永生或輪迴立場", "axis": 0, "stance": null, "usurp": 0, "relation": {"menmesvento": -4}}
+- 主角對安德烈說「反正都會毀掉，調查沒有用。」→ {"reason": "消極否定調查，安德烈不認同；但不是維持世界現狀的主張", "axis": 0, "stance": null, "usurp": 0, "relation": {"andre": -4}}
 
 規則：
 - 不確定時一律給 0。
