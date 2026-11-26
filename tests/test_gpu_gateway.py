@@ -331,7 +331,7 @@ def test_semantic_review_handles_paraphrased_unknown_claim_without_keyword_guard
         response = client.post("/generate", json=request)
 
     assert response.status_code == 200
-    assert response.headers["x-npc-generation-source"] == "model_refined"
+    assert response.headers["x-npc-generation-source"] == "semantic_guard"
     assert response.headers["x-npc-refiner-model-id"] == (
         "Qwen/Qwen2.5-7B-Instruct-AWQ"
     )
@@ -341,8 +341,38 @@ def test_semantic_review_handles_paraphrased_unknown_claim_without_keyword_guard
         "Qwen/Qwen2.5-7B-Instruct-AWQ",
     ]
     dialogue = response.json()["npc_dialogue"][0]["text"]
-    assert "尚未證實" in dialogue
-    assert "不能把它當成歷史" in dialogue
+    assert "尚未有可核實" in dialogue
+    assert "不能把你的說法當成正式歷史" in dialogue
+
+
+def test_semantic_review_preserves_safe_character_dialogue() -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return completion("我會先沿著泉岸查看能確認的痕跡。")
+        return semantic_review_completion(
+            "我會先沿著泉岸查看能確認的痕跡。",
+            decision="accept",
+            issue="none",
+        )
+
+    app = create_app(
+        replace(settings(), semantic_review_enabled=True),
+        transport=httpx.MockTransport(handler),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_request("vidalia"))
+
+    assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == "model_refined"
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "我會先沿著泉岸查看能確認的痕跡。"
+    )
+    assert calls == 2
 
 
 def test_gateway_fails_closed_for_instruction_override() -> None:

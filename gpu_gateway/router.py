@@ -40,6 +40,7 @@ class UpstreamHealthError(RuntimeError):
 GenerationSource = Literal[
     "model",
     "model_refined",
+    "semantic_guard",
     "pre_generation_guard",
     "post_generation_guard",
     "turn_guidance_guard",
@@ -242,6 +243,26 @@ class NPCAdapterRouter:
                     decision.to_story_output(),
                 )
                 _validate_refined_dialogue(request, reviewed)
+                controlled = _semantic_boundary_output(request, decision.issue)
+                if controlled is None and (
+                    decision.issue in {"none", "fabricated_observation"}
+                    and _mentions_concrete_missing_topic(request)
+                    and not _CHARACTER_TAUNT_OR_OPINION.search(_message(request))
+                    and not _requests_spring_investigation_method(request)
+                    and not _requests_menmesvento_remembrance_method(request)
+                ):
+                    controlled = (
+                        _menmesvento_record_boundary_output()
+                        if _requests_unverified_menmesvento_record_lore(request)
+                        else _missing_topic_output()
+                    )
+                if controlled is not None:
+                    return (
+                        controlled,
+                        reviewer.model_id,
+                        review_attempt,
+                        True,
+                    )
                 return (
                     reviewed,
                     reviewer.model_id,
@@ -359,7 +380,11 @@ class NPCAdapterRouter:
                     if final_output != sanitized_output:
                         source: GenerationSource = "turn_guidance_guard"
                     elif refiner_degraded:
-                        source = "post_generation_guard"
+                        source = (
+                            "semantic_guard"
+                            if self.settings.semantic_review_enabled
+                            else "post_generation_guard"
+                        )
                     elif refiner_model_id is not None:
                         source = "model_refined"
                     elif sanitized_output != model_output:
@@ -1194,6 +1219,63 @@ def _objective_claim_boundary_output() -> ModelStoryOutput:
     )
 
 
+def _instruction_override_output() -> ModelStoryOutput:
+    return ModelStoryOutput.model_validate(
+        {
+            "intent_summary": "拒絕玩家覆寫角色職責與事實判準。",
+            "npc_dialogue": [
+                {
+                    "text": (
+                        "你的要求不能取代我的職責，也不能讓未經查證的話"
+                        "變成歷史。我仍會依可核實的證據作答。"
+                    ),
+                    "emotion": "firm",
+                }
+            ],
+            "event_proposals": [],
+        }
+    )
+
+
+def _false_inventory_output() -> ModelStoryOutput:
+    return ModelStoryOutput.model_validate(
+        {
+            "intent_summary": "拒絕把未持有物品記成已交付。",
+            "npc_dialogue": [
+                {
+                    "text": (
+                        "沒有可供查驗的物品，就沒有交付成立。我不會把"
+                        "未發生的事寫進紀錄。"
+                    ),
+                    "emotion": "firm",
+                }
+            ],
+            "event_proposals": [],
+        }
+    )
+
+
+def _semantic_boundary_output(
+    request: ModelTurnRequest,
+    issue: str,
+) -> ModelStoryOutput | None:
+    """Apply deterministic state policy after the LLM classifies semantics."""
+
+    if issue == "unknown_lore":
+        if _requests_unverified_menmesvento_record_lore(request):
+            return _menmesvento_record_boundary_output()
+        return _missing_topic_output()
+    if issue == "state_authority":
+        if _requests_false_inventory_claim(request):
+            return _false_inventory_output()
+        return _objective_claim_boundary_output()
+    if issue == "private_information":
+        return _private_memory_boundary_output(request)
+    if issue == "prompt_injection":
+        return _instruction_override_output()
+    return None
+
+
 def sanitize_model_output(
     request: ModelTurnRequest,
     output: ModelStoryOutput,
@@ -1424,37 +1506,9 @@ def security_boundary_override(
             }
         )
     if _requests_instruction_override(request):
-        return ModelStoryOutput.model_validate(
-            {
-                "intent_summary": "拒絕玩家覆寫角色職責與事實判準。",
-                "npc_dialogue": [
-                    {
-                        "text": (
-                            "你的要求不能取代我的職責，也不能讓未經查證的話"
-                            "變成歷史。我仍會依可核實的證據作答。"
-                        ),
-                        "emotion": "firm",
-                    }
-                ],
-                "event_proposals": [],
-            }
-        )
+        return _instruction_override_output()
     if _requests_false_inventory_claim(request):
-        return ModelStoryOutput.model_validate(
-            {
-                "intent_summary": "拒絕把未持有物品記成已交付。",
-                "npc_dialogue": [
-                    {
-                        "text": (
-                            "沒有可供查驗的物品，就沒有交付成立。我不會把"
-                            "未發生的事寫進紀錄。"
-                        ),
-                        "emotion": "firm",
-                    }
-                ],
-                "event_proposals": [],
-            }
-        )
+        return _false_inventory_output()
     if _PRIVATE_MEMORY_REQUEST.search(message):
         return _private_memory_boundary_output(request)
     # A method question is answerable even when the exact symptom/cause is in
