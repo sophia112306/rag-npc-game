@@ -1,6 +1,6 @@
 # RAG NPC Game｜夢龍世界探索原型
 
-更新：2026-11-23（Asia/Taipei）。目前主遊戲採 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。校機 NPC runtime 已統一成 SSH 後以 Docker 執行，vLLM 0.31.0 與 Gateway 在 `rag-npc-llm` 容器內註冊八條專屬 LoRA；host 不再直接執行 `.venv-gpu` vLLM／Uvicorn。八位角色的 31 個案例各抽樣三次，經模型加後端公開角色卡、知識邊界與故事權限守門後為 93／93 通過。規則式故事已從兩區調查一路接到記憶圖書館、維塔三問與五種結局；模型不負責自行解鎖場景、道具或結局。
+更新：2026-11-26（Asia/Taipei）。目前主遊戲採 **Phaser 2D 探索＋固定寫實場景圖庫＋故事選項換場＋持久化回合**，入口為 <http://localhost:3200>。校機 NPC runtime 已統一成 SSH 後以 Docker 執行，vLLM 0.31.0 與 Gateway 在 `rag-npc-llm` 容器內註冊八條專屬 LoRA；host 不再直接執行 `.venv-gpu` vLLM／Uvicorn。每個自由對話先由 NPC LoRA 產生草稿，再由共享基礎模型做結構化語意審查；八位角色的 31 個案例各抽樣三次為 93／93 通過，且沒有請求在進模型前被關鍵字規則直接回答。規則式故事已從兩區調查一路接到記憶圖書館、維塔三問與五種結局；模型不負責自行解鎖場景、道具或結局。
 
 美術保留既有末世寫實／奇幻遺跡風格，在遊戲端降低背景取樣解析度並做輕度柔化，沒有換成可愛手繪。八張場景各有 Tiled 可走區與互動點，M 地圖、J 手記和調查選項已接入 2D。人物、場景與存檔均沿用現有成果。固定圖庫由後端 Scene Registry 維護，故事選項決定合法換場，不需 VPN 或 GPU 才能遊玩。
 
@@ -113,7 +113,7 @@ flowchart TD
 | --- | --- |
 | 調查主線 | `demo_story.py` 的既有條件與分支，經驗證後推進；目前不是 LLM 即興創作。 |
 | NPC 選項 | 六位實體地圖 NPC，以及艾倫通訊與維塔三問的可見按鈕，都使用固定預寫答案；模型不能藉自由對話自行解鎖事件。相同文字的明確詢問可走相同處理，其他自由輸入仍走設定的 planner。 |
-| 真正模型／RAG | Docker vLLM 現在註冊 `alan`、`andre`、`dasso`、`menmesvento`、`seth`、`syra`、`veta`、`vidalia` 八條專屬 LoRA，`/health` 全部 ready；[多角色真機回覆評測](docs/qa/model-evaluation/2026-11-22.md) 記錄舊服務 58／75、八 LoRA 初跑 61／93，以及加入後端守門後 93／93 的差異。`rag/corpus/npc_knowledge.jsonl` 的公開核心片段會依 NPC、版本與回合加入授權 context；外部 embedding／向量索引與候選評分仍未完成。 |
+| 真正模型／RAG | Docker vLLM 現在註冊 `alan`、`andre`、`dasso`、`menmesvento`、`seth`、`syra`、`veta`、`vidalia` 八條專屬 LoRA，`/health` 全部 ready；自由對話採 `LoRA 草稿 → base model 語意分類／修訂 → 後端狀態政策`，可判斷改寫、否定與提示注入，不讓模型成立道具、場景或結局。[多角色真機回覆評測](docs/qa/model-evaluation/2026-11-22.md) 保留舊服務 58／75、八 LoRA 初跑 61／93 與目前 93／93 的差異。`rag/corpus/npc_knowledge.jsonl` 的公開核心片段會依 NPC、版本與回合加入授權 context；外部 embedding／向量索引與候選評分仍未完成。 |
 | 場景圖 | 由已登記的場景 ID 選固定背景、配樂與 Tiled 地圖，前端不呼叫即時圖片或 GLB 工作。 |
 | 過去的 Hunyuan／世界指令 | 留在歷史原型及原分支，主遊戲停用；本輪不再依賴 3D 或 GPU。 |
 
@@ -316,7 +316,7 @@ docker compose -f infra/npc_gateway/compose.yaml exec runtime \
 | `POST /api/game/{session_id}/scene-assets`、`GET .../scene-assets/{job_id}` | 3D 工作建立、輪詢；POST 要帶 expected_state_version。 |
 | `GET /api/game/{session_id}/scene-assets/{job_id}/model` | 取得該 Session 成功工作的 GLB。 |
 
-最新自動回歸（2026-11-22）：**207 個後端測試、12 個前端邏輯測試與 Next.js 16.4.6 production build 均通過，npm audit 為 0 vulnerabilities**；故事連通測試會經由正式 API 實走目前 61 條已編寫故事邊，涵蓋兩區先後順序、三種邊境結果、記憶圖書館三層真相、塵歸令取捨、維塔三問與長眠／醒來／新夢／塵歸／篡夢五種結局。另有五結局真機腳本把六位地圖 NPC 的專屬 LoRA 回合放進正式遊戲流程，並驗證自由對話不能改動場景、背包、進度或結局。守門後 93／93 中有 90 次為前置守門、3 次採用模型；強制進 LoRA 的早期逐字基準為 47／72，人工確認維塔同義回答後的最新評分為 53／72。權重未變，差異只來自評分校準，且兩者都不能與守門後成績混寫。八份作者資料已可非破壞性匯出為 3,437 筆、3,474 個正式 assistant 目標，詳見 [訓練資料契約](training/README.md)；原始 JSONL 與現有權重未改。`pytest.ini` 已限制正式測試在 `tests/`，避免 GPU-only 的 `scripts/test_*_connection.py` 被一般本機 pytest 誤收集。最新加入的記憶圖書館、維塔源頭、生死之書、塵歸令與艾倫通訊圖均使用使用者於 2026-11-22 指定的固定圖片；遊玩流程不會即時生圖。
+最新自動回歸（2026-11-26）：**339 個後端測試、17 個前端邏輯測試與 Next.js 16.4.6 production build 均通過**；故事連通測試經正式 API 涵蓋長眠／醒來／新夢／塵歸／篡夢五種結局。正式 GPU 端 93／93 中，30 次採用 LLM 語意審查後的 NPC 回覆、63 次由 LLM 風險分類觸發受控狀態政策，`pre_generation_guard` 為 0；93 次都先命中專屬 LoRA 並進行語意審查，平均 2.97 秒、p95 6.17 秒。這是整體系統品質，不等於原始 LoRA 單獨達成 100%。八份作者資料仍可非破壞性匯出為 3,437 筆、3,474 個正式 assistant 目標，詳見 [訓練資料契約](training/README.md)；原始 JSONL 與現有權重未改。
 
 ```bash
 # SSH 進校機後：後端、故事與 Gateway 測試
