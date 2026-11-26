@@ -432,7 +432,7 @@ def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None
         settings(),
         transport=httpx.MockTransport(
             lambda _request: completion(
-                "这件事至关重要，我们应该先听见证人的说法。"
+                "这件事至关重要，我们应该先听见战士的说法。"
             )
         ),
     )
@@ -445,7 +445,7 @@ def test_gateway_normalizes_simplified_chinese_without_losing_dialogue() -> None
         "post_generation_guard"
     )
     assert response.json()["npc_dialogue"][0]["text"] == (
-        "這件事至關重要，我們應該先聽見證人的說法。"
+        "這件事至關重要，我們應該先聽見戰士的說法。"
     )
 
 
@@ -942,6 +942,26 @@ def test_gateway_keeps_food_small_talk_displayable_when_upstream_is_unavailable(
     assert "午餐" in response.json()["npc_dialogue"][0]["text"]
     assert response.headers["x-npc-generation-source"] == "post_generation_guard"
     assert response.headers["x-npc-upstream-attempts"] == "2"
+
+
+def test_gateway_keeps_not_ready_reply_natural_when_upstream_is_unavailable() -> None:
+    request = make_request("vidalia")
+    request["action_message"] = "還沒啊"
+
+    app = create_app(
+        settings(),
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(503, json={"error": "busy"})
+        ),
+    )
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    dialogue = response.json()["npc_dialogue"][0]["text"]
+    assert dialogue == "沒關係，不急。等你準備好再說。"
+    assert "查證" not in dialogue and "任務" not in dialogue
+    assert response.headers["x-npc-generation-source"] == "post_generation_guard"
 
 
 def test_gateway_refines_frustrated_slang_without_using_poisoned_draft() -> None:

@@ -595,6 +595,7 @@ _SIMPLIFIED_TO_TRADITIONAL = str.maketrans(
         "刚": "剛",
         "细": "細",
         "释": "釋",
+        "战": "戰",
     }
 )
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
@@ -917,6 +918,15 @@ def _natural_conversation_fallback(request: ModelTurnRequest) -> ModelStoryOutpu
         if description:
             text += description
         text += "想知道什麼，就直接問吧。"
+        emotion = "attentive"
+    elif _RUDE_OR_FRUSTRATED_TOPIC.search(message):
+        text = "抱歉，我剛才沒說清楚。你是指哪一部分？"
+        emotion = "concerned"
+    elif _NOT_READY_TOPIC.fullmatch(message):
+        text = "沒關係，不急。等你準備好再說。"
+        emotion = "reassuring"
+    elif _ATTENTION_INTERJECTION.fullmatch(message):
+        text = "嗯？怎麼了？"
         emotion = "attentive"
     elif _FOOD_TOPIC.search(message):
         text = "午餐？我不知道這裡有什麼食物能吃。你現在想吃什麼？"
