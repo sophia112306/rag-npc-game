@@ -2,6 +2,7 @@
 
 import asyncio
 import hmac
+import logging
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
@@ -27,6 +28,9 @@ from .router import (
     UpstreamHealthError,
     validation_error_detail,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(
@@ -113,6 +117,7 @@ def create_app(
                 detail={"code": "MODEL_RESPONSE_REJECTED"},
             ) from exc
         except ModelGatewayPermanentError as exc:
+            logger.warning("vLLM rejected NPC generation request: %s", exc)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail={"code": "VLLM_REQUEST_REJECTED", "message": str(exc)},
