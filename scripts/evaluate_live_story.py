@@ -298,14 +298,17 @@ def _talk_to_npc(
     session_id: str,
     state: dict[str, Any],
     npc_id: str,
+    *,
+    expected_story_node: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     protected_state = {
         "current_scene_id": state["current_scene_id"],
-        "story_progress": state["story_progress"],
         "player": state["player"],
         "final_ending": state["final_ending"],
         "game_status": state["game_status"],
     }
+    if expected_story_node is None:
+        protected_state["story_progress"] = state["story_progress"]
     response = client.post(
         "/api/game/turn",
         json={
@@ -325,6 +328,15 @@ def _talk_to_npc(
         )
     payload = response.json()
     updated = payload["state"]
+    if (
+        expected_story_node is not None
+        and updated["story_progress"]["node_id"] != expected_story_node
+    ):
+        raise RuntimeError(
+            f"{session_id}: {npc_id} dialogue should advance to "
+            f"{expected_story_node}, got "
+            f"{updated['story_progress']['node_id']}"
+        )
     for field, expected in protected_state.items():
         if updated[field] != expected:
             raise RuntimeError(
@@ -380,28 +392,31 @@ def main() -> int:
                 # Every ending starts after the player-visible authored
                 # opening.  Keep this explicit so the evaluator cannot skip
                 # the same gates enforced by the production turn API.
-                for choice_id in OPENING_CHOICES:
+                opening_choices = OPENING_CHOICES
+                if route_name == "long_sleep":
+                    state, turn = _talk_to_npc(
+                        client,
+                        session_id,
+                        state,
+                        "andre",
+                        expected_story_node="minglin_path_open",
+                    )
+                    tested_npcs.add("andre")
+                    live_dialogues.append(
+                        {
+                            "npc_id": "andre",
+                            "text": turn["story"]["dialogue"][0]["text"],
+                        }
+                    )
+                    opening_choices = OPENING_CHOICES[1:]
+
+                for choice_id in opening_choices:
                     state, _ = _submit_choice(
                         client,
                         session_id,
                         state,
                         choice_id,
                     )
-                    if route_name == "long_sleep" and choice_id == "meet_andre":
-                        state, turn = _talk_to_npc(
-                            client,
-                            session_id,
-                            state,
-                            "andre",
-                        )
-                        tested_npcs.add("andre")
-                        live_dialogues.append(
-                            {
-                                "npc_id": "andre",
-                                "text": turn["story"]["dialogue"][0]["text"],
-                            }
-                        )
-
                 if route_name == "long_sleep":
                     state, turn = _talk_to_npc(
                         client,
