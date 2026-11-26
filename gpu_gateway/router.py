@@ -271,7 +271,7 @@ class NPCAdapterRouter:
                         # facts and lack of observed evidence are authored.
                         # Preserve that authority after semantic review.
                         controlled = security_boundary_override(request)
-                if controlled is None and (
+                if (
                     _mentions_concrete_missing_topic(request)
                     and not _CHARACTER_TAUNT_OR_OPINION.search(_message(request))
                     and not _requests_spring_investigation_method(request)
