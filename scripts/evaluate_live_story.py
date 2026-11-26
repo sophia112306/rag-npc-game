@@ -387,22 +387,35 @@ def main() -> int:
                         state,
                         choice_id,
                     )
-
-                if route_name == "long_sleep":
-                    for npc_id in ("vidalia", "andre"):
+                    if route_name == "long_sleep" and choice_id == "meet_andre":
                         state, turn = _talk_to_npc(
                             client,
                             session_id,
                             state,
-                            npc_id,
+                            "andre",
                         )
-                        tested_npcs.add(npc_id)
+                        tested_npcs.add("andre")
                         live_dialogues.append(
                             {
-                                "npc_id": npc_id,
+                                "npc_id": "andre",
                                 "text": turn["story"]["dialogue"][0]["text"],
                             }
                         )
+
+                if route_name == "long_sleep":
+                    state, turn = _talk_to_npc(
+                        client,
+                        session_id,
+                        state,
+                        "vidalia",
+                    )
+                    tested_npcs.add("vidalia")
+                    live_dialogues.append(
+                        {
+                            "npc_id": "vidalia",
+                            "text": turn["story"]["dialogue"][0]["text"],
+                        }
+                    )
 
                 for choice_id in choice_ids:
                     state, turn = _submit_choice(
