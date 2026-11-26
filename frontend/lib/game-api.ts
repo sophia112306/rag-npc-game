@@ -69,6 +69,21 @@ export type PlayerScene = {
   canon_status: "confirmed" | "provisional";
 };
 
+export type AlanTone = "calm" | "urgent" | "interference" | "override" | "silent";
+
+export type AlanHud = {
+  visible: boolean;
+  label: string;
+  display_value: number;
+  tone: AlanTone;
+  message: string;
+  persistent: boolean;
+  countdown_turns: number | null;
+  event_key: string | null;
+};
+
+export type AlanModelResponse = { reply: string };
+
 export type GameStateSummary = {
   session_id: string;
   player: { player_id: string; name: string; inventory: string[]; items?: PlayerItem[] };
@@ -81,6 +96,7 @@ export type GameStateSummary = {
   current_scene_id: string;
   current_scene: PlayerScene;
   navigation?: PlayerNavigation | null;
+  alan_hud?: AlanHud | null;
   story_progress: {
     arc_id: string;
     node_id: string;
@@ -149,6 +165,7 @@ export type PlayerNavigation = {
 export type Capabilities = {
   generation_mode: "rule_based" | "external_model";
   dynamic_dialogue: boolean;
+  relationship_system: "disabled" | "model_judged";
 };
 
 export type SceneImageJob = {
@@ -213,7 +230,11 @@ export class ApiRequestError extends Error {
   }
 }
 
-export const GAME_SESSION_STORAGE_KEY = "vidalia-game-session";
+// Bump the browser session namespace after changing the canonical opening.
+// Existing sessions may already be in the old fissure or Minglin flow, so
+// reusing them would make a fresh page show the wrong opening NPC. A new
+// namespace preserves old saves while making Minglin -> Andre deterministic.
+export const GAME_SESSION_STORAGE_KEY = "vidalia-game-session-v4";
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8300";
 
 export function resolveApiAsset(url: string): string {

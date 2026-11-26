@@ -13,6 +13,7 @@ class CapabilitiesResponse(BaseModel):
 
     generation_mode: Literal["rule_based", "external_model"]
     dynamic_dialogue: bool
+    relationship_system: Literal["disabled", "model_judged"]
     rag_integration: Literal["pending"] = "pending"
     voice_integration: Literal["pending"] = "pending"
     allowed_operations: list[OperationType]
@@ -31,6 +32,11 @@ def get_capabilities(request: Request) -> CapabilitiesResponse:
     return CapabilitiesResponse(
         generation_mode=generation_mode,
         dynamic_dialogue=True,
+        relationship_system=(
+            "model_judged"
+            if request.app.state.game_orchestrator.narrative_judge is not None
+            else "disabled"
+        ),
         allowed_operations=[
             OperationType.TRANSFER_ITEM,
             OperationType.ESTABLISH_COMMITMENT,

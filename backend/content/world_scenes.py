@@ -3,6 +3,7 @@
 from hashlib import sha256
 import math
 import random
+from collections.abc import Iterable
 
 from backend.content.scenes import require_scene
 from backend.schemas.world_scene import WorldNpc, WorldObject, WorldSceneConfig, WorldSceneView
@@ -11,6 +12,7 @@ from backend.schemas.world_scene import WorldNpc, WorldObject, WorldSceneConfig,
 def default_config(scene_id: str) -> WorldSceneConfig:
     seed = int(sha256(scene_id.encode()).hexdigest()[:7], 16)
     settings = {
+        "fissure": dict(tree_count=4, runestone_count=1, weather="mist"),
         "minglin": dict(tree_count=9, runestone_count=2),
         "minglin_life_spring": dict(tree_count=14, runestone_count=3, weather="mist"),
         "minglin_rune_grove": dict(
@@ -59,7 +61,9 @@ def default_config(scene_id: str) -> WorldSceneConfig:
 
 
 def build_world_scene(
-    scene_id: str, config: WorldSceneConfig | None = None
+    scene_id: str,
+    config: WorldSceneConfig | None = None,
+    visible_npc_ids: Iterable[str] | None = None,
 ) -> WorldSceneView:
     config = config or default_config(scene_id)
     rng = random.Random(config.seed)
@@ -123,7 +127,10 @@ def build_world_scene(
                 )
             )
 
-    npc = {"minglin": "vidalia", "liuchen_valley": "menmesvento"}.get(scene_id)
+    npc = {"fissure": "andre", "minglin": "vidalia", "liuchen_valley": "menmesvento"}.get(scene_id)
+    if scene_id == "minglin" and visible_npc_ids is not None:
+        visible = set(visible_npc_ids)
+        npc = "andre" if "andre" in visible else "vidalia" if "vidalia" in visible else None
     scene_npcs = [
         WorldNpc(npc_id="seth", x=-3.4, z=-6, label="與塞特交談"),
         WorldNpc(npc_id="syra", x=3.4, z=-6, label="與希拉交談"),
@@ -131,6 +138,7 @@ def build_world_scene(
         WorldNpc(npc_id="dasso", x=3.5, z=-8, label="與達索交談")
     ] if scene_id == "lieyi_plains" else []
     label = {
+        "fissure": "與安德烈交談",
         "minglin": "與維達利亞交談",
         "minglin_life_spring": "調查泉眼",
         "minglin_rune_grove": "調查符石",

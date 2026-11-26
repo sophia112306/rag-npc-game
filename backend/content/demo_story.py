@@ -7,7 +7,7 @@ state change still passes through the normal proposal resolver.
 
 from dataclasses import dataclass
 
-from backend.content.characters import npc_is_present
+from backend.content.characters import CHARACTER_PROFILES, npc_is_present
 from backend.content.npc_dialogue import NPC_DIALOGUE_CHOICES
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import ActionMode
@@ -39,6 +39,15 @@ class DemoStoryChoiceDefinition:
     required_completed_choice_ids: tuple[str, ...] = ()
     epilogue_answer_key: str | None = None
     epilogue_answer_value: str | None = None
+    rune_site: str | None = None  # E2-4：放置觀測符印的地點（寫入 flags["placed_runes"]，供之後拆除）
+    # 觸發條件（規格 v3 事件清單）：全部符合才會出現
+    min_relations: tuple[tuple[str, int], ...] = ()  # 例如 (("vidalia", 60),)
+    axis_min: int | None = None
+    axis_max: int | None = None
+    required_any_flags: tuple[str, ...] = ()  # 任一旗標為真即可
+    requires_placed_runes: bool = False
+    once_group: str | None = None  # 同群組任一選項做過後，整組不再出現
+    removes_placed_runes: bool = False  # 依已放置的符印數，每處套用一次 E2-4_remove
     ending_id: str | None = None
     emotion: str | None = None
 
@@ -115,21 +124,69 @@ def _minglin_travel_choices(node_id: str) -> tuple[DemoStoryChoiceDefinition, ..
 
 DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     _choice(
-        "ask_location",
+        "meet_andre",
+        "fissure_arrival",
+        "fissure",
+        "與安德烈交談",
+        "我和安德烈交談，請他帶我前往鳴霖。",
+        "你醒在屏障裂隙邊。這裡不是適合久留的地方——跟我走，我帶你去鳴霖的議會。",
+        "minglin_path_open",
+        "鳴霖・未記載之物",
+        action_mode=ActionMode.DIALOGUE,
+        target_npc_id="andre",
+        destination_scene_id="minglin",
+    ),
+    _choice(
+        "meet_andre",
         "minglin_arrival",
+        "minglin",
+        "與安德烈交談",
+        "我和安德烈交談，請告訴我接下來該怎麼走。",
+        "你醒在鳴霖林間的入口。先別急著靠近議會庭——沿著前方的路走，等你看清這片森林，我再告訴你該找誰。",
+        "minglin_path_open",
+        "鳴霖・前往議會庭",
+        action_mode=ActionMode.DIALOGUE,
+        target_npc_id="andre",
+    ),
+    _choice(
+        "walk_to_council",
+        "minglin_path_open",
+        "minglin",
+        "沿著前方道路前進",
+        "我沿著鳴霖前方的道路往前走。",
+        "林霧在前方散開，一名金髮精靈站在議會庭的石環中央。她似乎早已察覺你的到來。",
+        "minglin_council",
+        "鳴霖・議會庭",
+        action_mode=ActionMode.MOVEMENT,
+    ),
+    _choice(
+        "meet_vidalia",
+        "minglin_council",
+        "minglin",
+        "與維達利亞交談",
+        "我向維達利亞說明自己剛才的遭遇，請她告訴我這裡是什麼地方。",
+        "旅人，歡迎來到鳴霖。你身上的氣息沒有被命脈之泉記下；先告訴我，你在屏障裂隙看見了什麼？",
+        "minglin_orientation",
+        "鳴霖異象・調查委託",
+        action_mode=ActionMode.DIALOGUE,
+        target_npc_id="vidalia",
+    ),
+    _choice(
+        "ask_location",
+        "minglin_briefed",
         "minglin",
         "詢問目前所在地",
         "這裡是什麼地方？泉水和現在的異象有關嗎？",
         "這裡是鳴霖的平衡議會。命脈之泉已經很久沒有向外延伸；最近又出現異象，我還不知道兩者是否相關。",
-        "minglin_orientation",
-        "鳴霖異象",
+        "minglin_briefed",
+        "兩條調查路線",
         action_mode=ActionMode.DIALOGUE,
         target_npc_id="vidalia",
         reveal_clue_ids=("spring_stopped_expanding",),
     ),
     _choice(
         "ask_for_task",
-        "minglin_arrival",
+        "minglin_orientation",
         "minglin",
         "詢問能幫什麼忙",
         "我可以先從哪裡調查這場異象？",
@@ -140,10 +197,9 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         target_npc_id="vidalia",
         reveal_clue_ids=("minglin_anomaly",),
     ),
-    *_minglin_travel_choices("minglin_arrival"),
     _choice(
-        "ask_for_task",
-        "minglin_orientation",
+        "ask_about_anomaly",
+        "minglin_briefed",
         "minglin",
         "追問異象來源",
         "我應該先調查哪一種異象？",
@@ -154,10 +210,9 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         target_npc_id="vidalia",
         reveal_clue_ids=("minglin_anomaly",),
     ),
-    *_minglin_travel_choices("minglin_orientation"),
     _choice(
         "ask_about_factions",
-        "minglin_orientation",
+        "minglin_briefed",
         "minglin",
         "詢問其他勢力",
         "除了精靈，還有哪些勢力會追查這場異象？",
@@ -440,7 +495,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     _choice(
         "border_help_both", "border_ruins_preview", "border_ruins",
         "協助塞特與希拉", "我決定協助塞特與希拉，讓兩人繼續前行。",
-        "你決定協助塞特與希拉。裂隙地圖已收進背包，圖書館的路線成為可追查的線索。",
+        "你決定協助塞特與希拉。裂隙拓印圖已收進背包，圖書館的路線成為可追查的線索。",
         "border_choice_resolved", "邊境抉擇：協助兩人",
         action_mode=ActionMode.DIALOGUE, target_npc_id="seth", rule_event_id="E2-3_help_both",
         witness_npc_ids=("seth", "syra"), narrate_response=True,
@@ -449,7 +504,7 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     _choice(
         "border_report", "border_ruins_preview", "border_ruins",
         "選擇通報長老會", "我選擇向長老會通報這次邊境相遇。",
-        "你選擇通報長老會，這次行動將沿長老協力的方向承接。你沒有取得裂隙地圖。",
+        "你選擇通報長老會，這次行動將沿長老協力的方向承接。你沒有取得裂隙拓印圖。",
         "border_choice_resolved", "邊境抉擇：長老協力",
         action_mode=ActionMode.DIALOGUE, target_npc_id="seth", rule_event_id="E2-3_report",
         witness_npc_ids=("seth", "syra"), narrate_response=True,
@@ -471,8 +526,8 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     ),
     _choice(
         "enter_memory_library_with_map", "demo_complete", "minglin",
-        "依裂隙地圖前往記憶圖書館", "我依照塞特與希拉交付的裂隙地圖前往記憶圖書館。",
-        "裂隙地圖在暮光下顯出一條被抹去的路。石門之後，封存輪迴記錄的古老藏庫重新出現在你面前。",
+        "依裂隙拓印圖前往記憶圖書館", "我依照塞特與希拉交付的裂隙拓印圖前往記憶圖書館。",
+        "裂隙拓印圖在暮光下顯出一條被抹去的路。石門之後，封存輪迴記錄的古老藏庫重新出現在你面前。",
         "memory_library_arrival", "記憶圖書館",
         action_mode=ActionMode.MOVEMENT, destination_scene_id="memory_library",
         unlock_scene_ids=("memory_library",), special_scene_transition=True,
@@ -654,7 +709,225 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "你取代沉睡巨龍成為夢的控制者。世界得以延續，代價是所有記憶都開始依附你的意志。",
         "ending_usurp", "結局：篡夢", ending_id="篡夢",
     ),
+    # -----------------------------------------------------------------
+    # 階段二選做支線：解決邊境廢墟後、進入記憶圖書館前，可回到三處各做一次。
+    # 規格 v3 E2-1 抽泉裝置試運轉、E2-4 觀測符印（命脈之泉／流塵谷地脈裂隙／聖火反應爐）。
+    # 艾倫此時尚未曝光身分，只以「視網膜上的字」出現。
+    # -----------------------------------------------------------------
+    _choice(
+        "side_spring_anomaly", "demo_complete", "minglin",
+        "回命脈之泉查看異常", "我回命脈之泉看看泉水的異常。",
+        "泉眼旁的岩縫裡多了一具陌生的金屬裝置，管線深深插進泉脈，正一下一下地抽動。裝置上刻著烈燚原長老會能源長老的印記。",
+        "side_spring_pump", "泉脈裡的裝置",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin_life_spring",
+    ),
+    _choice(
+        "pump_prevent", "side_spring_pump", "minglin_life_spring",
+        "拆下裝置並告訴安德烈", "我把這具裝置拆下來，並把它的來歷告訴安德烈。",
+        "你切斷管線，把裝置拖離泉眼。安德烈聽完你的說明，沉默地收起那枚長老會的印記：「這件事，我會讓平衡議會知道。」"
+        "這時，視網膜上浮現一行字：「在泉眼放下觀測符印，這是修復世界的步驟。」",
+        "side_spring_rune", "泉眼旁的訊號", rule_event_id="E2-1_prevent", narrate_response=True,
+    ),
+    _choice(
+        "pump_assist", "side_spring_pump", "minglin_life_spring",
+        "協助長老校準裝置", "我照長老會的刻痕，幫忙把裝置校準。",
+        "你依著刻痕調整閥門，裝置的抽動變得平穩而有力。泉水的聲音更低了，岩縫深處傳來長老會的回應訊號——他們記下了你的協力。"
+        "這時，視網膜上浮現一行字：「在泉眼放下觀測符印，這是修復世界的步驟。」",
+        "side_spring_rune", "泉眼旁的訊號", rule_event_id="E2-1_assist", narrate_response=True,
+    ),
+    _choice(
+        "pump_ignore", "side_spring_pump", "minglin_life_spring",
+        "不碰這具裝置", "我不碰這具裝置，先把它留在原地。",
+        "你沒有碰那具裝置。它在你身後繼續抽動，泉水的流聲一點一點變得遙遠。"
+        "這時，視網膜上浮現一行字：「在泉眼放下觀測符印，這是修復世界的步驟。」",
+        "side_spring_rune", "泉眼旁的訊號", rule_event_id="E2-1_ignore", narrate_response=True,
+    ),
+    _choice(
+        "rune_place_spring", "side_spring_rune", "minglin_life_spring",
+        "在泉眼放下觀測符印", "我照視網膜上的指示，在泉眼放下觀測符印。",
+        "符印貼上泉眼的岩面，微光沿著水脈滲了下去。視網膜角落的數字輕輕跳動了一下。你沿林道回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_place", rune_site="minglin_life_spring",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", narrate_response=True,
+    ),
+    _choice(
+        "rune_refuse_spring", "side_spring_rune", "minglin_life_spring",
+        "拒絕在泉眼放下符印", "我不打算在泉眼放下這種東西。",
+        "視網膜上的字停了一會兒，才換成較溫和的語氣：「那只是觀測用的標記，不會傷害任何人。」你沒有回應，沿林道回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_refuse",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", narrate_response=True,
+    ),
+    _choice(
+        "side_fire_reactor", "demo_complete", "minglin",
+        "前往烈燚原的聖火反應爐", "我再去一趟烈燚原，看看聖火反應爐。",
+        "你再次踏進烈燚原。聖火反應爐的熱浪撲面而來，爐壁上的紋路與泉眼旁那具裝置如出一轍。"
+        "視網膜上浮現一行字：「在反應爐放下觀測符印，這是修復世界的步驟。」",
+        "side_fire_rune", "聖火反應爐",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="lieyi_plains", special_scene_transition=True,
+    ),
+    _choice(
+        "rune_place_fire", "side_fire_rune", "lieyi_plains",
+        "在反應爐放下觀測符印", "我照視網膜上的指示，在聖火反應爐放下觀測符印。",
+        "符印貼上滾燙的爐壁，沒有被火焰吞沒，反而讓火光短暫地停頓了一瞬。視網膜角落的數字輕輕跳動了一下。你離開烈燚原，回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_place", rune_site="lieyi_plains",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
+        narrate_response=True,
+    ),
+    _choice(
+        "rune_refuse_fire", "side_fire_rune", "lieyi_plains",
+        "拒絕在反應爐放下符印", "我不打算在聖火反應爐放下這種東西。",
+        "視網膜上的字閃了閃：「只是一個標記而已，你在擔心什麼？」你沒有回應，離開烈燚原回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_refuse",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
+        narrate_response=True,
+    ),
+    _choice(
+        "side_dust_fissure", "demo_complete", "minglin",
+        "前往流塵谷的地脈裂隙", "我再去一趟流塵谷，看看地脈裂隙。",
+        "你再次走進流塵谷。風沙在一道地脈裂隙前打著旋，裂隙深處傳來與泉眼相同的低鳴。"
+        "視網膜上浮現一行字：「在裂隙放下觀測符印，這是修復世界的步驟。」",
+        "side_dust_rune", "地脈裂隙",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="liuchen_valley", special_scene_transition=True,
+    ),
+    _choice(
+        "rune_place_dust", "side_dust_rune", "liuchen_valley",
+        "在裂隙放下觀測符印", "我照視網膜上的指示，在地脈裂隙放下觀測符印。",
+        "符印沉進裂隙的陰影裡，周圍的風沙忽然安靜下來。視網膜角落的數字輕輕跳動了一下。你離開流塵谷，回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_place", rune_site="liuchen_valley",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
+        narrate_response=True,
+    ),
+    _choice(
+        "rune_refuse_dust", "side_dust_rune", "liuchen_valley",
+        "拒絕在裂隙放下符印", "我不打算在地脈裂隙放下這種東西。",
+        "視網膜上的字沉默了片刻：「你遲早會明白這是必要的步驟。」你沒有回應，離開流塵谷回到鳴霖。",
+        "demo_complete", "邊境之後", rule_event_id="E2-4_refuse",
+        action_mode=ActionMode.MOVEMENT, destination_scene_id="minglin", special_scene_transition=True,
+        narrate_response=True,
+    ),
 )
+
+
+_E3_CHOICES = (
+    # -----------------------------------------------------------------
+    # 階段三：真相之後、前往維塔之前的事件（規格 v3 E3-2～E3-4、真相 C 後拒絕艾倫、拆除符印）
+    # 關係值門檻主要靠敘事 AI 判讀對話累積；條件不符時不會出現，不影響主線。
+    # -----------------------------------------------------------------
+    _choice(
+        "reject_alan_after_truths", "memory_truths_complete", "memory_library",
+        "明確拒絕艾倫", "我不會再替外界評議會做任何事，艾倫。",
+        "通訊另一端安靜了很久。艾倫最後只留下一句：「你會後悔的。」視網膜上的數字停止跳動，雜音一點一點退去。",
+        "memory_truths_complete", "真相三：夢境之外", rule_event_id="Truth_C_reject_alan",
+        narrate_response=True, once_group="reject_alan",
+    ),
+    _choice(
+        "agree_wake_veta", "dust_token_decided", "liuchen_valley",
+        "答應他喚醒維塔的請求", "我答應你，會去喚醒維塔。",
+        "門梅司文托閉上眼，像是終於放下了千年的重量：「那就去吧。讓他醒來，親眼看看這個世界。」",
+        "dust_token_decided", "門梅司文托的請求", rule_event_id="E3-2_agree",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="menmesvento", witness_npc_ids=("menmesvento",),
+        min_relations=(("menmesvento", 60),), once_group="e3_2",
+    ),
+    _choice(
+        "refuse_wake_veta", "dust_token_decided", "liuchen_valley",
+        "婉拒他喚醒維塔的請求", "這件事，我還不能答應你。",
+        "門梅司文托沒有追問，只是把視線移回生死之書：「無妨。每個人都該自己決定要叫醒誰。」",
+        "dust_token_decided", "門梅司文托的請求",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="menmesvento", witness_npc_ids=("menmesvento",),
+        min_relations=(("menmesvento", 60),), once_group="e3_2",
+    ),
+    # E3-3 維達利亞的感情節點：依主軸三選一，只發生一次
+    _choice(
+        "vidalia_offer_weaving", "veta_route_ready", "minglin",
+        "聽維達利亞想說的話", "維達利亞，妳想對我說什麼？",
+        "維達利亞的聲音比平常輕：「留下來吧。我可以用織夢術讓你成為精靈，從此不必再回到那個會死去的世界。」"
+        "她頓了頓，又說：「但你要想清楚，一旦織成，就再也回不去了。」",
+        "side_vidalia_offer", "織夢之約",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+        min_relations=(("vidalia", 60),), axis_max=-20, once_group="e3_3",
+    ),
+    _choice(
+        "accept_dream_weaving", "side_vidalia_offer", "minglin",
+        "接受織夢，成為精靈", "我願意留下來，成為精靈。",
+        "維達利亞牽起你的手，林間的霧絲纏上你的指尖。等霧散去，你聽見的風聲已經和她一樣。你成了鳴霖的精靈，再也不是外來者。",
+        "veta_route_ready", "命脈之泉源頭", rule_event_id="E3-3_accept_transformation",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+    ),
+    _choice(
+        "decline_dream_weaving", "side_vidalia_offer", "minglin",
+        "婉拒織夢", "謝謝妳，但我還不能留下。",
+        "維達利亞收回手，笑得有些勉強：「我知道。只是……想問問看而已。」",
+        "veta_route_ready", "命脈之泉源頭",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+    ),
+    _choice(
+        "vidalia_confides_wavering", "veta_route_ready", "minglin",
+        "聽維達利亞想說的話", "維達利亞，妳想對我說什麼？",
+        "維達利亞望著議會庭外的雨霧，很久才開口：「我一直以為，只要什麼都不改變就好。可是看著你，我開始不確定了……我其實不想讓這個世界改變，這樣是錯的嗎？」",
+        "veta_route_ready", "命脈之泉源頭",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+        min_relations=(("vidalia", 60),), axis_min=20, once_group="e3_3",
+    ),
+    _choice(
+        "vidalia_asks_outside", "veta_route_ready", "minglin",
+        "聽維達利亞想說的話", "維達利亞，妳想對我說什麼？",
+        "維達利亞歪著頭看你：「外面的世界是什麼樣子？那裡的雨，也會這樣下個不停嗎？」你說起那個一切都會結束的世界，她安靜地聽到最後。",
+        "veta_route_ready", "命脈之泉源頭",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+        min_relations=(("vidalia", 60),), axis_min=-19, axis_max=19, once_group="e3_3",
+    ),
+    _choice(
+        "andre_shows_breach", "veta_route_ready", "minglin",
+        "跟安德烈去看屏障裂縫", "安德烈，你想給我看什麼？",
+        "安德烈帶你回到屏障破裂的地方。裂縫比你醒來那天寬了許多，邊緣還在緩慢地剝落。「我查過了，」他說，「裂縫開始擴大的時間，和你出現的那天完全吻合。」"
+        "他另外告訴你，裂縫附近有一處隱藏的採集洞穴，危急時可以躲進去。",
+        "veta_route_ready", "命脈之泉源頭", rule_event_id="E3-4",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="andre",
+        min_relations=(("andre", 60),), once_group="e3_4",
+    ),
+    _choice(
+        "remove_placed_runes", "veta_route_ready", "minglin",
+        "拆除各地的觀測符印", "我要把先前放下的觀測符印全部拆掉。",
+        "你回到每一處放過符印的地方，把它們一一剝下。符印離開岩面時發出細微的碎裂聲，視網膜角落的數字也跟著往回跳。",
+        "veta_route_ready", "命脈之泉源頭", narrate_response=True,
+        requires_placed_runes=True, required_any_flags=("warning_event_done", "truth_c_unlocked"),
+        removes_placed_runes=True, once_group="remove_runes",
+    ),
+)
+
+DEMO_STORY_CHOICES = DEMO_STORY_CHOICES + _E3_CHOICES
+
+# 一次性群組：同群組任一選項做過後，整組不再出現
+ONCE_GROUP_MEMBERS: dict[str, frozenset[str]] = {
+    group: frozenset(choice.choice_id for choice in DEMO_STORY_CHOICES if choice.once_group == group)
+    for group in {choice.once_group for choice in DEMO_STORY_CHOICES if choice.once_group}
+}
+
+
+def _choice_conditions_met(choice: DemoStoryChoiceDefinition, state: GameState, completed: set[str]) -> bool:
+    """規格 v3 事件的觸發條件：關係值、主軸、旗標、已放置的符印與一次性。"""
+
+    for npc_id, minimum in choice.min_relations:
+        npc = state.npc_states.get(npc_id)
+        if npc is None or npc.relation < minimum:
+            return False
+    if choice.axis_min is not None and state.axis < choice.axis_min:
+        return False
+    if choice.axis_max is not None and state.axis > choice.axis_max:
+        return False
+    if choice.required_any_flags and not any(state.flags.get(flag) for flag in choice.required_any_flags):
+        return False
+    if choice.requires_placed_runes and not state.flags.get("placed_runes"):
+        return False
+    if choice.once_group and ONCE_GROUP_MEMBERS[choice.once_group] & completed:
+        return False
+    return True
+
+
+# 階段二選做支線的入口；每處只能去一次，只在解決邊境廢墟之後出現
+SIDE_EVENT_ENTRY_IDS = frozenset(("side_spring_anomaly", "side_fire_reactor", "side_dust_fissure"))
+
+# 警告事件 W（規格 v3）：篡奪值第一次達 75 後強制發生，不屬於任何固定節點
+WARNING_RULE_IDS = frozenset(("W", "W_expose_elders"))
 
 BORDER_RULE_IDS = frozenset(("E2-3_help_both", "E2-3_report", "E2-3_ignore"))
 BORDER_RESOLUTION_IDS = frozenset(choice.choice_id for choice in DEMO_STORY_CHOICES if choice.rule_event_id in BORDER_RULE_IDS)
@@ -663,7 +936,47 @@ MEMORY_LIBRARY_ENTRY_IDS = frozenset(
 )
 AUTHORED_RULE_IDS = frozenset(
     choice.rule_event_id for choice in DEMO_STORY_CHOICES if choice.rule_event_id
-)
+) | WARNING_RULE_IDS
+
+
+def pending_warning_choices(state: GameState) -> tuple[DemoStoryChoiceDefinition, ...]:
+    """警告事件 W：篡奪值第一次達 75 後的下一回合強制出現，只發生一次。
+
+    維塔源頭有自己的篡夢警告流程（veta_usurp_warning），那裡不另外插入 W。
+    """
+
+    node_id = state.story_progress.node_id
+    if (
+        state.game_status != "active"
+        or not state.warning_triggered
+        or state.flags.get("warning_event_done")
+        or node_id.startswith("veta_")
+    ):
+        return ()
+    guide_id = max(
+        (npc_id for npc_id in ("andre", "vidalia", "menmesvento") if npc_id in state.npc_states),
+        key=lambda npc_id: state.npc_states[npc_id].relation,
+    )
+    guide = CHARACTER_PROFILES[guide_id].name
+    sight = (
+        f"{guide}帶你走到林地邊緣。樹幹表面泛著金屬的冷光，泉水沿著溝渠倒流回源頭。"
+        f"{guide}看著你：「異象是從你去過的地方開始的。」"
+    )
+    chapter = state.story_progress.chapter_title
+    return (
+        _choice(
+            "warning_witness", node_id, state.current_scene_id,
+            "記下眼前的異象", "我記下眼前的異象，沒有多說什麼。",
+            sight + "你把這一幕記在心裡。若那些符印真與異象有關，現在拆除還來得及。",
+            node_id, chapter, rule_event_id="W", narrate_response=True,
+        ),
+        _choice(
+            "warning_expose_elders", node_id, state.current_scene_id,
+            "當場揭發長老會", "我把長老會在各地動的手腳全部說出來。",
+            sight + "你說出長老會的裝置與他們的打算。消息很快傳開，長老會不得不暫時收手。",
+            node_id, chapter, rule_event_id="W_expose_elders", narrate_response=True,
+        ),
+    )
 
 
 def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefinition, ...]:
@@ -671,23 +984,51 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
 
     if state.game_status != "active":
         return ()
+    warning = pending_warning_choices(state)
+    if warning:
+        return warning
     completed = set(state.story_progress.completed_choice_ids)
     visited_both_regions = {"enter_lieyi_plains", "enter_liuchen_valley"}.issubset(
         completed
     )
     border_resolution = BORDER_RESOLUTION_IDS.intersection(completed)
     available_endings = set(EndingRules.evaluate_available_endings(state))
-    return tuple(
+    available = tuple(
         choice
         for choice in DEMO_STORY_CHOICES
         if choice.source_node_id == state.story_progress.node_id
         and choice.source_scene_id == state.current_scene_id
-        and (choice.choice_id != "preview_border_ruins" or (visited_both_regions and not border_resolution))
+        and (
+            choice.choice_id != "preview_border_ruins"
+            or (visited_both_regions and not border_resolution)
+        )
         and (choice.choice_id not in BORDER_RESOLUTION_IDS or not border_resolution)
         and set(choice.required_completed_choice_ids).issubset(completed)
-        and (not border_resolution or state.story_progress.node_id != "demo_complete" or choice.choice_id in MEMORY_LIBRARY_ENTRY_IDS)
+        and (
+            not border_resolution
+            or state.story_progress.node_id != "demo_complete"
+            or choice.choice_id in MEMORY_LIBRARY_ENTRY_IDS
+            or choice.choice_id in SIDE_EVENT_ENTRY_IDS
+        )
+        and (
+            choice.choice_id not in SIDE_EVENT_ENTRY_IDS
+            or (border_resolution and choice.choice_id not in completed)
+        )
         and (choice.ending_id is None or choice.ending_id in available_endings)
-    )[:4]
+        and _choice_conditions_met(choice, state, completed)
+        and not (
+            state.story_progress.node_id == "minglin_briefed"
+            and choice.destination_scene_id is None
+            and choice.choice_id in completed
+        )
+    )
+    if state.story_progress.node_id == "minglin_briefed":
+        # Once the task is accepted, put the two authored destinations first;
+        # optional follow-up questions must not hide the investigation routes.
+        available = tuple(
+            sorted(available, key=lambda choice: choice.destination_scene_id is None)
+        )
+    return available[:4]
 
 
 def available_npc_dialogue_choices(state: GameState, npc_id: str) -> tuple[DemoStoryChoiceDefinition, ...]:

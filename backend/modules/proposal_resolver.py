@@ -13,6 +13,7 @@ from backend.content.story_findings import finding_report, public_findings
 from backend.content.items import ITEMS
 from backend.content.characters import CHARACTER_PROFILES, npc_is_present
 from backend.rules.event_rules import EventRules
+from backend.rules.scene_rules import SceneRules
 from backend.rules.state_rules import StateRules
 from backend.rules.ending_rules import EndingRules
 from backend.schemas.game_state import GameState, NPCState, StoryPhase
@@ -329,6 +330,8 @@ class ProposalResolver:
                 f"Story choice '{operation.story_choice_id}' is not available now.",
             )
 
+        # 先換階段再套用事件數值，讓事件受新階段的封頂限制
+        SceneRules.enter_phase(state, SceneRules.phase_after_story_choice(state, choice.choice_id))
         awarded_items = []
         if choice.rule_event_id:
             if choice.rule_event_id not in AUTHORED_RULE_IDS:
@@ -342,6 +345,10 @@ class ProposalResolver:
                 state.warning_cooldown_turns = 0
             StateRules.apply_delta(state, axis_delta=rule.get("axis", 0), usurp_delta=rule.get("usurp", 0), relation_deltas=rule.get("relation", {}), is_event=True)
             state.flags.update(rule.get("flags", {}))
+            if choice.rune_site and choice.rule_event_id == "E2-4_place":
+                placed_runes = state.flags.setdefault("placed_runes", [])
+                if choice.rune_site not in placed_runes:
+                    placed_runes.append(choice.rune_site)
             state.truth_level = min(3, state.truth_level + rule.get("truth_delta", 0))
             for npc_id in choice.witness_npc_ids:
                 state.npc_states.setdefault(npc_id, NPCState(npc_id=npc_id, name=CHARACTER_PROFILES[npc_id].name)).met = True
@@ -349,6 +356,12 @@ class ProposalResolver:
                 if item.award_rule_event_id == choice.rule_event_id and item.item_id not in state.player.inventory:
                     state.player.inventory.append(item.item_id)
                     awarded_items.append(item.item_id)
+        if choice.removes_placed_runes:
+            # 規格 v3：拆除已放置的符印，每處篡奪值 −10（仍受倒數不下降規則限制）
+            remove_rule = EventRules.get_event_effect("E2-4_remove")
+            for _site in list(state.flags.get("placed_runes", [])):
+                StateRules.apply_delta(state, usurp_delta=remove_rule.get("usurp", 0), is_event=True)
+            state.flags["placed_runes"] = []
 
         previous_node_id = state.story_progress.node_id
         if choice.choice_id not in state.story_progress.completed_choice_ids:
@@ -362,8 +375,6 @@ class ProposalResolver:
 
         state.story_progress.node_id = choice.next_node_id
         state.story_progress.chapter_title = choice.next_chapter_title
-        if choice.choice_id == "enter_veta_source":
-            state.story_phase = StoryPhase.ACT3_FREEDOM
         if choice.epilogue_answer_key and choice.epilogue_answer_value:
             epilogue_flags = state.flags.setdefault("epilogue_flags", {})
             epilogue_flags[choice.epilogue_answer_key] = choice.epilogue_answer_value

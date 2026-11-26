@@ -6,6 +6,9 @@ import hmac
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from pydantic import ValidationError
+from backend.schemas.alan_chat import AlanModelRequest, AlanModelResponse
+from backend.schemas.api_response import NarrativeAIResponse
+from backend.schemas.narrative_ai import NarrativeAIRequest
 
 from backend.generation.gateway import (
     ModelGatewayPermanentError,
@@ -16,6 +19,8 @@ from backend.generation.gateway import (
 )
 
 from .config import GatewaySettings
+from .alan import AlanAdapter
+from .narrator import NarrativeAdapter
 from .router import (
     NPCAdapterRouter,
     UnsupportedNPCError,
@@ -31,6 +36,8 @@ def create_app(
 ) -> FastAPI:
     resolved = settings or GatewaySettings.from_env()
     adapter_router = NPCAdapterRouter(resolved, transport=transport)
+    alan_adapter = AlanAdapter(resolved, transport=transport)
+    narrative_adapter = NarrativeAdapter(resolved, transport=transport)
     application = FastAPI(
         title="RAG NPC Multi-LoRA Gateway",
         version="1.0.0",
@@ -94,6 +101,7 @@ def create_app(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={"code": "UNSUPPORTED_NPC", "message": str(exc)},
             ) from exc
+
         except asyncio.TimeoutError as exc:
             raise HTTPException(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -121,6 +129,33 @@ def create_app(
                     "code": "INVALID_MODEL_OUTPUT",
                     "message": validation_error_detail(exc),
                 },
+            ) from exc
+
+    @application.post("/alan/generate", response_model=AlanModelResponse)
+    async def generate_alan(
+        request: AlanModelRequest,
+        _: None = Depends(require_bearer),
+    ) -> AlanModelResponse:
+        try:
+            return await alan_adapter.generate(request)
+        except ModelGatewayTransientError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "ALAN_MODEL_UNAVAILABLE", "message": str(exc)},
+            ) from exc
+
+    @application.post("/narrate", response_model=NarrativeAIResponse)
+    async def narrate(
+        request: NarrativeAIRequest,
+        _: None = Depends(require_bearer),
+    ) -> NarrativeAIResponse:
+        """規格 v3 敘事 AI：判讀一句玩家發言，回傳數值變化提案。"""
+        try:
+            return await narrative_adapter.judge(request)
+        except ModelGatewayTransientError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "NARRATOR_MODEL_UNAVAILABLE", "message": str(exc)},
             ) from exc
 
     application.state.adapter_router = adapter_router

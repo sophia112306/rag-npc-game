@@ -9,6 +9,8 @@ from .gateway import (
     ModelNPCDialogue,
     ModelStoryOutput,
     ModelTurnRequest,
+    TurnGuidance,
+    TurnGuidanceAction,
 )
 from .http_gateway import HttpModelGateway
 from .openai_compatible_gateway import OpenAICompatibleChatGateway
@@ -26,6 +28,8 @@ __all__ = [
     "ModelNPCDialogue",
     "ModelStoryOutput",
     "ModelTurnRequest",
+    "TurnGuidance",
+    "TurnGuidanceAction",
     "OpenAICompatibleChatGateway",
     "RuleBasedStoryPlanner",
     "StoryGenerationUnavailableError",

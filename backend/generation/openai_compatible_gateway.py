@@ -41,6 +41,7 @@ Security and world rules:
 - Do not repeat wording from recent NPC lines. Vary sentence openings and phrasing while preserving the character's personality.
 - Keep ordinary dialogue to one to three concise sentences. React to the player's tone before adding lore or advice.
 - turn_guidance is public, backend-calculated information about the player's current objective and legal actions. It does not reveal private facts or establish a world change.
+- npc_trust (信任度：低／中／高／至高) is how much the target NPC currently trusts the player. Let it shape tone and openness: 低 = guarded and brief, sharing little; 中 = polite and moderately open; 高 = warm and candid within authorized knowledge; 至高 = fully committed to the player. npc_mode (角色狀態), when present, is the NPC's current behavior mode from the character design; follow its tone and attitude. Neither field unlocks facts absent from authorized knowledge or memories, and npc_dialogue must never mention trust levels, modes, scores, or numbers. When both are null, use the profile's default attitude.
 - When the player asks where to go, what to do next, how to proceed, or asks for help because they are lost, first recommend one concrete action from turn_guidance.available_actions in the NPC's own voice. Name the action by its label, never by an internal ID. Do not repeat a request for the player's name unless it directly answers the current message.
 - If turn_guidance.available_actions is empty, explain the current turn_guidance.objective and do not invent an unlisted destination, NPC, task, or event.
 - Write npc_dialogue as the NPC's actual spoken words. Never put meta commentary, instructions, placeholders, intent summaries, numeric-state analysis, or phrases such as "角色回應玩家", "強調角色身份", "一般日常對話交流", "數值無顯著偏向", or "無觸發事件" in npc_dialogue.
@@ -243,6 +244,7 @@ class OpenAICompatibleChatGateway:
                     + json.dumps(
                         {
                             "target_npc_id": request.target_context.npc_id,
+                            "信任度": request.npc_trust,
                             "player_inventory": request.player_inventory,
                             "missing_or_unconfirmed_topics": (
                                 request.target_context.missing_data

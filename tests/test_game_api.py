@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from backend.content.npc_dialogue import NPC_DIALOGUE_CHOICES
 from backend.generation.planner import GatewayStoryPlanner, StoryGenerationUnavailableError
 from backend.main import create_app
+from test_demo_story_flow import _start as start_briefed_session
 
 
 @pytest.fixture
@@ -17,7 +18,14 @@ def client(tmp_path) -> TestClient:
         yield test_client
 
 
-def start_session(client: TestClient, session_id: str = "m1-session") -> dict:
+def start_session(
+    client: TestClient,
+    session_id: str = "m1-session",
+    *,
+    complete_opening: bool = True,
+) -> dict:
+    if complete_opening:
+        return start_briefed_session(client, session_id)
     response = client.post("/api/game/start", json={"session_id": session_id})
     assert response.status_code == 201
     return response.json()
@@ -72,7 +80,7 @@ def test_andre_profile_choices_and_dialogue_are_available(client: TestClient) ->
     assert profile.status_code == 200
     assert profile.json()["portrait_url"] == "/images/andre.png"
 
-    state = start_session(client, "andre-session")
+    state = start_session(client, "andre-session", complete_opening=False)
     choices = client.get("/api/game/andre-session/choices?npc_id=andre")
     assert choices.status_code == 200
     assert choices.json()
@@ -83,7 +91,7 @@ def test_andre_profile_choices_and_dialogue_are_available(client: TestClient) ->
     response = client.post("/api/game/turn", json=action)
     assert response.status_code == 200
     assert response.json()["story"]["dialogue"][0]["speaker_name"] == "安德烈"
-    assert "地脈" in response.json()["story"]["dialogue"][0]["text"]
+    assert "沿著前方的路" in response.json()["story"]["dialogue"][0]["text"]
     assert response.json()["state"]["npc_states"]["andre"]["met"] is True
     assert response.json()["state"]["state_version"] == state["state_version"] + 1
 
@@ -206,6 +214,7 @@ def test_default_capabilities_identify_rule_based_generation(client: TestClient)
     assert response.json() == {
         "generation_mode": "rule_based",
         "dynamic_dialogue": True,
+        "relationship_system": "disabled",
         "rag_integration": "pending",
         "voice_integration": "pending",
         "allowed_operations": [
@@ -219,8 +228,19 @@ def test_default_capabilities_identify_rule_based_generation(client: TestClient)
     }
 
 
+def test_capabilities_report_model_judged_relationships(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("NARRATIVE_GATEWAY_URL", "http://judge.test/narrate")
+    application = create_app(f"sqlite+aiosqlite:///{tmp_path / 'capabilities.db'}")
+
+    with TestClient(application) as configured_client:
+        response = configured_client.get("/api/capabilities")
+
+    assert response.status_code == 200
+    assert response.json()["relationship_system"] == "model_judged"
+
+
 def test_start_turn_and_read_current_state(client: TestClient) -> None:
-    state = start_session(client)
+    state = start_session(client, complete_opening=False)
     choices = client.get(f"/api/game/{state['session_id']}/choices")
 
     assert state["turn_count"] == 0
@@ -231,36 +251,26 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert state["story_progress"] == {
         "arc_id": "vita_anomaly_demo_v1",
         "node_id": "minglin_arrival",
-        "chapter_title": "鳴霖異象",
+        "chapter_title": "鳴霖・林間入口",
         "mode": "demo_fallback",
         "public_clue_ids": [],
         "findings": [],
     }
-    assert state["npc_states"]["vidalia"]["met"] is True
+    assert state["npc_states"]["vidalia"]["met"] is False
     assert "truth_level" not in state
     assert "axis" not in state
     assert "usurp" not in state
     assert "flags" not in state
     assert "relation" not in state["npc_states"]["vidalia"]
     assert choices.status_code == 200
-    assert [choice["choice_id"] for choice in choices.json()] == [
-        "ask_location",
-        "ask_for_task",
-        "travel_to_minglin_life_spring",
-        "travel_to_minglin_rune_grove",
-    ]
-    assert all(
-        choice["target_npc_id"] == "vidalia"
-        for choice in choices.json()[:2]
-    )
-    assert all(
-        choice["action_mode"] == "movement"
-        and choice["target_npc_id"] is None
-        and choice["destination_scene_id"]
-        for choice in choices.json()[2:]
-    )
+    assert [choice["choice_id"] for choice in choices.json()] == ["meet_andre"]
+    assert choices.json()[0]["target_npc_id"] == "andre"
 
-    response = client.post("/api/game/turn", json=action_payload(state["session_id"]))
+    payload = action_payload(
+        state["session_id"], expected_state_version=state["state_version"]
+    )
+    payload.update(message="我在鳴霖醒來，這裡發生了什麼？", target_npc_id="andre")
+    response = client.post("/api/game/turn", json=payload)
 
     assert response.status_code == 200
     turn = response.json()
@@ -270,9 +280,9 @@ def test_start_turn_and_read_current_state(client: TestClient) -> None:
     assert "truth_level" not in turn["state"]
     assert "flags" not in turn["state"]
     assert turn["parsed_action"]["action_type"] == "dialogue"
-    assert "你好，旅人" in turn["story"]["dialogue"][0]["text"]
+    assert "沿著前方的路" in turn["story"]["dialogue"][0]["text"]
     assert "開發替身" not in turn["story"]["dialogue"][0]["text"]
-    assert turn["story"]["established_events"] == []
+    assert turn["story"]["established_events"]
     assert "proposal_decisions" not in turn
 
     state_response = client.get(f"/api/game/{state['session_id']}/state")
@@ -287,7 +297,9 @@ def test_default_rule_planner_offers_and_remembers_dynamic_quest(client: TestCli
     first = client.post(
         "/api/game/turn",
         json={
-            **action_payload(state["session_id"]),
+            **action_payload(
+                state["session_id"], expected_state_version=state["state_version"]
+            ),
             "message": "有什麼需要我幫忙的任務？",
         },
     )
@@ -296,7 +308,10 @@ def test_default_rule_planner_offers_and_remembers_dynamic_quest(client: TestCli
     second = client.post(
         "/api/game/turn",
         json={
-            **action_payload(state["session_id"], expected_state_version=2),
+            **action_payload(
+                state["session_id"],
+                expected_state_version=first.json()["state"]["state_version"],
+            ),
             "message": "請再告訴我任務內容",
         },
     )
@@ -334,7 +349,9 @@ def test_choices_for_unknown_session_return_not_found(client: TestClient) -> Non
 
 def test_repeated_action_id_does_not_advance_the_turn_twice(client: TestClient) -> None:
     state = start_session(client, "idempotent-session")
-    payload = action_payload(state["session_id"])
+    payload = action_payload(
+        state["session_id"], expected_state_version=state["state_version"]
+    )
 
     first = client.post("/api/game/turn", json=payload)
     second = client.post("/api/game/turn", json=payload)
@@ -342,12 +359,14 @@ def test_repeated_action_id_does_not_advance_the_turn_twice(client: TestClient) 
     assert first.status_code == 200
     assert second.status_code == 200
     assert second.json() == first.json()
-    assert second.json()["state"]["turn_count"] == 1
+    assert second.json()["state"]["turn_count"] == state["turn_count"] + 1
 
 
 def test_reused_action_id_with_different_content_returns_conflict(client: TestClient) -> None:
     state = start_session(client, "digest-conflict-session")
-    payload = action_payload(state["session_id"])
+    payload = action_payload(
+        state["session_id"], expected_state_version=state["state_version"]
+    )
     first = client.post("/api/game/turn", json=payload)
     assert first.status_code == 200
 
@@ -360,17 +379,24 @@ def test_reused_action_id_with_different_content_returns_conflict(client: TestCl
 
 def test_stale_state_version_returns_conflict(client: TestClient) -> None:
     state = start_session(client, "version-session")
-    first = client.post("/api/game/turn", json=action_payload(state["session_id"]))
+    first = client.post(
+        "/api/game/turn",
+        json=action_payload(
+            state["session_id"], expected_state_version=state["state_version"]
+        ),
+    )
     assert first.status_code == 200
 
     stale = client.post(
         "/api/game/turn",
-        json=action_payload(state["session_id"], expected_state_version=1),
+        json=action_payload(
+            state["session_id"], expected_state_version=state["state_version"]
+        ),
     )
 
     assert stale.status_code == 409
     assert stale.json()["detail"]["code"] == "STATE_VERSION_CONFLICT"
-    assert stale.json()["detail"]["actual_state_version"] == 2
+    assert stale.json()["detail"]["actual_state_version"] == state["state_version"] + 1
 
 
 def test_local_frontend_origin_passes_cors_preflight(client: TestClient) -> None:
@@ -389,10 +415,12 @@ def test_local_frontend_origin_passes_cors_preflight(client: TestClient) -> None
 
 def test_session_and_idempotent_response_survive_app_restart(tmp_path) -> None:
     database_url = f"sqlite+aiosqlite:///{tmp_path / 'restart.db'}"
-    payload = action_payload("restart-session")
 
     with TestClient(create_app(database_url)) as first_client:
-        start_session(first_client, payload["session_id"])
+        state = start_session(first_client, "restart-session")
+        payload = action_payload(
+            state["session_id"], expected_state_version=state["state_version"]
+        )
         first_response = first_client.post("/api/game/turn", json=payload)
         assert first_response.status_code == 200
         expected_response = first_response.json()
@@ -402,15 +430,15 @@ def test_session_and_idempotent_response_survive_app_restart(tmp_path) -> None:
         replay = restarted_client.post("/api/game/turn", json=payload)
 
     assert state.status_code == 200
-    assert state.json()["turn_count"] == 1
-    assert state.json()["state_version"] == 2
+    assert state.json()["turn_count"] == expected_response["state"]["turn_count"]
+    assert state.json()["state_version"] == expected_response["state"]["state_version"]
     assert replay.status_code == 200
     assert replay.json() == expected_response
 
 
 def test_generation_failure_returns_503_without_committing_turn(tmp_path) -> None:
     class FailingPlanner:
-        async def propose(self, action, parsed_action, state):
+        async def propose(self, action, parsed_action, state, turn_guidance):
             raise StoryGenerationUnavailableError("model_timeout", 2)
 
     application = create_app(
@@ -421,7 +449,9 @@ def test_generation_failure_returns_503_without_committing_turn(tmp_path) -> Non
         state = start_session(failing_client, "model-failure-session")
         failed = failing_client.post(
             "/api/game/turn",
-            json=action_payload(state["session_id"]),
+            json=action_payload(
+                state["session_id"], expected_state_version=state["state_version"]
+            ),
         )
         unchanged = failing_client.get(f"/api/game/{state['session_id']}/state")
 
@@ -434,8 +464,8 @@ def test_generation_failure_returns_503_without_committing_turn(tmp_path) -> Non
         "attempts": 2,
     }
     assert unchanged.status_code == 200
-    assert unchanged.json()["turn_count"] == 0
-    assert unchanged.json()["state_version"] == 1
+    assert unchanged.json()["turn_count"] == state["turn_count"]
+    assert unchanged.json()["state_version"] == state["state_version"]
 
 
 def test_configured_gateway_dialogue_reaches_player_after_validation(tmp_path) -> None:
@@ -461,7 +491,9 @@ def test_configured_gateway_dialogue_reaches_player_after_validation(tmp_path) -
         capabilities = dynamic_client.get("/api/capabilities")
         response = dynamic_client.post(
             "/api/game/turn",
-            json=action_payload(state["session_id"]),
+            json=action_payload(
+                state["session_id"], expected_state_version=state["state_version"]
+            ),
         )
 
     assert response.status_code == 200
@@ -481,7 +513,7 @@ def test_next_model_turn_receives_committed_memory_and_commitment(tmp_path) -> N
 
         async def generate_story(self, request):
             self.requests.append(request)
-            if request.turn_number == 1:
+            if len(self.requests) == 1:
                 return {
                     "intent_summary": "Record the player's explicit promise.",
                     "npc_dialogue": [{"text": "我會記得你的承諾。"}],
@@ -521,14 +553,20 @@ def test_next_model_turn_receives_committed_memory_and_commitment(tmp_path) -> N
         first = continuity_client.post(
             "/api/game/turn",
             json={
-                **action_payload(state["session_id"]),
+                **action_payload(
+                    state["session_id"],
+                    expected_state_version=state["state_version"],
+                ),
                 "message": "我答應帶回地圖碎片",
             },
         )
         second = continuity_client.post(
             "/api/game/turn",
             json={
-                **action_payload(state["session_id"], expected_state_version=2),
+                **action_payload(
+                    state["session_id"],
+                    expected_state_version=first.json()["state"]["state_version"],
+                ),
                 "message": "你還記得嗎？",
             },
         )
@@ -545,12 +583,12 @@ def test_next_model_turn_receives_committed_memory_and_commitment(tmp_path) -> N
         "observed_event",
     }
     assert any("我答應帶回地圖碎片" in memory.content for memory in next_context.memories)
-    assert [message.role for message in next_context.recent_dialogue] == [
+    assert [message.role for message in next_context.recent_dialogue[-2:]] == [
         "player",
         "npc",
     ]
-    assert next_context.recent_dialogue[0].text == "我答應帶回地圖碎片"
-    assert next_context.recent_dialogue[1].text == "我會記得你的承諾。"
+    assert next_context.recent_dialogue[-2].text == "我答應帶回地圖碎片"
+    assert next_context.recent_dialogue[-1].text == "我會記得你的承諾。"
 
 
 def test_dynamic_quest_is_offered_persisted_and_carried_forward(tmp_path) -> None:
@@ -560,7 +598,7 @@ def test_dynamic_quest_is_offered_persisted_and_carried_forward(tmp_path) -> Non
 
         async def generate_story(self, request):
             self.requests.append(request)
-            if request.turn_number == 1:
+            if len(self.requests) == 1:
                 return {
                     "intent_summary": "Offer a generated quest without auto-accepting it.",
                     "npc_dialogue": [{"text": "你願意替我找回泉邊的地圖碎片嗎？"}],
@@ -600,13 +638,22 @@ def test_dynamic_quest_is_offered_persisted_and_carried_forward(tmp_path) -> Non
         state = start_session(quest_client, "quest-session")
         first = quest_client.post(
             "/api/game/turn",
-            json={**action_payload(state["session_id"]), "message": "有什麼需要幫忙？"},
+            json={
+                **action_payload(
+                    state["session_id"],
+                    expected_state_version=state["state_version"],
+                ),
+                "message": "有什麼需要幫忙？",
+            },
         )
         quests = quest_client.get(f"/api/game/{state['session_id']}/quests")
         second = quest_client.post(
             "/api/game/turn",
             json={
-                **action_payload(state["session_id"], expected_state_version=2),
+                **action_payload(
+                    state["session_id"],
+                    expected_state_version=first.json()["state"]["state_version"],
+                ),
                 "message": "讓我想想。",
             },
         )

@@ -18,9 +18,9 @@ Chrome 桌面實際操作：安德烈詢問 → 泉眼維達利亞詢問 → 灰
 
 ![邊境三種抉擇與返回選項](03-border-decisions.jpg)
 
-協助後第 16 回合，J 顯示五項紀錄及一份裂隙地圖，名稱、說明與透明 PNG 正常。hard refresh 與實際重啟 Uvicorn 後，仍是相同回合、`border_choice_resolved` 與一張地圖；未被舊防劇透轉換改稱路標。
+協助後第 16 回合，J 顯示五項紀錄及一份裂隙拓印圖，名稱、說明與透明 PNG 正常。hard refresh 與實際重啟 Uvicorn 後，仍是相同回合、`border_choice_resolved` 與一張地圖；未被舊防劇透轉換改稱路標。
 
-![真實持有的裂隙地圖](04-fissure-map-inventory.jpg)
+![真實持有的裂隙拓印圖](04-fissure-map-inventory.jpg)
 
 ![390×844 手機背包](05-mobile-inventory.jpg)
 

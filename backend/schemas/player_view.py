@@ -8,9 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.content.reveal_policy import is_demo_first_stage, public_chapter_title, public_clue_ids
 from backend.content.scenes import SCENES, SceneVisualProfile, require_scene
-from backend.content.world_scenes import build_world_scene
 from backend.schemas.world_scene import WorldDiscovery, WorldSceneView
 
+from .alan_hud import AlanHud
 from .game_state import GameState
 from .player_choice import PlayerChoice
 
@@ -37,22 +37,31 @@ def project_navigation(state: GameState) -> PlayerNavigationView:
     """Public map and exact validated actions; no private rules or memory."""
     # Imported at projection time because schemas are re-exported by __init__.
     from backend.orchestration.player_choices import build_player_choices
-    from backend.content.demo_story import BORDER_RESOLUTION_IDS, available_demo_story_choices
+    from backend.content.demo_story import BORDER_RESOLUTION_IDS, SIDE_EVENT_ENTRY_IDS, available_demo_story_choices
     from backend.content.characters import CHARACTER_PROFILES
 
     choices = build_player_choices(state, [])
     routes = {c.destination_scene_id: c for c in choices if c.destination_scene_id}
     investigations = [c for c in choices if c.action_mode == "interaction"]
     decisions = [
-        choice for choice in available_demo_story_choices(state)
+        choice
+        for choice in available_demo_story_choices(state)
         if choice.choice_id in BORDER_RESOLUTION_IDS
     ]
-    if decisions:
+    if state.story_progress.node_id in {"fissure_arrival", "minglin_arrival"}:
+        objective = "下一步：與安德烈交談。"
+    elif state.story_progress.node_id == "minglin_path_open":
+        objective = "下一步：沿著鳴霖前方道路往前走，抵達議會庭。"
+    elif state.story_progress.node_id == "minglin_council":
+        objective = "下一步：與維達利亞交談。"
+    elif decisions:
         name = CHARACTER_PROFILES[decisions[0].target_npc_id].name
         objective = f"下一步：走近{name}，在交談選項做出邊境決定。"
     elif state.story_progress.node_id == "demo_complete":
+        side_trips = "、".join(c.label for c in choices if c.choice_id in SIDE_EVENT_ENTRY_IDS)
         objective = (
             "邊境的選擇已保存，可前往古老記憶藏庫追查下一層真相。"
+            + (f"也可以先{side_trips}。" if side_trips else "")
             if BORDER_RESOLUTION_IDS.intersection(state.story_progress.completed_choice_ids) and "memory_library" in routes else
             "兩地線索已帶回議會，可前往邊境廢墟與兩名旅人交談。"
             if "border_ruins" in routes else
@@ -189,6 +198,7 @@ class PlayerViewState(BaseModel):
     story_progress: PlayerStoryProgressView
     world_scene: WorldSceneView | None = None
     navigation: PlayerNavigationView | None = None
+    alan_hud: AlanHud | None = None
     player: PlayerIdentityView
     npc_states: dict[str, NPCPublicStateView]
     created_at: datetime
@@ -198,11 +208,23 @@ class PlayerViewState(BaseModel):
 def project_player_view(state: GameState) -> PlayerViewState:
     """Remove author-only facts, secret flags, and private NPC state."""
 
+    # Local import avoids the schemas package re-export cycle: the Alan
+    # projector itself consumes GameState, while this module defines the
+    # player-facing projection that contains it.
+    from backend.content.alan_hud import build_alan_hud
     from backend.content.story_findings import public_findings
+    from backend.content.world_scenes import build_world_scene
 
     scene = require_scene(state.current_scene_id)
     findings = public_findings(state)
-    world = build_world_scene(state.current_scene_id, state.world_scenes.get(state.current_scene_id))
+    visible_npcs = None
+    if state.current_scene_id == "minglin":
+        visible_npcs = {"andre"} if state.story_progress.node_id in {"minglin_arrival", "minglin_path_open"} else {"vidalia"}
+    world = build_world_scene(
+        state.current_scene_id,
+        state.world_scenes.get(state.current_scene_id),
+        visible_npc_ids=visible_npcs,
+    )
     latest = next((finding for finding in reversed(findings)
                    if finding.scene_id == state.current_scene_id and finding.visual_signal), None)
     if latest:
@@ -215,6 +237,7 @@ def project_player_view(state: GameState) -> PlayerViewState:
         final_ending=state.final_ending,
         current_scene_id=state.current_scene_id,
         navigation=project_navigation(state),
+        alan_hud=build_alan_hud(state),
         world_scene=world,
         current_scene=PlayerSceneView(
             scene_id=scene.scene_id,

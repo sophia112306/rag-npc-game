@@ -6,6 +6,14 @@ import MinglinGame, { approachTarget, isNpcId, interactWithTarget, movePlayer, t
 import WorldMap from "../components/WorldMap";
 import InvestigationJournal from "../components/InvestigationJournal";
 import StoryIntro from "../components/StoryIntro";
+import AlanHud from "../components/AlanHud";
+import { playAlanCue } from "../lib/alan-audio";
+import {
+  CHARACTER_VOICE_PROFILES,
+  resolveCharacterVoiceId,
+  selectCharacterVoice,
+  type CharacterVoiceId,
+} from "../lib/character-voice";
 import { getSceneMusic } from "../lib/scene-music";
 import { useSceneMusic } from "../lib/use-scene-music";
 import { resolveNpcReaction, type NpcReactionCue } from "../lib/npc-reactions";
@@ -17,6 +25,7 @@ import {
   type Capabilities,
   type GameStateSummary,
   type GameTurnResponse,
+  type AlanHud as AlanHudState,
   type PlayerChoice,
   type PlayerScene,
 } from "../lib/game-api";
@@ -81,7 +90,7 @@ const legacyNpcDialogue: Record<string, string> = {
   "他們想被能返回外界的你記住。那不等於復活，卻是他們對抗遺忘的方式。": "流塵谷的人很重視記憶與名字。若你遇見他們，先聽他們說自己的故事。",
   "你沒有把長老的說法直接當成真相，而是記下他對失去下一世的恐懼與控制規則的企圖。": "長老會也在關注聖火，但你還沒有足夠證據判斷他們的目的。",
   "他們沒有因此獲得外部復活，卻把被你記住視為在世界之外留下存在的唯一方式。": "他們希望自己的名字不只留在沙裡。你記住了其中幾個，卻還不知道這份請求背後的原因。",
-  "符石的缺口組成一張不穩定的裂隙地圖；它足以在追殺或崩塌發生時指向流塵谷。": "符石的缺口指向流塵谷。你記下這條暫定路線，準備前往查探。",
+  "符石的缺口組成一張不穩定的裂隙拓印圖；它足以在追殺或崩塌發生時指向流塵谷。": "符石的缺口指向流塵谷。你記下這條暫定路線，準備前往查探。",
   "符石路徑在腳下崩解，你借助地圖標出的地理優勢甩開封閉路線，進入流塵谷。": "符石路徑在腳下崩解，你循著先前記下的風沙方向穿過裂隙，進入流塵谷。",
 };
 
@@ -93,7 +102,7 @@ function migrateRecordedDialogue(messages: ChatMessage[]): ChatMessage[] {
     if (message.kind === "player" && message.text === "我把符石間的風沙軌跡拼成一張路線圖。") {
       return { ...message, text: "我從符石間的風沙軌跡辨認流塵谷的方向。" };
     }
-    if (message.kind === "player" && message.text === "我依照裂隙地圖進入流塵谷。") {
+    if (message.kind === "player" && message.text === "我依照裂隙拓印圖進入流塵谷。") {
       return { ...message, text: "我沿著符石間辨認的風沙方向進入流塵谷。" };
     }
     if (message.kind !== "npc") return message;
@@ -175,13 +184,29 @@ const previewScene: PlayerScene = {
   region_name: "鳴霖",
   display_name: "平衡議會",
   subtitle: "古林中的議會庭",
-  description: "維達利亞接見旅人的林間議會庭。",
+  description: "你在鳴霖林間入口醒來，安德烈正在前方確認地脈異象。",
   background_url: "/game/forest-council.png",
   horizon_url: "/game/forest-eye-backdrop.png",
   tilemap_url: "/game/minglin.tmj",
   visual_profile: DEFAULT_SCENE_VISUAL_PROFILE,
   canon_status: "confirmed",
 };
+
+function createCharacterUtterance(
+  text: string,
+  characterId: CharacterVoiceId,
+  voices: readonly SpeechSynthesisVoice[],
+) {
+  const profile = CHARACTER_VOICE_PROFILES[characterId];
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = profile.lang;
+  utterance.rate = profile.rate;
+  utterance.pitch = profile.pitch;
+  utterance.volume = profile.volume;
+  const selectedVoice = selectCharacterVoice(voices, characterId);
+  if (selectedVoice) utterance.voice = selectedVoice;
+  return utterance;
+}
 
 export default function Home() {
   const [introOpen, setIntroOpen] = useState(true);
@@ -190,7 +215,7 @@ export default function Home() {
     vidalia: previewProfile, andre: previewAndreProfile, menmesvento: previewMenmesventoProfile,
     dasso: previewDassoProfile, seth: previewSethProfile, syra: previewSyraProfile,
   });
-  const [activeNpcId, setActiveNpcId] = useState<NpcId>("vidalia");
+  const [activeNpcId, setActiveNpcId] = useState<NpcId>("andre");
   const [sessionId, setSessionId] = useState("");
   const [dialogueOpen, setDialogueOpen] = useState(false);
   const [nearTarget, setNearTarget] = useState<InteractionTarget | null>(null);
@@ -203,6 +228,8 @@ export default function Home() {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [lastNpcSpeech, setLastNpcSpeech] = useState("");
+  const [lastNpcVoiceId, setLastNpcVoiceId] = useState<CharacterVoiceId>("andre");
+  const [speechVoices, setSpeechVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [busy, setBusy] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [ready, setReady] = useState(false);
@@ -221,7 +248,7 @@ export default function Home() {
   const findings = gameState?.story_progress.findings ?? [];
   const sceneImageUrl = scene.background_url;
   const [generationMode, setGenerationMode] = useState<Capabilities["generation_mode"]>("rule_based");
-  const questLabel = gameState?.story_progress.chapter_title ?? "鳴霖異象";
+  const questLabel = gameState?.story_progress.chapter_title ?? "鳴霖・林間入口";
   const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
   const [npcChoiceSet, setNpcChoiceSet] = useState<{npcId: NpcId; choices: PlayerChoice[]} | null>(null);
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
@@ -232,6 +259,14 @@ export default function Home() {
   const pendingApproach = useRef<string | null>(null);
   const sceneMusic = getSceneMusic(scene.scene_id);
   const music = useSceneMusic(sceneMusic.src, speaking ? 0.07 : dialogueOpen ? 0.11 : 0.2);
+  const alanHud = gameState?.alan_hud;
+  const lastAlanEventRef = useRef<string | null>(null);
+  const storyNode = gameState?.story_progress.node_id ?? "minglin_arrival";
+  const minglinOpeningAndre = scene.scene_id === "minglin" && ["minglin_arrival", "minglin_path_open"].includes(storyNode);
+  const visibleNpcIds: NpcId[] = scene.scene_id === "minglin"
+    ? (minglinOpeningAndre ? ["andre"] : ["vidalia"])
+    : [...Object.keys(profiles)] as NpcId[];
+  const forwardChoice = playerChoices.find(choice => choice.choice_id === "walk_to_council");
   const primaryNpc = gameState?.world_scene.npc_id ?? gameState?.world_scene.npc_interactions?.[0]?.npc_id;
   const primaryTarget: InteractionTarget = isNpcId(primaryNpc) ? primaryNpc : "landmark";
   const displayNpcId = dialogueOpen ? activeNpcId : nearTarget && nearTarget !== "landmark" ? nearTarget : activeNpcId;
@@ -245,7 +280,9 @@ export default function Home() {
   const npcChoices = npcChoiceSet?.npcId === activeNpcId ? npcChoiceSet.choices : [];
   const visibleChoices = activeLandmark ? playerChoices
     : activeNpcId === "vidalia" && scene.scene_id === "minglin" ? sceneChoices
-      : [...(activeNpcId === "andre" ? [] : sceneChoices), ...npcChoices].slice(0, 4);
+      : [...sceneChoices, ...npcChoices]
+        .filter(choice => choice.choice_id !== "walk_to_council")
+        .slice(0, 4);
   const reportChoice = playerChoices.find(choice => choice.choice_id === "review_demo_findings");
 
   useEffect(() => {
@@ -255,17 +292,27 @@ export default function Home() {
   }, [notice]);
 
   useEffect(() => {
-    if (scene.scene_id === "liuchen_valley") {
+    if (scene.scene_id === "fissure" || minglinOpeningAndre) {
+      setActiveNpcId("andre");
+      setLastNpcSpeech(previewAndreProfile.greeting);
+      setLastNpcVoiceId("andre");
+    } else if (scene.scene_id === "liuchen_valley") {
       setActiveNpcId("menmesvento");
       setLastNpcSpeech(previewMenmesventoProfile.greeting);
+      setLastNpcVoiceId("menmesvento");
     } else if (scene.scene_id === "lieyi_plains") {
       setActiveNpcId("dasso");
       setLastNpcSpeech(previewDassoProfile.greeting);
+      setLastNpcVoiceId("dasso");
     } else if (scene.scene_id === "border_ruins") {
       setActiveNpcId("seth");
       setLastNpcSpeech(previewSethProfile.greeting);
+      setLastNpcVoiceId("seth");
+    } else if (scene.scene_id === "veta_source" || scene.scene_id === "veta_preview") {
+      setLastNpcVoiceId("veta");
     } else if (scene.scene_id === "minglin" || scene.scene_id === "minglin_life_spring") {
       setActiveNpcId("vidalia");
+      setLastNpcVoiceId("vidalia");
     }
     setNearTarget(null);
     setActiveLandmark(false);
@@ -273,7 +320,7 @@ export default function Home() {
     pendingApproach.current = null;
     setTrackedChoice(null);
     setNpcReaction(null);
-  }, [scene.scene_id]);
+  }, [scene.scene_id, minglinOpeningAndre]);
 
   useEffect(() => {
     if (!ready || !sessionId) return;
@@ -294,17 +341,50 @@ export default function Home() {
       webkitSpeechRecognition?: SpeechRecognitionConstructor;
     };
     setVoiceSupported(Boolean(speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition));
-    setTtsSupported("speechSynthesis" in window);
+    const supportsTts = "speechSynthesis" in window;
+    setTtsSupported(supportsTts);
+    const refreshVoices = () => setSpeechVoices(window.speechSynthesis.getVoices());
+    if (supportsTts) {
+      refreshVoices();
+      window.speechSynthesis.addEventListener("voiceschanged", refreshVoices);
+    }
     void initialize(id);
     return () => {
       recognitionRef.current?.stop();
-      window.speechSynthesis?.cancel();
+      if (supportsTts) {
+        window.speechSynthesis.removeEventListener("voiceschanged", refreshVoices);
+        window.speechSynthesis.cancel();
+      }
     };
   }, []);
 
   useEffect(() => {
     if (dialogueOpen) endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, dialogueOpen]);
+
+  const speakAlanMessage = useCallback((hud: AlanHudState | null | undefined) => {
+    if (!hud?.visible || !ttsSupported || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = createCharacterUtterance(hud.message, "alan", speechVoices);
+    if (hud.tone === "override") {
+      utterance.rate = 0.78;
+      utterance.pitch = 0.62;
+    }
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  }, [speechVoices, ttsSupported]);
+
+  useEffect(() => {
+    const eventKey = alanHud?.event_key;
+    if (!alanHud?.visible || !eventKey || eventKey === lastAlanEventRef.current) return;
+    const firstSignal = lastAlanEventRef.current === null;
+    lastAlanEventRef.current = eventKey;
+    if (firstSignal) return;
+    playAlanCue(alanHud.tone);
+    if (alanHud.tone !== "calm") speakAlanMessage(alanHud);
+  }, [alanHud, speakAlanMessage]);
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
@@ -349,7 +429,10 @@ export default function Home() {
       setGenerationMode(capabilities.generation_mode);
       setPlayerChoices(await requestJson<PlayerChoice[]>(`/api/game/${id}/choices`));
       setGameState(state);
-      const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: character.name, text: character.greeting, kind: "npc" }];
+      const openingProfile = state.current_scene_id === "fissure" ||
+        (state.current_scene_id === "minglin" && ["minglin_arrival", "minglin_path_open"].includes(state.story_progress.node_id))
+        ? andre : character;
+      const fallback: ChatMessage[] = [{ id: window.crypto.randomUUID(), speaker: openingProfile.name, text: openingProfile.greeting, kind: "npc" }];
       let restored = fallback;
       try {
         const cached = JSON.parse(window.localStorage.getItem(conversationKey(id)) ?? "null");
@@ -365,11 +448,20 @@ export default function Home() {
         }
       } catch { /* A missing or old browser record starts with the greeting. */ }
       setMessages(restored);
-      setLastNpcSpeech(restored.filter((message) => message.kind === "npc").at(-1)?.text ?? character.greeting);
+      const lastRestoredNpc = restored.filter((message) => message.kind === "npc").at(-1);
+      const openingVoiceId = resolveCharacterVoiceId(openingProfile.npc_id, openingProfile.name);
+      setLastNpcSpeech(lastRestoredNpc?.text ?? openingProfile.greeting);
+      setLastNpcVoiceId(resolveCharacterVoiceId(
+        lastRestoredNpc?.npcId,
+        lastRestoredNpc?.speaker,
+        openingVoiceId,
+      ));
       setReady(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "無法連線到後端。");
-      setMessages([{ id: window.crypto.randomUUID(), speaker: previewProfile.name, text: previewProfile.greeting, kind: "npc" }]);
+      setMessages([{ id: window.crypto.randomUUID(), speaker: previewAndreProfile.name, text: previewAndreProfile.greeting, kind: "npc" }]);
+      setLastNpcSpeech(previewAndreProfile.greeting);
+      setLastNpcVoiceId("andre");
     } finally {
       setBusy(false);
       setInitializing(false);
@@ -382,6 +474,7 @@ export default function Home() {
     if (!landmark) {
       setActiveNpcId(targetId);
       setLastNpcSpeech(messages.filter(message => message.kind === "npc" && (message.npcId ?? "vidalia") === targetId).at(-1)?.text ?? profiles[targetId].greeting);
+      setLastNpcVoiceId(targetId);
     }
     if (pendingApproach.current) {
       setTrackedChoice(pendingApproach.current);
@@ -459,9 +552,7 @@ export default function Home() {
       return;
     }
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(lastNpcSpeech);
-    utterance.lang = "zh-TW";
-    utterance.rate = 1;
+    const utterance = createCharacterUtterance(lastNpcSpeech, lastNpcVoiceId, speechVoices);
     utterance.onend = () => setSpeaking(false);
     utterance.onerror = () => setSpeaking(false);
     setSpeaking(true);
@@ -535,6 +626,12 @@ export default function Home() {
       });
       pendingActionRef.current = null;
       setGameState(turn.state);
+      if (turn.state.story_progress.node_id === "minglin_path_open") {
+        setDialogueOpen(false);
+        setActiveLandmark(false);
+        setNearTarget(null);
+        setNotice("安德烈要你沿著前方道路往前走。走到議會庭，維達利亞才會出現。");
+      }
       setTrackedChoice(null);
       const count = turn.state.story_progress.findings?.length ?? 0;
       setNotice(
@@ -567,21 +664,32 @@ export default function Home() {
         targetId:messageTarget, sceneId:scene.scene_id, emotion: line.emotion,
       }))];
       setMessages(nextMessages);
-      setLastNpcSpeech(playerVisibleDialogue.map((line) => line.text).join("\n"));
+      if (playerVisibleDialogue.length > 0) {
+        const lastSpokenLine = playerVisibleDialogue.at(-1);
+        setLastNpcSpeech(playerVisibleDialogue.map((line) => line.text).join("\n"));
+        setLastNpcVoiceId(resolveCharacterVoiceId(
+          lastSpokenLine?.speaker_id,
+          lastSpokenLine?.speaker_name,
+          messageNpcId,
+        ));
+      }
       try {
         window.localStorage.setItem(conversationKey(sessionId), JSON.stringify({ format_version: CONVERSATION_FORMAT_VERSION, turn_number: turn.turn_number, updated_at: turn.state.updated_at, messages: nextMessages }));
       } catch { /* The current conversation still works when browser storage is unavailable. */ }
     } catch (cause) {
-      if (cause instanceof ApiRequestError && ["STATE_VERSION_CONFLICT", "STORY_CHOICE_UNAVAILABLE", "STORY_CHOICE_MISMATCH", "NPC_UNAVAILABLE"].includes(cause.code ?? "")) {
+      if (cause instanceof ApiRequestError && cause.code === "STATE_VERSION_CONFLICT") {
         pendingActionRef.current = null;
         try {
           const latest = await requestJson<GameStateSummary>(`/api/game/${sessionId}/state`);
           setGameState(latest);
           setPlayerChoices(await requestJson<PlayerChoice[]>(`/api/game/${sessionId}/choices`));
-          setError("進度或選項已更新，已同步目前內容；請確認後重新選擇。");
+          setError("遊戲進度已更新，請重新確認目前畫面上的選項。");
         } catch {
           setError("遊戲進度版本衝突，且無法重新取得最新狀態。請稍後重試。");
         }
+      } else if (cause instanceof ApiRequestError && ["STORY_CHOICE_UNAVAILABLE", "STORY_CHOICE_MISMATCH", "NPC_UNAVAILABLE"].includes(cause.code ?? "")) {
+        pendingActionRef.current = null;
+        setError(cause.message);
       } else {
         if (cause instanceof ApiRequestError && cause.code === "ACTION_ID_CONFLICT") {
           pendingActionRef.current = null;
@@ -606,13 +714,26 @@ export default function Home() {
     setNearTarget(null);
     setActiveLandmark(false);
     pendingApproach.current = null;
-    setActiveNpcId("vidalia");
+    setActiveNpcId("andre");
     setInput("");
     setInputType("text");
     setIntroOpen(true);
     setNpcReaction(null);
     pendingActionRef.current = null;
     void initialize(id);
+  }
+
+  function handleForwardReached() {
+    if (!forwardChoice || busy) return;
+    setNotice("你沿著鳴霖的道路向前走……");
+    void sendAction(
+      forwardChoice.message,
+      "text",
+      forwardChoice.target_npc_id,
+      forwardChoice.action_mode,
+      forwardChoice.destination_scene_id,
+      forwardChoice.story_choice_id,
+    );
   }
 
   return (
@@ -627,8 +748,9 @@ export default function Home() {
         onError={music.onError}
       />
       <section className="map-stage" aria-label={`斜俯視的${scene.region_name}遊戲地圖`}>
-        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, profile.name])) as Record<NpcId, string>} reaction={npcReaction} paused={introOpen || dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onZoomChange={setMapZoom} />}
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, profile.name])) as Record<NpcId, string>} reaction={npcReaction} visibleNpcIds={visibleNpcIds} forwardTriggerEnabled={storyNode === "minglin_path_open"} paused={introOpen || dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onReachForward={handleForwardReached} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
+        <AlanHud hud={alanHud} sessionId={sessionId} stateVersion={stateVersion} onReplay={() => speakAlanMessage(alanHud)} onSpeakReply={text => speakAlanMessage(alanHud ? { ...alanHud, message: text } : null)} />
 
         <header className="location-banner" aria-label="目前場景">
           <svg className="compass-mark" viewBox="0 0 72 72" fill="none" aria-hidden="true">
@@ -674,7 +796,7 @@ export default function Home() {
           <button type="button" onClick={() => zoomMap({ kind: "step", amount: -MAP_ZOOM_STEP })} disabled={!ready || mapZoom <= MIN_MAP_ZOOM} aria-label="縮小地圖" title="縮小地圖">−</button>
         </div>
 
-        {!dialogueOpen && <div className="exploration-status"><p>{navigation?.objective ?? "走近維達利亞，開始調查。"}</p><small>{notice || "WASD／點地面移動 · E 互動 · M 地圖 · J 手記 · 滾輪縮放"}</small></div>}
+        {!dialogueOpen && <div className="exploration-status"><p>{navigation?.objective ?? (minglinOpeningAndre ? "先與安德烈交談。" : "走近維達利亞，開始調查。")}</p><small>{notice || "WASD／點地面移動 · E 互動 · M 地圖 · J 手記 · 滾輪縮放"}</small></div>}
 
         <div className="touch-controls" aria-label="移動控制">
           <button type="button" className="touch-turn-left" onClick={() => turnPlayer(-1)} aria-label="向左轉身">↶</button>
@@ -728,13 +850,13 @@ export default function Home() {
 
         {initializing && (
           <div className="game-overlay" role="status" aria-live="polite">
-            <div className="game-overlay-card"><span className="overlay-rune">✧</span><h2>正在進入鳴霖</h2><p>命脈之泉的聲音，正漸漸清晰……</p><span className="loading-line" /></div>
+            <div className="game-overlay-card"><span className="overlay-rune">✧</span><h2>正在醒於鳴霖林間</h2><p>後頸的通訊微微發熱，遠處傳來地脈崩解的聲音……</p><span className="loading-line" /></div>
           </div>
         )}
 
         {!initializing && !ready && (
           <div className="game-overlay" role="alert">
-            <div className="game-overlay-card"><span className="overlay-rune">✧</span><h2>暫時無法進入鳴霖</h2><p>{error || "遊戲服務暫時沒有回應。"}</p><button type="button" onClick={() => void initialize(sessionId)}>重新連線</button></div>
+            <div className="game-overlay-card"><span className="overlay-rune">✧</span><h2>暫時無法進入遊戲</h2><p>{error || "遊戲服務暫時沒有回應。"}</p><button type="button" onClick={() => void initialize(sessionId)}>重新連線</button></div>
           </div>
         )}
 
@@ -743,7 +865,7 @@ export default function Home() {
             <section className="game-overlay-card help-card" role="dialog" aria-modal="true" aria-label="操作說明">
               <button type="button" className="overlay-close" onClick={() => setHelpOpen(false)} aria-label="關閉說明">✕</button>
               <span className="overlay-rune">✧</span><h2>旅人指南</h2>
-              <dl><div><dt>移動</dt><dd>左鍵點道路，或使用 WASD／方向鍵。角色會朝移動方向轉身。</dd></div><div><dt>旅途地圖</dt><dd>點左上角地圖可查看鳴霖、流塵谷、烈燚原及路線；青色光點標示目前場景。前往各地仍依劇情選項。</dd></div><div><dt>縮放</dt><dd>滑鼠滾輪、右側 ＋／－，或手機雙指縮放。點倍率可恢復全景。</dd></div><div><dt>轉身</dt><dd>右鍵點想面對的方向，或按 Q／R 原地轉身；手機可用 ↶／↷。</dd></div><div><dt>交談</dt><dd>鳴霖議會可與維達利亞、安德烈交談；命脈之泉可與維達利亞交談；流塵谷可與門梅司文托交談；烈燚原可與達索交談；邊境廢墟可與塞特、希拉交談。點擊角色，或靠近後按 E。</dd></div><div><dt>音樂</dt><dd>右上角可播放或關閉背景音樂。</dd></div><div><dt>返回</dt><dd>按 Esc 關閉對話、地圖與說明。</dd></div></dl>
+              <dl><div><dt>移動</dt><dd>左鍵點道路，或使用 WASD／方向鍵。角色會朝移動方向轉身。</dd></div><div><dt>旅途地圖</dt><dd>點左上角地圖可查看鳴霖、流塵谷、烈燚原及路線；青色光點標示目前場景。前往各地仍依劇情選項。</dd></div><div><dt>縮放</dt><dd>滑鼠滾輪、右側 ＋／－，或手機雙指縮放。點倍率可恢復全景。</dd></div><div><dt>轉身</dt><dd>右鍵點想面對的方向，或按 Q／R 原地轉身；手機可用 ↶／↷。</dd></div><div><dt>交談</dt><dd>開場在鳴霖先與安德烈交談；沿前方道路走到議會庭後，維達利亞才會出現。完成她的對話後，才會開放命脈之泉與符石林。</dd></div><div><dt>音樂</dt><dd>右上角可播放或關閉背景音樂。</dd></div><div><dt>返回</dt><dd>按 Esc 關閉對話、地圖與說明。</dd></div></dl>
               <div className="overlay-actions"><button type="button" className="secondary-button" onClick={() => { setHelpOpen(false); setIntroOpen(true); }}>重看序章</button><button type="button" onClick={() => setHelpOpen(false)}>繼續探索</button></div>
             </section>
           </div>
@@ -752,7 +874,7 @@ export default function Home() {
         {restartConfirm && (
           <div className="game-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRestartConfirm(false); }}>
             <section className="game-overlay-card" role="dialog" aria-modal="true" aria-label="重新開始遊戲">
-              <span className="overlay-rune">✧</span><h2>重新開始旅程？</h2><p>角色會回到鳴霖入口，對話回合也會從頭開始。</p>
+              <span className="overlay-rune">✧</span><h2>重新開始旅程？</h2><p>角色會回到鳴霖林間，從安德烈的引導重新開始。</p>
               <div className="overlay-actions"><button type="button" className="secondary-button" onClick={() => setRestartConfirm(false)}>繼續目前旅程</button><button type="button" onClick={restart}>重新開始</button></div>
             </section>
           </div>

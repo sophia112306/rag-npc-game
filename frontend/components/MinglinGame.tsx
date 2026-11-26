@@ -44,9 +44,12 @@ type Props = {
   tilemapUrl: string;
   npcNames: Record<NpcId, string>;
   reaction: NpcReactionEvent | null;
+  visibleNpcIds: NpcId[];
+  forwardTriggerEnabled: boolean;
   paused: boolean;
   onNearChange: (targetId: InteractionTarget | null) => void;
   onInteract: (targetId: InteractionTarget) => void;
+  onReachForward: () => void;
   onZoomChange: (zoom: number) => void;
 };
 
@@ -63,17 +66,21 @@ const directions = [
   { texture: "traveler", flipX: true },
 ] as const;
 
-export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemapUrl, npcNames, reaction, paused, onNearChange, onInteract, onZoomChange }: Props) {
+export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemapUrl, npcNames, reaction, visibleNpcIds, forwardTriggerEnabled, paused, onNearChange, onInteract, onReachForward, onZoomChange }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused);
   const nearRef = useRef(onNearChange);
   const interactRef = useRef(onInteract);
+  const reachForwardRef = useRef(onReachForward);
   const zoomRef = useRef(onZoomChange);
   const namesRef = useRef(npcNames);
+  const visibleNpcIdsRef = useRef(visibleNpcIds);
+  const forwardTriggerEnabledRef = useRef(forwardTriggerEnabled);
 
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   useEffect(() => { nearRef.current = onNearChange; }, [onNearChange]);
   useEffect(() => { interactRef.current = onInteract; }, [onInteract]);
+  useEffect(() => { reachForwardRef.current = onReachForward; }, [onReachForward]);
   useEffect(() => { zoomRef.current = onZoomChange; }, [onZoomChange]);
   useEffect(() => { namesRef.current = npcNames; }, [npcNames]);
   useEffect(() => {
@@ -81,6 +88,14 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
       window.dispatchEvent(new CustomEvent<NpcReactionEvent>("minglin:npc-reaction", { detail: reaction }));
     }
   }, [reaction]);
+  useEffect(() => {
+    visibleNpcIdsRef.current = visibleNpcIds;
+    window.dispatchEvent(new CustomEvent<NpcId[]>("minglin:visibility", { detail: visibleNpcIds }));
+  }, [visibleNpcIds]);
+  useEffect(() => {
+    forwardTriggerEnabledRef.current = forwardTriggerEnabled;
+    window.dispatchEvent(new CustomEvent<boolean>("minglin:forward-trigger", { detail: forwardTriggerEnabled }));
+  }, [forwardTriggerEnabled]);
 
   useEffect(() => {
     let game: Phaser.Game | undefined;
@@ -93,6 +108,8 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
         private player?: Phaser.GameObjects.Image;
         private playerShadow?: Phaser.GameObjects.Ellipse;
         private npcs: Partial<Record<NpcId, Phaser.GameObjects.Image>> = {};
+        private npcShadows: Partial<Record<NpcId, Phaser.GameObjects.Ellipse>> = {};
+        private npcMarkers: Partial<Record<NpcId, Phaser.GameObjects.Text>> = {};
         private targets = new Map<InteractionTarget, { x: number; y: number; label: string }>();
         private walkable: Phaser.Geom.Polygon[] = [];
         private keys = new Set<string>();
@@ -102,6 +119,9 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
         private pinchStart?: { distance: number; zoom: number };
         private touchStarts = new Map<number, { x: number; y: number }>();
         private suppressTouchTap = false;
+        private visibleNpcIds = new Set<NpcId>(visibleNpcIdsRef.current);
+        private forwardTriggerEnabled = forwardTriggerEnabledRef.current;
+        private forwardTriggerFired = false;
 
         constructor() { super("minglin"); }
 
@@ -160,7 +180,8 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
             const label = isNpc ? namesRef.current[npcId] : actor.properties?.find((p: {name:string}) => p.name === "label")?.value ?? "調查地標";
             this.targets.set(targetId, { x: npcX, y: npcY, label });
             if (isNpc) {
-              this.add.ellipse(npcX, npcY + 4, 40, 12, 0x232119, 0.35).setDepth(npcY - 1);
+              const shadow = this.add.ellipse(npcX, npcY + 4, 40, 12, 0x232119, 0.35).setDepth(npcY - 1);
+              this.npcShadows[npcId] = shadow;
               const spriteHeight: Record<NpcId, number> = {
                 vidalia: 132, andre: 137, menmesvento: 137, dasso: 154, seth: 148, syra: 143,
               };
@@ -176,7 +197,9 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
               color: "#ffe496", fontSize: "19px", fontFamily: "serif",
               stroke: "#172018", strokeThickness: 4,
             }).setOrigin(0.5).setDepth(npcY + 1);
+            if (isNpc) this.npcMarkers[npcId] = marker;
             this.tweens.add({ targets: marker, alpha:.65, duration: 1300, yoyo: true, repeat: -1 });
+            if (isNpc) this.setNpcVisibility(npcId, this.visibleNpcIds.has(npcId));
           }
           this.input.mouse?.disableContextMenu();
 
@@ -259,6 +282,7 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
               return;
             }
             const clickedTarget = [...this.targets].find(([id, target]) =>
+              (!isNpcId(id) || this.visibleNpcIds.has(id)) &&
               Math.abs(x - target.x) < (id === "landmark" ? 85 : 64) && y > target.y - (id === "landmark" ? 55 : 150) && y < target.y + 35)?.[0];
             if (clickedTarget) {
               const target = this.targets.get(clickedTarget)!;
@@ -289,6 +313,17 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
           window.addEventListener("minglin:interact", talk);
           window.addEventListener("minglin:approach", approach);
           window.addEventListener("minglin:npc-reaction", react);
+          const visibility = (event: Event) => {
+            this.visibleNpcIds = new Set((event as CustomEvent<NpcId[]>).detail);
+            for (const npcId of NPC_IDS) this.setNpcVisibility(npcId, this.visibleNpcIds.has(npcId));
+            this.refreshNearState();
+          };
+          const forwardTrigger = (event: Event) => {
+            this.forwardTriggerEnabled = (event as CustomEvent<boolean>).detail;
+            if (!this.forwardTriggerEnabled) this.forwardTriggerFired = false;
+          };
+          window.addEventListener("minglin:visibility", visibility);
+          window.addEventListener("minglin:forward-trigger", forwardTrigger);
           this.events.once("shutdown", () => {
             this.scale.off("resize", resized);
             window.removeEventListener("keydown", keydown);
@@ -305,6 +340,8 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
             window.removeEventListener("minglin:interact", talk);
             window.removeEventListener("minglin:approach", approach);
             window.removeEventListener("minglin:npc-reaction", react);
+            window.removeEventListener("minglin:visibility", visibility);
+            window.removeEventListener("minglin:forward-trigger", forwardTrigger);
           });
           this.refreshNearState();
         }
@@ -344,6 +381,12 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
           } else {
             this.tweens.add({ ...common, y: home.y - 5, duration: 180, repeat: 1 });
           }
+        }
+
+        private setNpcVisibility(npcId: NpcId, visible: boolean) {
+          this.npcs[npcId]?.setVisible(visible);
+          this.npcShadows[npcId]?.setVisible(visible);
+          this.npcMarkers[npcId]?.setVisible(visible);
         }
 
         private worldAt(x: number, y: number) {
@@ -441,6 +484,7 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
         }
 
         private isNearTarget(targetId: InteractionTarget) {
+          if (isNpcId(targetId) && !this.visibleNpcIds.has(targetId)) return false;
           const target = this.targets.get(targetId);
           return !!this.player && !!target &&
             PhaserEngine.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y) < 125;
@@ -477,12 +521,22 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
           if (!this.canWalk(nextX, nextY)) return false;
           if ((Object.keys(this.npcs) as NpcId[]).some((npcId) => {
             const npc = this.npcs[npcId];
-            return npc && PhaserEngine.Math.Distance.Between(nextX, nextY, npc.x, npc.y) < 31;
+            return this.visibleNpcIds.has(npcId) && npc && PhaserEngine.Math.Distance.Between(nextX, nextY, npc.x, npc.y) < 31;
           })) return false;
           this.player.setPosition(nextX, nextY).setDepth(nextY);
           this.playerShadow.setPosition(nextX, nextY + 3).setDepth(nextY - 1);
           this.keepPlayerVisible();
           this.refreshNearState();
+          if (
+            this.forwardTriggerEnabled &&
+            !this.forwardTriggerFired &&
+            nextX >= 760 && nextX <= 1260 &&
+            nextY >= 280 && nextY <= 485
+          ) {
+            this.forwardTriggerFired = true;
+            this.destination = undefined;
+            reachForwardRef.current();
+          }
           return true;
         }
 

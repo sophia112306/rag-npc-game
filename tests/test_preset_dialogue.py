@@ -7,11 +7,13 @@ import pytest
 
 from fastapi.testclient import TestClient
 
+from backend.content.demo_story import SIDE_EVENT_ENTRY_IDS
 from backend.content.npc_dialogue import NPC_DIALOGUE_CHOICES
 from backend.main import create_app
 from backend.rules.event_rules import EventRules
 from backend.schemas.player_view import PlayerIdentityView
 from backend.schemas.story import AdvanceStoryOperation, DialogueLine, EventProposal, StoryProposal
+from test_demo_story_flow import _start
 
 
 class UnavailableModel:
@@ -53,10 +55,18 @@ def test_six_scene_preset_journey_never_calls_model_and_resumes(tmp_path):
                 assert state["story_progress"]["node_id"] == before
                 assert state["npc_states"][npc_id]["met"] is True
 
-        talk_to("andre")
-        for choice in ("ask_location", "ask_about_factions", "ask_about_fire_elder", "ask_about_mummies", "travel_to_minglin_life_spring"):
+        choose("meet_andre", "andre")
+        choose("walk_to_council")
+        choose("meet_vidalia", "vidalia")
+        choose("ask_for_task")
+        for choice in (
+            "ask_location",
+            "ask_about_factions",
+            "ask_about_fire_elder",
+            "ask_about_mummies",
+            "travel_to_minglin_life_spring",
+        ):
             choose(choice)
-        talk_to("vidalia")
         for choice in ("study_spring_ash", "enter_lieyi_plains"):
             choose(choice)
         talk_to("dasso")
@@ -113,7 +123,7 @@ def _advance(client, session_id, choice_id):
 
 
 def _reach_border(client, session_id):
-    client.post("/api/game/start", json={"session_id": session_id})
+    _start(client, session_id)
     for choice_id in (
         "travel_to_minglin_life_spring", "study_spring_ash", "enter_lieyi_plains",
         "observe_sacred_fire", "return_with_fire_findings", "travel_to_minglin_rune_grove",
@@ -124,7 +134,7 @@ def _reach_border(client, session_id):
 
 
 @pytest.mark.parametrize("choice_id,rule_id,expected_inventory", [
-    ("border_help_both", "E2-3_help_both", ["fissure_map"]),
+    ("border_help_both", "E2-3_help_both", ["fissure_map", "ember_amulet", "cloth_fragment"]),
     ("border_report", "E2-3_report", []),
     ("border_ignore", "E2-3_ignore", []),
 ])
@@ -148,9 +158,11 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
         assert "flags" not in result["state"]
         assert "axis" not in effect and "usurp" not in effect
         if expected_inventory:
-            item = result["state"]["player"]["items"][0]
-            assert item["name"] == "裂隙地圖"
-            assert (Path(__file__).resolve().parents[1] / "frontend/public" / item["image_url"].lstrip("/")).exists()
+            items = result["state"]["player"]["items"]
+            assert [item["item_id"] for item in items] == expected_inventory
+            assert [item["name"] for item in items] == ["裂隙拓印圖", "餘燼護符", "麻布殘片"]
+            for item in items:
+                assert (Path(__file__).resolve().parents[1] / "frontend/public" / item["image_url"].lstrip("/")).exists()
 
         alternative = client.post("/api/game/turn", json={**payload, "action_id": str(uuid4()), "expected_state_version": result["state"]["state_version"]})
         assert alternative.status_code == 409
@@ -162,7 +174,10 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
             "border_report": "enter_memory_library_with_elders",
             "border_ignore": "enter_memory_library_alone",
         }[choice_id]
-        assert option_ids == {expected_entry}
+        # 進圖書館的入口之外，只多出階段二的選做支線
+        assert expected_entry in option_ids
+        assert option_ids - {expected_entry} == SIDE_EVENT_ENTRY_IDS
+        assert options[0]["choice_id"] == expected_entry
         saved = client.get(f"/api/game/{choice_id}/state").json()
         assert saved["player"]["inventory"] == expected_inventory
 
@@ -173,8 +188,8 @@ def test_border_outcomes_use_authored_rules_once_and_persist(tmp_path, choice_id
 @pytest.mark.parametrize(
     "false_claim",
     (
-        "你已經獲得裂隙地圖。",
-        "我把裂隙地圖交給你了。",
+        "你已經獲得裂隙拓印圖。",
+        "我把裂隙拓印圖交給你了。",
         "協助兩人的結果已成立，地圖現在是你的。",
         "邊境抉擇已完成，你可以直接進入圖書館。",
     ),
@@ -183,7 +198,7 @@ def test_model_claims_cannot_replace_player_choice_or_story_rules(
     tmp_path, false_claim
 ):
     class RewardClaimingModel:
-        async def propose(self, action, _parsed, state):
+        async def propose(self, action, _parsed, state, turn_guidance):
             return StoryProposal(
                 session_id=action.session_id, turn_number=state.turn_count + 1,
                 proposed_dialogue=[DialogueLine(speaker_type="npc", speaker_id="seth", speaker_name="塞特", text=false_claim)],
@@ -211,7 +226,7 @@ def test_model_claims_cannot_replace_player_choice_or_story_rules(
         accepted, _payload = _advance(
             client, "model-claim", "border_help_both"
         )
-        assert accepted["state"]["player"]["inventory"] == ["fissure_map"]
+        assert accepted["state"]["player"]["inventory"] == ["fissure_map", "ember_amulet", "cloth_fragment"]
         assert accepted["state"]["story_progress"]["node_id"] == (
             "border_choice_resolved"
         )
@@ -219,4 +234,4 @@ def test_model_claims_cannot_replace_player_choice_or_story_rules(
 
 def test_cached_item_ids_recover_fixed_presentation():
     old = PlayerIdentityView.model_validate({"player_id": "player_01", "name": "旅人", "inventory": ["fissure_map"]})
-    assert old.items[0].name == "裂隙地圖"
+    assert old.items[0].name == "裂隙拓印圖"

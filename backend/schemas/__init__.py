@@ -1,6 +1,7 @@
 """Shared Pydantic contracts used by the backend modules and APIs."""
 
 from .api_response import ApiError, DeltaPayload, GameTurnResponse, NarrativeAIResponse
+from .alan_hud import AlanHud, AlanTone
 from .character import CharacterProfile
 from .content import (
     CharacterDefinition,
@@ -51,6 +52,8 @@ from .story import (
 
 __all__ = [
     "ActionType",
+    "AlanHud",
+    "AlanTone",
     "ActionMode",
     "ApiError",
     "CharacterProfile",

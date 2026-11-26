@@ -16,10 +16,44 @@ from backend.schemas.game_state import GameState
 from backend.schemas.player_view import project_player_view
 
 
-def _start(client: TestClient, session_id: str) -> dict:
+_OPENING_CHOICES_BY_NODE = {
+    "minglin_arrival": "meet_andre",
+    "minglin_path_open": "walk_to_council",
+    "minglin_council": "meet_vidalia",
+    "minglin_orientation": "ask_for_task",
+}
+
+
+def _start(
+    client: TestClient,
+    session_id: str,
+    *,
+    opening_node: str = "minglin_briefed",
+) -> dict:
+    """Start a session and, by default, finish the authored opening.
+
+    Most tests in this module exercise the investigation graph that starts
+    after Vidalia gives the player a task.  The opening itself has dedicated
+    coverage in ``test_opening_sequence.py``.  Advancing through the real API
+    keeps these tests compatible with the player-visible opening without
+    bypassing state transitions.
+    """
+
     response = client.post("/api/game/start", json={"session_id": session_id})
     assert response.status_code == 201
-    return response.json()
+    state = response.json()
+    while (
+        state["story_progress"]["node_id"] != opening_node
+        and state["story_progress"]["node_id"] in _OPENING_CHOICES_BY_NODE
+    ):
+        choice_id = _OPENING_CHOICES_BY_NODE[state["story_progress"]["node_id"]]
+        state = _submit_choice(
+            client,
+            session_id,
+            state["state_version"],
+            choice_id,
+        )["state"]
+    return state
 
 
 def _choice(client: TestClient, session_id: str, choice_id: str) -> dict:
@@ -55,12 +89,21 @@ def _submit_choice(
     return response.json()
 
 
+_TO_BORDER_RESOLUTION = (
+    "travel_to_minglin_life_spring", "study_spring_ash", "enter_lieyi_plains",
+    "observe_sacred_fire", "return_with_fire_findings",
+    "travel_to_minglin_rune_grove", "trace_dust_runes", "enter_liuchen_valley",
+    "listen_to_forgotten_names", "return_with_dust_findings", "preview_border_ruins",
+)
+
+
 def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
     """Keep every authored branch connected to a playable route through the API."""
 
     paths = {
         "council-dialogue-and-border-help": (
             "ask_location",
+            "ask_about_anomaly",
             "ask_about_factions",
             "ask_about_fire_elder",
             "ask_about_mummies",
@@ -97,7 +140,6 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "choose_long_sleep",
         ),
         "direct-briefing-and-border-report": (
-            "ask_for_task",
             "travel_to_minglin_rune_grove",
             "read_ember_runes",
             "enter_lieyi_plains",
@@ -160,7 +202,6 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
         ),
         "orientation-briefing": (
             "ask_location",
-            "ask_for_task",
             "travel_to_minglin_life_spring",
             "study_spring_ash",
             "enter_lieyi_plains",
@@ -203,12 +244,48 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "return_to_minglin_for_veta", "enter_veta_source", "veta_q1_recurring_life",
             "veta_q2_control", "confirm_usurp_after_warning", "choose_usurp",
         ),
+        # 階段二選做支線：E2-1 抽泉裝置與 E2-4 觀測符印的每個選項
+        "side-events-place": (
+            *_TO_BORDER_RESOLUTION, "border_help_both", "return_after_border_choice",
+            "side_spring_anomaly", "pump_prevent", "rune_place_spring",
+            "side_fire_reactor", "rune_place_fire",
+            "side_dust_fissure", "rune_place_dust",
+        ),
+        "side-events-refuse": (
+            *_TO_BORDER_RESOLUTION, "border_report", "return_after_border_choice",
+            "side_spring_anomaly", "pump_assist", "rune_refuse_spring",
+            "side_fire_reactor", "rune_refuse_fire",
+            "side_dust_fissure", "rune_refuse_dust",
+        ),
+        "side-events-ignore": (
+            *_TO_BORDER_RESOLUTION, "border_ignore", "return_after_border_choice",
+            "side_spring_anomaly", "pump_ignore", "rune_refuse_spring",
+        ),
+        # 階段三：真相 C 後拒絕艾倫、拆除符印，再走到塵歸結局
+        "reject-alan-and-remove-runes": (
+            *_TO_BORDER_RESOLUTION, "border_help_both", "return_after_border_choice",
+            "side_spring_anomaly", "pump_ignore", "rune_place_spring",
+            "enter_memory_library_with_map", "inspect_invasion_archive", "inspect_life_death_book",
+            "contact_alan_observer", "reject_alan_after_truths", "seek_menmesvento_after_truths",
+            "accept_dust_return_token", "return_to_minglin_for_veta", "remove_placed_runes",
+            "enter_veta_source", "veta_q1_recurring_life", "veta_q2_release", "choose_dust_return",
+        ),
     }
     expected_edges = {
         (choice.choice_id, choice.source_node_id, choice.source_scene_id)
         for choice in DEMO_STORY_CHOICES
+        if choice.source_node_id != "fissure_arrival"
+        # 需要關係值 ≥ 60 的事件（E3-2～E3-4）靠對話累積，固定選項路線走不到，
+        # 改由 test_act3_events.py 以指定狀態驗證
+        and not choice.min_relations
+        and choice.source_node_id != "side_vidalia_offer"
     }
-    visited_edges: set[tuple[str, str, str]] = set()
+    visited_edges: set[tuple[str, str, str]] = {
+        ("meet_andre", "minglin_arrival", "minglin"),
+        ("walk_to_council", "minglin_path_open", "minglin"),
+        ("meet_vidalia", "minglin_council", "minglin"),
+        ("ask_for_task", "minglin_orientation", "minglin"),
+    }
 
     with TestClient(
         create_app(f"sqlite+aiosqlite:///{tmp_path / 'story-connectivity.db'}")
@@ -447,7 +524,9 @@ def test_stale_or_altered_story_choice_is_rejected_without_turn(tmp_path) -> Non
         create_app(f"sqlite+aiosqlite:///{tmp_path / 'invalid-choice.db'}")
     ) as client:
         session_id = "invalid-choice"
-        state = _start(client, session_id)
+        state = _start(client, session_id, opening_node="minglin_orientation")
+        original_turn_count = state["turn_count"]
+        original_state_version = state["state_version"]
         stale = client.post(
             "/api/game/turn",
             json={
@@ -483,8 +562,8 @@ def test_stale_or_altered_story_choice_is_rejected_without_turn(tmp_path) -> Non
         assert stale.json()["detail"]["code"] == "STORY_CHOICE_UNAVAILABLE"
         assert altered.status_code == 409
         assert altered.json()["detail"]["code"] == "STORY_CHOICE_MISMATCH"
-        assert unchanged.json()["turn_count"] == 0
-        assert unchanged.json()["state_version"] == 1
+        assert unchanged.json()["turn_count"] == original_turn_count
+        assert unchanged.json()["state_version"] == original_state_version
 
 
 def test_first_stage_dialogue_does_not_reveal_later_truths(tmp_path) -> None:
@@ -495,6 +574,7 @@ def test_first_stage_dialogue_does_not_reveal_later_truths(tmp_path) -> None:
         state = _start(client, session_id)
         for choice_id in (
             "ask_location",
+            "ask_about_anomaly",
             "ask_about_factions",
             "ask_about_fire_elder",
             "ask_about_mummies",
@@ -524,6 +604,7 @@ def test_first_stage_dialogue_does_not_reveal_later_truths(tmp_path) -> None:
                 assert later_truth not in visible
 
         assert state["story_progress"]["public_clue_ids"] == [
+            "minglin_anomaly",
             "spring_stopped_expanding",
             "factions_notice_anomaly",
             "elders_near_spring",
@@ -568,13 +649,13 @@ def test_replaying_saved_first_stage_turn_uses_current_reveal_timing(tmp_path) -
     ) as client:
         session_id = "legacy-replay"
         state = _start(client, session_id)
-        orientation = _submit_choice(
+        location = _submit_choice(
             client, session_id, state["state_version"], "ask_location"
         )
         old_response = _submit_choice(
             client,
             session_id,
-            orientation["state"]["state_version"],
+            location["state"]["state_version"],
             "ask_about_factions",
         )
 
@@ -683,8 +764,14 @@ def test_map_routes_are_server_choices_and_unlock_after_investigation(tmp_path):
         assert scenes["liuchen_valley"]["travel_choice"] is None
         choices = client.get("/api/game/map-routes/choices").json()
         assert scenes["minglin_rune_grove"]["travel_choice"] in choices
-        assert "第一次入侵" not in str(scenes) and "truth_level" not in str(scenes)
-        grove = _submit_choice(client, "map-routes", 1, "travel_to_minglin_rune_grove")
+        assert "第一次入侵" not in str(scenes)
+        assert "truth_level" not in str(scenes)
+        grove = _submit_choice(
+            client,
+            "map-routes",
+            state["state_version"],
+            "travel_to_minglin_rune_grove",
+        )
         assert "辨認風沙路徑" in grove["state"]["navigation"]["objective"]
         assert "前往平衡議會" not in grove["state"]["navigation"]["objective"]
         route = _submit_choice(client, "map-routes", grove["state"]["state_version"], "trace_dust_runes")
@@ -701,8 +788,8 @@ def test_map_routes_are_server_choices_and_unlock_after_investigation(tmp_path):
 
 def test_typed_dialogue_choice_advances_once_without_automatic_travel(tmp_path):
     with TestClient(create_app(f"sqlite+aiosqlite:///{tmp_path / 'typed.db'}")) as client:
-        _start(client, "typed")
-        payload = {"session_id":"typed", "action_id":str(uuid4()), "expected_state_version":1,
+        state = _start(client, "typed", opening_node="minglin_orientation")
+        payload = {"session_id":"typed", "action_id":str(uuid4()), "expected_state_version":state["state_version"],
                    "message":"詢問能幫什麼忙", "input_type":"text", "action_mode":"dialogue", "target_npc_id":"vidalia"}
         first = client.post("/api/game/turn", json=payload)
         replay = client.post("/api/game/turn", json=payload)
@@ -715,13 +802,13 @@ def test_typed_dialogue_choice_advances_once_without_automatic_travel(tmp_path):
 def test_typed_dialogue_choice_accepts_transcript_spacing_and_punctuation(tmp_path):
     database_url = f"sqlite+aiosqlite:///{tmp_path / 'typed-normalized.db'}"
     with TestClient(create_app(database_url)) as client:
-        _start(client, "typed-normalized")
+        state = _start(client, "typed-normalized", opening_node="minglin_orientation")
         response = client.post(
             "/api/game/turn",
             json={
                 "session_id": "typed-normalized",
                 "action_id": str(uuid4()),
-                "expected_state_version": 1,
+                "expected_state_version": state["state_version"],
                 "message": "  詢問　能幫什麼忙？！ ",
                 "input_type": "speech_transcript",
                 "action_mode": "dialogue",

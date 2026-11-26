@@ -26,13 +26,26 @@ def match_typed_story_dialogue(action: PlayerAction, state: GameState) -> DemoSt
         return None
     text = normalize_authored_choice_text(action.message)
     choices = (*available_demo_story_choices(state), *available_npc_dialogue_choices(state, action.target_npc_id or ""))
-    return next((choice for choice in choices
+    exact_choice = next((choice for choice in choices
                  if choice.action_mode == "dialogue"
                  and choice.target_npc_id == action.target_npc_id
                  and text in {
                      normalize_authored_choice_text(choice.label),
                      normalize_authored_choice_text(choice.message),
                  }), None)
+    if exact_choice:
+        return exact_choice
+
+    # During the two authored introductions, natural text is still the same
+    # story beat as the visible shortcut. This lets the player answer Andre or
+    # Vidalia naturally without allowing the turn to skip the opening route.
+    opening_choice_ids = {
+        ("minglin_arrival", "andre"): "meet_andre",
+        ("minglin_council", "vidalia"): "meet_vidalia",
+        ("minglin_orientation", "vidalia"): "ask_for_task",
+    }
+    choice_id = opening_choice_ids.get((state.story_progress.node_id, action.target_npc_id or ""))
+    return next((choice for choice in choices if choice.choice_id == choice_id), None)
 
 
 def story_choice_action_matches(

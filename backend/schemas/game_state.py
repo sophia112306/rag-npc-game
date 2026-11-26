@@ -51,7 +51,7 @@ class StoryProgressState(BaseModel):
 
     arc_id: str = "vita_anomaly_demo_v1"
     node_id: str = "minglin_arrival"
-    chapter_title: str = "鳴霖異象"
+    chapter_title: str = "鳴霖・林間入口"
     mode: Literal["demo_fallback"] = "demo_fallback"
     completed_choice_ids: List[str] = Field(default_factory=list)
     public_clue_ids: List[str] = Field(default_factory=list)
@@ -75,7 +75,7 @@ class GameState(BaseModel):
     game_status: Literal["active", "completed", "game_over"] = "active"
     final_ending: str | None = None
     phase_turns: int = 0                 # 當前階段已消耗的回合數
-    current_scene_id: str = "fissure"    # 當前場景 ID (初始在屏障裂隙)
+    current_scene_id: str = "minglin"    # 當前場景 ID (開場在鳴霖林間入口)
     
     # 流程與階段控制
     story_phase: StoryPhase = StoryPhase.ACT1_APPROACHING
@@ -86,9 +86,12 @@ class GameState(BaseModel):
     # [新增] 草案 v3 防刷分計數器（每階段切換時歸零）
     phase_usurp_dialogue_gain: int = 0   # 本階段靠激怒 NPC 累積的篡奪值 (上限 +10)
     recent_axis_signs: List[int] = Field(default_factory=list)  # 記錄最近 3 回合的主軸傾向符號 (-1, 0, 1)
+    recent_axis_stances: List[Optional[str]] = Field(default_factory=list)  # 最近 3 回合的立場類別；有類別時以類別判斷同一立場
     phase_relation_dialogue_gain: Dict[str, int] = Field(
         default_factory=lambda: {"andre": 0, "vidalia": 0, "menmesvento": 0}
     )                                    # 本階段各角色靠對話累積的關係值 (各上限 +40)
+    recent_dialogue_messages: List[str] = Field(default_factory=list)  # 最近 3 次對話判讀的玩家原句（正規化後）；同一句話 3 回合內只計一次
+    dialogue_counters_phase: Optional[StoryPhase] = None  # phase_*_dialogue_gain 計數器所屬的階段；階段改變時歸零
     
     # 草案 v3 三大核心結局數值
     axis: int = Field(default=0, ge=-100, le=100)    # 主軸傾向值 (-100 ~ +100)
@@ -112,7 +115,7 @@ class GameState(BaseModel):
         default_factory=lambda: {
             "elder_cooperation": False,   # 長老協力
             "library_path": False,        # 圖書館路徑
-            "fissure_map": False,         # 裂隙地圖
+            "fissure_map": False,         # 裂隙拓印圖（內部 ID 保留 fissure_map）
             "has_dust_token": False,      # 持有塵歸令
             "is_transformed": False,      # 已轉化（相容舊布林判斷）
             "transformed_race": None,     # [新增] 已轉化具體種族 (None / "elf" / "mummy" / "human")

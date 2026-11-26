@@ -2,11 +2,25 @@
 
 from backend.content.characters import npc_is_present
 from backend.content.demo_story import available_demo_story_choices, available_npc_dialogue_choices
-from backend.content.scenes import travel_destinations
+from backend.content.scenes import require_scene, travel_destinations
+from backend.generation.gateway import TurnGuidance, TurnGuidanceAction
 from backend.schemas.game_state import GameState
 from backend.schemas.player_action import ActionMode, PlayerAction
 from backend.schemas.player_choice import PlayerChoice
 from backend.schemas.progression import PlayerQuestView
+
+
+def npc_available_in_state(npc_id: str, state: GameState) -> bool:
+    """Apply story-gated presence on top of the scene's canonical NPC list."""
+
+    if not npc_is_present(npc_id, state.current_scene_id):
+        return False
+    if state.current_scene_id == "minglin":
+        if state.story_progress.node_id in {"minglin_arrival", "minglin_path_open"}:
+            return npc_id == "andre"
+        if state.story_progress.node_id in {"minglin_council", "minglin_orientation", "minglin_briefed"}:
+            return npc_id == "vidalia"
+    return True
 
 
 def build_player_choices(
@@ -19,14 +33,23 @@ def build_player_choices(
     if state.game_status != "active":
         return []
     if npc_id is not None:
-        if not npc_is_present(npc_id, state.current_scene_id):
+        if not npc_available_in_state(npc_id, state):
             return []
+        if state.story_progress.node_id in {"fissure_arrival", "minglin_arrival", "minglin_council", "minglin_orientation"}:
+            return [
+                choice.to_player_choice()
+                for choice in available_demo_story_choices(state)
+                if choice.target_npc_id == npc_id
+            ]
         if npc_id != "vidalia" or state.current_scene_id != "minglin":
             return [choice.to_player_choice() for choice in available_npc_dialogue_choices(state, npc_id)]
 
     story_choices = available_demo_story_choices(state)
     if story_choices:
-        if quests and state.story_progress.node_id == "minglin_arrival":
+        if quests and state.story_progress.node_id in {
+            "minglin_arrival",
+            "minglin_briefed",
+        }:
             # Keep existing quest dialogue, but travel must also advance the
             # story node. A plain scene change stranded legacy quest sessions.
             travel = [choice.to_player_choice() for choice in story_choices if choice.destination_scene_id]
@@ -36,6 +59,36 @@ def build_player_choices(
     travel = _travel_choices(state.current_scene_id)
     dialogue_limit = max(1, 4 - len(travel))
     return [*_dialogue_choices(state, quests)[:dialogue_limit], *travel]
+
+
+def build_turn_guidance(
+    state: GameState,
+    choices: list[PlayerChoice],
+) -> TurnGuidance:
+    """Project the current objective and legal actions for model dialogue.
+
+    This deliberately reuses player-visible navigation and choices instead of
+    serializing GameState, which includes author-only facts and hidden flags.
+    """
+
+    # Import here because player_view derives its navigation through this
+    # module. At call time both modules have completed initialization.
+    from backend.schemas.player_view import project_navigation
+
+    navigation = project_navigation(state)
+    return TurnGuidance(
+        objective=navigation.objective,
+        scene_name=require_scene(state.current_scene_id).display_name,
+        available_actions=[
+            TurnGuidanceAction(
+                label=choice.label,
+                action_mode=choice.action_mode,
+                destination_scene_id=choice.destination_scene_id,
+                target_npc_id=choice.target_npc_id,
+            )
+            for choice in choices[:8]
+        ],
+    )
 
 
 def player_choice_action_matches(

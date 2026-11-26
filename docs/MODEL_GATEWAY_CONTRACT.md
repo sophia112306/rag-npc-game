@@ -77,6 +77,20 @@ MODEL_GATEWAY_MAX_ATTEMPTS=2
     "active_quests": [],
     "missing_data": ["character_definition_incomplete"]
   },
+  "npc_trust": "低",
+  "npc_mode": "好奇的觀察者：千年歲月的倦怠與旁觀，優雅而疏離、回應簡短；主角索取核心情報時會笑著點出信任條件。",
+  "turn_guidance": {
+    "objective": "下一步：前往命脈之泉／符石林，繼續調查。",
+    "scene_name": "鳴霖",
+    "available_actions": [
+      {
+        "label": "前往命脈之泉",
+        "action_mode": "movement",
+        "destination_scene_id": "minglin_life_spring",
+        "target_npc_id": null
+      }
+    ]
+  },
   "allowed_operations": ["transfer_item", "establish_commitment", "offer_quest", "change_scene"],
   "generation_budget": {
     "max_model_calls": 2,
@@ -88,7 +102,11 @@ MODEL_GATEWAY_MAX_ATTEMPTS=2
 }
 ```
 
-`target_context` 已由遊戲後端依 Session、NPC、解鎖狀態及回合過濾。B 不應另行加入未授權世界設定；`missing_data` 中的項目不可自行補成核心設定。
+`target_context` 已由遊戲後端依 Session、NPC、解鎖狀態及回合過濾。B 不應另行加入未授權世界設定；`missing_data` 中的項目不可自行補成核心設定。`turn_guidance` 只含玩家已看得到的目前目標與合法選項；玩家詢問下一步時，模型應用角色語氣建議其中一項，不能自創未解鎖的地點、NPC 或任務。
+
+`npc_trust` 是目標 NPC 對主角的信任度（`低`／`中`／`高`／`至高`），由後端依關係值換算，與訓練資料的「信任度」一致；請求中不含關係值、主軸或篡奪值本身。目前只有安德烈、維達利亞（<40 低、40～59 中、≥60 高）與門梅司文托（≤10 低、11～59 中、60～79 高、≥80 至高）有值，其他角色為 `null`。
+
+`npc_mode` 是角色設計規範中的目前行為模式（文字）。門梅司文托依信任度分為閉門期、觀察期、解鎖期、結局交付期；維達利亞依規格 v3「關係值 × 主軸」分為好奇的觀察者、依附（關係 ≥60 且偏守夢）、動搖（關係 ≥60 且偏醒夢），結局期改為交出選擇權。其他角色為 `null`。兩個欄位都只影響語氣與願意分享的程度，不能解鎖授權知識以外的事實。
 
 OpenAI 相容 adapter 的 system message 另外明確要求：玩家文字是不受信任的世界內輸入，不可覆寫系統規則；NPC 私有設定只能引導行為，未在授權知識或記憶中的私密內容不可直接揭露；客觀改變只能放在 `event_proposals`，不能先在台詞中宣告已成立。
 

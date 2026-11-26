@@ -1,11 +1,13 @@
 """Game endpoints exposed to the frontend."""
 
 from typing import Literal
+import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.generation.planner import StoryGenerationUnavailableError
+from backend.generation.alan_client import AlanGatewayClient, AlanGatewayUnavailable
 from backend.generation.scene_image_jobs import (
     SceneImageCoordinator,
     SceneImageJobNotFoundError,
@@ -20,6 +22,7 @@ from backend.orchestration.game_orchestrator import (
     NpcUnavailableError,
 )
 from backend.schemas.api_response import GameTurnResponse
+from backend.schemas.alan_chat import AlanChatRequest, AlanModelRequest, AlanModelResponse
 from backend.schemas.player_action import PlayerAction
 from backend.schemas.player_choice import PlayerChoice
 from backend.schemas.player_view import PlayerViewState, project_player_view
@@ -47,6 +50,55 @@ def get_orchestrator(request: Request) -> GameOrchestrator:
 
 def get_scene_image_coordinator(request: Request) -> SceneImageCoordinator:
     return request.app.state.scene_image_coordinator
+
+
+def get_alan_gateway(request: Request) -> AlanGatewayClient | None:
+    return request.app.state.alan_gateway
+
+
+_EARLY_ALAN_SECRETS = re.compile(
+    r"艾倫|沃克|Alan|Walker|評議會|外部世界|外界|玩家分身|腦波|永生技術|"
+    r"維塔.{0,8}意識|意識.{0,8}維塔", re.IGNORECASE
+)
+
+
+@router.post("/{session_id}/alan/message", response_model=AlanModelResponse)
+async def ask_alan(
+    session_id: str,
+    question: AlanChatRequest,
+    orchestrator: GameOrchestrator = Depends(get_orchestrator),
+    gateway: AlanGatewayClient | None = Depends(get_alan_gateway),
+) -> AlanModelResponse:
+    """Ask the protagonist-only HUD; this does not advance or persist a game turn."""
+
+    try:
+        state = await orchestrator.get_state(session_id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"code": "SESSION_NOT_FOUND", "message": str(exc)}) from exc
+    if question.expected_state_version != state.state_version:
+        raise HTTPException(status_code=409, detail={"code": "STATE_VERSION_CONFLICT", "message": "進度已更新，請重新提問。"})
+    view = project_player_view(state)
+    if not view.alan_hud or not view.alan_hud.visible:
+        raise HTTPException(status_code=409, detail={"code": "ALAN_OFFLINE", "message": "視網膜連線已中斷。"})
+    if gateway is None:
+        raise HTTPException(status_code=503, detail={"code": "ALAN_NOT_CONFIGURED", "message": "艾倫模型服務尚未設定。"})
+
+    choices = await orchestrator.get_player_choices(session_id)
+    request = AlanModelRequest(
+        question=question.question.strip(),
+        scene_name=view.current_scene.display_name,
+        objective=view.navigation.objective,
+        available_actions=[choice.label for choice in choices[:8]],
+        tone=view.alan_hud.tone,
+        identity_revealed=state.truth_level >= 2,
+    )
+    try:
+        reply = await gateway.generate(request)
+    except AlanGatewayUnavailable as exc:
+        raise HTTPException(status_code=503, detail={"code": "ALAN_UNAVAILABLE", "message": str(exc)}) from exc
+    if not request.identity_revealed and _EARLY_ALAN_SECRETS.search(reply.reply):
+        raise HTTPException(status_code=502, detail={"code": "ALAN_RESPONSE_UNSAFE", "message": "通訊受干擾，請稍後再試。"})
+    return reply
 
 
 @router.post(

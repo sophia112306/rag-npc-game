@@ -12,6 +12,7 @@ from backend.content.world_scenes import build_world_scene
 from backend.main import create_app
 from backend.rules.event_rules import EventRules
 from backend.schemas.game_state import GameState
+from test_demo_story_flow import _start
 
 
 def test_scene_registry_references_existing_assets_and_destinations() -> None:
@@ -82,7 +83,7 @@ def test_valid_scene_change_is_saved_and_resumed_after_restart(tmp_path) -> None
     action_id = str(uuid4())
 
     with TestClient(create_app(database_url)) as client:
-        started = client.post("/api/game/start", json={"session_id": session_id}).json()
+        started = _start(client, session_id)
         choices = client.get(f"/api/game/{session_id}/choices").json()
         travel = next(
             choice
@@ -134,7 +135,7 @@ def test_unconnected_scene_change_is_rejected_without_mutating_location(tmp_path
     client = TestClient(create_app(f"sqlite+aiosqlite:///{tmp_path / 'invalid-scene.db'}"))
     with client:
         session_id = "invalid-scene"
-        started = client.post("/api/game/start", json={"session_id": session_id}).json()
+        started = _start(client, session_id)
         first = client.post(
             "/api/game/turn",
             json={
@@ -183,7 +184,7 @@ def test_isolated_story_scene_is_not_an_ordinary_travel_destination(
     action_id = str(uuid4())
 
     with TestClient(create_app(database_url)) as client:
-        started = client.post("/api/game/start", json={"session_id": session_id}).json()
+        started = _start(client, session_id)
         choices = client.get(f"/api/game/{session_id}/choices").json()
         payload = {
             "session_id": session_id,
@@ -216,7 +217,7 @@ def test_isolated_story_scene_is_not_an_ordinary_travel_destination(
 
         assert resumed.status_code == 201
         assert resumed.json()["current_scene_id"] == "minglin"
-        assert resumed.json()["state_version"] == 2
+        assert resumed.json()["state_version"] == started["state_version"] + 1
 
 
 def test_e3_1_fissure_map_escape_condition_remains_distinct_from_travel_graph() -> None:
@@ -243,7 +244,7 @@ def test_destination_is_part_of_idempotency_content(tmp_path) -> None:
         create_app(f"sqlite+aiosqlite:///{tmp_path / 'scene-digest.db'}")
     ) as client:
         session_id = "scene-digest"
-        started = client.post("/api/game/start", json={"session_id": session_id}).json()
+        started = _start(client, session_id)
         action_id = str(uuid4())
         payload = {
             "session_id": session_id,

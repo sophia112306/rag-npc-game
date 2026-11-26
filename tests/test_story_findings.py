@@ -17,17 +17,24 @@ def test_reports_reflect_each_branch_and_reach_npc_only_when_reported(tmp_path):
     with TestClient(create_app(database)) as client:
         for session, choices in paths.items():
             state = _start(client, session)
+            context = client.app.state.npc_context_repository
+            opening_context = client.portal.call(
+                context.get_generation_context,
+                session,
+                "vidalia",
+                state["turn_count"],
+            )
+            opening_memory_ids = {memory.memory_id for memory in opening_context.memories}
             for choice in choices:
                 state = _submit_choice(client, session, state["state_version"], choice)["state"]
-            context = client.app.state.npc_context_repository
             before = client.portal.call(context.get_generation_context, session, "vidalia", state["turn_count"])
-            assert not before.memories  # Private investigations did not teleport into her memory.
+            assert {memory.memory_id for memory in before.memories} == opening_memory_ids
             report = _submit_choice(client, session, state["state_version"], "review_demo_findings")
             reports[session] = report["story"]["dialogue"][0]["text"]
             saved[session] = report["state"]["story_progress"]["findings"]
             after = client.portal.call(context.get_generation_context, session, "vidalia", report["turn_number"])
             assert any(saved[session][-1]["summary"] in memory.content for memory in after.memories)
-            assert all(finding["kind"] == "investigation" for finding in saved[session])
+            assert any(finding["kind"] == "investigation" for finding in saved[session])
         assert "灰燼" in reports["fire"] and "灰燼" not in reports["dust"]
         assert "名字" in reports["dust"] and "名字" not in reports["fire"]
         assert reports["fire"] != reports["dust"]
@@ -40,13 +47,27 @@ def test_discovery_signal_requires_established_investigation_and_survives_restar
     database = f"sqlite+aiosqlite:///{tmp_path / 'signal.db'}"
     with TestClient(create_app(database)) as client:
         state = _start(client, "signal")
-        assert not state["story_progress"]["findings"] and state["world_scene"]["discovery"] is None
-        state = _submit_choice(client, "signal", 1, "travel_to_minglin_life_spring")["state"]
+        assert not [
+            finding
+            for finding in state["story_progress"]["findings"]
+            if finding["kind"] == "investigation"
+        ]
+        assert state["world_scene"]["discovery"] is None
+        state = _submit_choice(
+            client,
+            "signal",
+            state["state_version"],
+            "travel_to_minglin_life_spring",
+        )["state"]
         assert state["world_scene"]["discovery"] is None
         state = _submit_choice(client, "signal", state["state_version"], "study_spring_ash")["state"]
         assert state["world_scene"]["discovery"]["signal"] == "ember"
         assert state["world_scene"]["discovery"]["clue_id"] == "ember_current"
-        assert len(state["story_progress"]["findings"]) == 1
+        assert len([
+            finding
+            for finding in state["story_progress"]["findings"]
+            if finding["kind"] == "investigation"
+        ]) == 1
     with TestClient(create_app(database)) as restarted:
         resumed = _start(restarted, "signal")
         assert resumed["world_scene"]["discovery"] == state["world_scene"]["discovery"]

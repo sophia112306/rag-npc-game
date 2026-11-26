@@ -24,9 +24,9 @@ const slides = [
   {
     eyebrow: "序章 · 旅人",
     title: "你的調查，從鳴霖開始",
-    body: "與居民交談、查證線索，再決定下一個目的地。你可以跟著建議行動推進故事，也能自由追問；不必猜特定關鍵字。",
+    body: "你會先在鳴霖林間醒來，遇見正在調查地脈的安德烈。和他交談後沿著前方道路走，維達利亞才會在議會庭現身。",
     image: "/game/forest-council.png",
-    alt: "鳴霖森林中的平衡議會",
+    alt: "鳴霖古林中的議會庭",
   },
 ] as const;
 
@@ -119,7 +119,7 @@ export default function StoryIntro({ onComplete }: Props) {
             ))}
           </nav>
           <button type="button" className={styles.next} onClick={advance}>
-            {isLast ? "踏入鳴霖" : "下一幕"}<span aria-hidden="true"> →</span>
+            {isLast ? "醒在鳴霖" : "下一幕"}<span aria-hidden="true"> →</span>
           </button>
         </div>
       </div>
