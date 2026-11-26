@@ -994,6 +994,68 @@ def test_gateway_refines_frustrated_slang_without_using_poisoned_draft() -> None
     assert "台灣口語" in cue["instruction"]
 
 
+def test_gateway_retries_refiner_output_with_english_fragment() -> None:
+    request = make_request("vidalia")
+    request["action_message"] = "你在供三小"
+    calls = 0
+
+    def handler(http_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        payload = json.loads(http_request.content)
+        if payload["model"] == "vidalia-lora":
+            return completion("供奉物品必須遵守古老規則。")
+        if calls == 2:
+            return completion("抱歉沒說清楚，我們重新談-talk一下。")
+        return completion("抱歉沒說清楚。你是指哪一部分？")
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "抱歉沒說清楚。你是指哪一部分？"
+    )
+    assert response.headers["x-npc-upstream-attempts"] == "3"
+    assert calls == 3
+
+
+def test_gateway_treats_punctuation_only_change_as_repetition() -> None:
+    request = make_request("vidalia")
+    request["action_message"] = "午餐"
+    target_context = request["target_context"]
+    assert isinstance(target_context, dict)
+    target_context["recent_dialogue"] = [
+        {
+            "role": "npc",
+            "text": "我不知道這裡有什麼食物。你想吃什麼？",
+            "turn_number": 1,
+        }
+    ]
+    calls = 0
+
+    def handler(http_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        payload = json.loads(http_request.content)
+        if payload["model"] == "vidalia-lora":
+            return completion("午餐我也不確定。")
+        if calls == 2:
+            return completion("我不知道這裡有什麼食物。你想吃什麼?")
+        return completion("午餐我不清楚有什麼食物。你偏好吃什麼？")
+
+    app = create_app(settings(), transport=httpx.MockTransport(handler))
+    with TestClient(app) as client:
+        response = client.post("/generate", json=request)
+
+    assert response.status_code == 200
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "午餐我不清楚有什麼食物。你偏好吃什麼？"
+    )
+    assert calls == 3
+
+
 def test_gateway_refuses_private_memory_in_character_without_system_jargon() -> None:
     request = make_request("vidalia")
     request["action_message"] = (

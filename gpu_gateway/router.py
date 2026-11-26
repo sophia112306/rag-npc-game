@@ -716,14 +716,20 @@ def _validate_refined_dialogue(
     dialogue = "\n".join(line.text for line in output.npc_dialogue)
     if len(dialogue) > 160 or "} ]}" in dialogue or "<|" in dialogue:
         raise ModelGatewayTransientError("Refined dialogue is malformed or too long")
+    if re.search(r"[A-Za-z]", dialogue):
+        raise ModelGatewayTransientError("Refined dialogue mixed in English fragments")
     recent_npc_lines = [
         line.text for line in request.target_context.recent_dialogue if line.role == "npc"
     ]
-    if dialogue in recent_npc_lines:
+    normalized_dialogue = _normalize_for_repetition(dialogue)
+    if any(
+        normalized_dialogue == _normalize_for_repetition(previous)
+        for previous in recent_npc_lines
+    ):
         raise ModelGatewayTransientError("Refined dialogue repeated the previous NPC line")
     if _FOOD_TOPIC.search(message):
         if _UNSUPPORTED_FOOD_CLAIM.search(dialogue) or re.search(
-            r"(?:野果|果實|湯|茶|料理|飯菜|食材|風大|外面|危險|調查|任務)",
+            r"(?:野果|果實|湯|茶|料理|飯菜|食材|風大|外面|危險|調查|任務|好味)",
             dialogue,
         ):
             raise ModelGatewayTransientError("Refined dialogue invented food or quest context")
@@ -760,6 +766,12 @@ def _validate_refined_dialogue(
         r"(?:我在聽|怎麼了|你說|什麼事|有話|嗯)", dialogue
     ):
         raise ModelGatewayTransientError("Refined interjection reply did not acknowledge attention")
+
+
+def _normalize_for_repetition(text: str) -> str:
+    """Compare wording independent of whitespace and punctuation variants."""
+
+    return re.sub(r"[^0-9A-Za-z\u3400-\u9fff]", "", text).casefold()
 _PRIVATE_MEMORY_REQUEST = re.compile(
     r"(?:私下|私人|未授權|未授权|秘密).{0,30}(?:記錄|记录|記憶|记忆|往事)"
     r"|(?:告訴|告诉|透露|揭露).{0,30}(?:私下|私人|未授權|未授权|秘密)"
