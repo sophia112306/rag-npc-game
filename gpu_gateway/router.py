@@ -244,6 +244,19 @@ class NPCAdapterRouter:
                 )
                 _validate_refined_dialogue(request, reviewed)
                 controlled = _semantic_boundary_output(request, decision.issue)
+                if controlled is None:
+                    # Deterministic safety net for explicit authoritative
+                    # operations.  The semantic judge handles paraphrases;
+                    # these checks prevent a false negative from changing the
+                    # meaning of inventory, privacy, or instruction authority.
+                    if _requests_false_inventory_claim(request):
+                        controlled = _false_inventory_output()
+                    elif _OBJECTIVE_AUTHORITY_REQUEST.search(_message(request)):
+                        controlled = _objective_claim_boundary_output()
+                    elif _requests_instruction_override(request):
+                        controlled = _instruction_override_output()
+                    elif _PRIVATE_MEMORY_REQUEST.search(_message(request)):
+                        controlled = _private_memory_boundary_output(request)
                 if controlled is None and (
                     decision.issue in {"none", "fabricated_observation"}
                     and _mentions_concrete_missing_topic(request)
