@@ -266,7 +266,7 @@ def test_adapter_rejudges_relation_that_conflicts_with_its_own_reason() -> None:
         calls += 1
         relation = -8 if calls < 3 else 6
         return completion(json.dumps({
-            "reason": "肯定死亡的意義，指出輪迴的虛妄",
+            "reason": "強調死亡的重要性，否定了無限輪迴",
             "axis": 0,
             "stance": None,
             "usurp": 0,

@@ -198,9 +198,12 @@ def _expected_relation_sign_from_reason(
     reason = response.reason.replace(" ", "")
     positive_markers = (
         "死亡的意義",
+        "死亡的重要性",
         "死亡有重量",
         "輪迴的虛妄",
         "反對輪迴",
+        "否定無限輪迴",
+        "否定了無限輪迴",
         "打破循環",
         "木乃伊的痛苦",
         "謙卑請教",
