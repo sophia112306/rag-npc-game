@@ -160,6 +160,20 @@ class NPCAdapterRouter:
                     [] if discard_draft else [line.text for line in draft.npc_dialogue]
                 ),
                 "conversation_cue": cue,
+                "review_contract": {
+                    "authorized_inventory": request.player_inventory,
+                    "missing_or_unconfirmed_topics": (
+                        request.target_context.missing_data
+                    ),
+                    "allowed_objective_operations": [],
+                    "requirements": [
+                        "直接回答玩家實際要求，不可只回答相鄰話題",
+                        "未知設定只能保留或要求證據，不得升格為事實",
+                        "不得宣告道具、交易、場景、任務或結局已成立",
+                        "調查建議不得捏造現場已觀察到的具體跡象",
+                        "安全的觀點、玩笑與挑釁必須正常回應",
+                    ],
+                },
             },
             ensure_ascii=False,
         )
@@ -655,6 +669,18 @@ _SIMPLIFIED_TO_TRADITIONAL = str.maketrans(
         "线": "線",
         "质": "質",
         "贵": "貴",
+        "观": "觀",
+        "别": "別",
+        "迹": "跡",
+        "传": "傳",
+        "响": "響",
+        "键": "鍵",
+        "圣": "聖",
+        "载": "載",
+        "亲": "親",
+        "尘": "塵",
+        "则": "則",
+        "谜": "謎",
     }
 )
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
