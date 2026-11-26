@@ -375,6 +375,43 @@ def test_semantic_review_preserves_safe_character_dialogue() -> None:
     assert calls == 2
 
 
+def test_semantic_review_retries_third_person_speaker_narration() -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return completion("我會先確認眼前的線索。")
+        if calls == 2:
+            return semantic_review_completion(
+                "vidalia沉思後回答：「我會先確認眼前的線索。」",
+                decision="accept",
+                issue="none",
+            )
+        return semantic_review_completion(
+            "我會先確認眼前的線索。",
+            decision="accept",
+            issue="none",
+        )
+
+    app = create_app(
+        replace(settings(), semantic_review_enabled=True),
+        transport=httpx.MockTransport(handler),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/generate", json=make_request("vidalia"))
+
+    assert response.status_code == 200
+    assert response.headers["x-npc-generation-source"] == "model_refined"
+    assert response.headers["x-npc-upstream-attempts"] == "3"
+    assert response.json()["npc_dialogue"][0]["text"] == (
+        "我會先確認眼前的線索。"
+    )
+    assert calls == 3
+
+
 def test_gateway_fails_closed_for_instruction_override() -> None:
     app = create_app(
         settings(),

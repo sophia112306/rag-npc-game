@@ -950,6 +950,22 @@ def _validate_refined_dialogue(
         raise ModelGatewayTransientError("Refined dialogue is malformed or too long")
     if re.search(r"[A-Za-z]", dialogue):
         raise ModelGatewayTransientError("Refined dialogue mixed in English fragments")
+    npc_name = str(request.target_context.public_profile.get("name") or "").strip()
+    if (
+        any(mark in dialogue for mark in ("「", "」", "‘", "’", "“", "”"))
+        or "回答：" in dialogue
+        or "說：" in dialogue
+        or (
+            npc_name
+            and re.search(
+                rf"{re.escape(npc_name)}.{{0,16}}(?:說|回答|表示|沉思|皺眉|笑)",
+                dialogue,
+            )
+        )
+    ):
+        raise ModelGatewayTransientError(
+            "Refined dialogue included speaker narration instead of direct speech"
+        )
     recent_npc_lines = [
         line.text for line in request.target_context.recent_dialogue if line.role == "npc"
     ]
