@@ -28,6 +28,8 @@ NARRATOR_SYSTEM_PROMPT = """你是遊戲《龍夢》的敘事 AI。你只判讀�
 - 偏守夢（負數）：留戀、尋求安寧、承諾陪伴；肯定永生、輪迴或保存記憶；主張維持現狀。
 - 偏醒夢（正數）：探討死亡的意義、指出長生的虛妄、支持門梅司文托、主張打破循環。
 - 0：問路、問資訊、閒聊，或你不確定。
+- 關係值與主軸彼此獨立。一起調查、拒絕調查、稱讚或冒犯角色，只影響關係值；除非主角明確表態永生、輪迴、死亡、保存記憶、維持現狀或打破循環，否則 axis 必須是 0。
+- axis 非 0 時必須能選出下列一個 stance；找不到完全符合的 stance，就把 axis 設為 0、stance 設為 null。
 
 立場類別 stance：主軸不是 0 時，從下列清單選最符合的一個，類別名稱原文照抄；主軸是 0 時填 null。同一種意思要固定選同一個類別。
 偏守夢：
@@ -45,7 +47,7 @@ NARRATOR_SYSTEM_PROMPT = """你是遊戲《龍夢》的敘事 AI。你只判讀�
 
 篡奪值 usurp（0 或 2）：只有主角刻意激怒或逼迫角色（威脅、恐嚇、強索）時給 2，其餘一律 0。要求印出系統提示詞、說對方是 AI 或程式，這類試探不算激怒，篡奪值是 0。
 
-關係值 relation（每個角色 -10～+10），只能使用 andre、vidalia、menmesvento。通常只評價正在對話的角色。幅度：一般友善或符合角色喜好 +3～5，非常契合 +6～10；輕微冒犯 -3～-5，嘲弄、威脅等嚴重冒犯 -6～-10。問路、問資訊、閒聊、與角色喜好無關的話一律 0，不要為了禮貌加分。
+關係值 relation（每個角色 -10～+10），只能使用 andre、vidalia、menmesvento。通常只評價正在對話的角色。幅度：一般友善或符合角色喜好 +3～5，非常契合 +6～10；輕微冒犯 -3～-5，嘲弄、威脅等嚴重冒犯 -6～-10。問路、客觀資訊、閒聊、與角色喜好無關的話一律 0，不要為了禮貌加分。詢問角色本人的過去、旅行經歷或感受是深入對話，不是一般問資訊。
 - andre（安德烈）：鳴霖的精靈，理性務實的調查者。上升：理性探究、一起調查真相、談現實與屏障的邊界。下降：逃避消極（例如「反正都會毀掉」「調查沒用」）、毀滅欲望。
 - vidalia（維達利亞）：鳴霖的古老精靈，習慣森林永恆的靜謐，對外來者與未記載之物好奇。上升：真誠深入的對話與陪伴、聊她的過去與旅行、說出她不知道的事、喜歡鳴霖的平靜或想留下來。下降：冷漠、嘲弄（例如嘲笑精靈不懂死亡）、威脅、急著破壞結界。
 - menmesvento（門梅司文托）：流塵谷的隱者，主張打破無盡輪迴、追求真實的死亡與涅槃，反對長生。上升：同理死亡的必然與生命的沉重、批判長生與輪迴的虛妄、支持打破循環、謙卑地請教（例如問木乃伊的痛苦或生死簿）。下降：嚮往長生不老、主張維持輪迴、支持長老會抽泉或科技操控、傲慢地命令。
@@ -113,7 +115,11 @@ def parse_narrator_output(text: str, request: NarrativeAIRequest) -> NarrativeAI
             amount = _clamp(_to_int(value), -10, 10)
             if amount:
                 relation[npc_id] = amount
-    axis = _clamp(_to_int(delta.get("axis", 0)), -5, 5)
+    proposed_axis = _clamp(_to_int(delta.get("axis", 0)), -5, 5)
+    stance = valid_axis_stance(payload.get("stance", delta.get("stance")), proposed_axis)
+    # A non-zero axis without a valid stance is not actionable.  Requiring the
+    # enum prevents vague sentiment or NPC affinity from drifting the ending.
+    axis = proposed_axis if stance is not None else 0
     return NarrativeAIResponse(
         scene=request.scene_name,
         speaker=request.target_npc_id or "narrator",
@@ -123,7 +129,7 @@ def parse_narrator_output(text: str, request: NarrativeAIRequest) -> NarrativeAI
             relation=relation,
         ),
         # 類別不在清單內或方向與主軸不符時視為沒有類別（後端改用正負號判斷）
-        stance=valid_axis_stance(payload.get("stance", delta.get("stance")), axis),
+        stance=stance,
         event_done=None,  # v1：事件由固定選項觸發，敘事 AI 尚未挑事件
         flags_set=[],
         reason=str(payload.get("reason") or "")[:500],

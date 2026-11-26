@@ -42,6 +42,7 @@ def test_adapter_uses_base_model_and_clamps_proposal() -> None:
         seen.update(json.loads(request.content))
         return completion(json.dumps({
             "axis": -9, "usurp": -1,
+            "stance": "承諾陪伴",
             "relation": {"vidalia": 30, "seth": 5, "andre": 0},
             "reason": "承諾陪伴",
         }, ensure_ascii=False))
@@ -62,7 +63,7 @@ def test_adapter_uses_base_model_and_clamps_proposal() -> None:
 
 
 def test_parser_accepts_fenced_and_nested_delta() -> None:
-    text = '```json\n{"delta": {"axis": 3, "usurp": 2, "relation": {"menmesvento": "4"}}, "reason": "談死亡"}\n```'
+    text = '```json\n{"delta": {"axis": 3, "usurp": 2, "relation": {"menmesvento": "4"}}, "stance": "主張打破循環", "reason": "談死亡"}\n```'
 
     result = parse_narrator_output(text, REQUEST)
 
@@ -85,6 +86,22 @@ def test_parser_keeps_only_valid_stances(axis, stance, expected) -> None:
     text = json.dumps({"reason": "測試", "axis": axis, "stance": stance, "usurp": 0, "relation": {}}, ensure_ascii=False)
 
     assert parse_narrator_output(text, REQUEST).stance == expected
+
+
+def test_parser_zeros_axis_without_a_valid_stance() -> None:
+    text = json.dumps({
+        "reason": "只是一起調查",
+        "axis": 4,
+        "stance": None,
+        "usurp": 0,
+        "relation": {"andre": 5},
+    }, ensure_ascii=False)
+
+    result = parse_narrator_output(text, REQUEST)
+
+    assert result.delta.axis == 0
+    assert result.stance is None
+    assert result.delta.relation == {"andre": 5}
 
 
 def test_prompt_lists_every_stance() -> None:
@@ -173,7 +190,7 @@ def test_adapter_fail_closes_persistent_reason_delta_contradiction() -> None:
 def test_narrate_endpoint_returns_judgement() -> None:
     app = create_app(
         GatewaySettings(),
-        transport=httpx.MockTransport(lambda request: completion('{"axis": 2, "usurp": 0, "relation": {}, "reason": "支持打破循環"}')),
+        transport=httpx.MockTransport(lambda request: completion('{"axis": 2, "stance": "主張打破循環", "usurp": 0, "relation": {}, "reason": "支持打破循環"}')),
     )
     with TestClient(app) as client:
         response = client.post("/narrate", json=REQUEST.model_dump(mode="json"))
