@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.content.npc_dialogue import NPC_DIALOGUE_CHOICES
 from backend.generation.planner import GatewayStoryPlanner, StoryGenerationUnavailableError
 from backend.main import create_app
 
@@ -185,7 +186,7 @@ def test_new_npc_profile_choice_and_dialogue(
         state = turn.json()["state"]
     choices = client.get(f"/api/game/{session_id}/choices?npc_id={npc_id}")
     assert choices.status_code == 200
-    assert len(choices.json()) == 2
+    assert len(choices.json()) == len(NPC_DIALOGUE_CHOICES[npc_id])
     assert all(choice["target_npc_id"] == npc_id for choice in choices.json())
 
     action = action_payload(session_id, expected_state_version=state["state_version"])

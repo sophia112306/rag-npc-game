@@ -75,7 +75,7 @@ def build_demo_story_proposal(
             speaker_name=CHARACTER_PROFILES[speaker_npc_id].name,
             text=(f"我記下了你這次的回報：\n{finding_report(state)}\n我們先保留這些紀錄，再比對另一條路線。"
                   if choice.choice_id == "review_demo_findings" else choice.response_text),
-            emotion="focused",
+            emotion=choice.emotion or "focused",
         )
     else:
         dialogue = DialogueLine(

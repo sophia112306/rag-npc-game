@@ -111,8 +111,10 @@ export type GameTurnResponse = {
   story: {
     dialogue: {
       speaker_type: "npc" | "narrator";
+      speaker_id: string | null;
       speaker_name: string;
       text: string;
+      emotion: string | null;
     }[];
   };
 };

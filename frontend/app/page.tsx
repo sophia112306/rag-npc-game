@@ -8,6 +8,7 @@ import InvestigationJournal from "../components/InvestigationJournal";
 import StoryIntro from "../components/StoryIntro";
 import { getSceneMusic } from "../lib/scene-music";
 import { useSceneMusic } from "../lib/use-scene-music";
+import { resolveNpcReaction, type NpcReactionCue } from "../lib/npc-reactions";
 import {
   ApiRequestError,
   DEFAULT_SCENE_VISUAL_PROFILE,
@@ -39,6 +40,7 @@ type ChatMessage = {
   npcId?: NpcId;
   targetId?: InteractionTarget;
   sceneId?: string;
+  emotion?: string | null;
 };
 
 type PendingAction = {
@@ -223,6 +225,7 @@ export default function Home() {
   const [playerChoices, setPlayerChoices] = useState<PlayerChoice[]>([]);
   const [npcChoiceSet, setNpcChoiceSet] = useState<{npcId: NpcId; choices: PlayerChoice[]} | null>(null);
   const [mapZoom, setMapZoom] = useState(MIN_MAP_ZOOM);
+  const [npcReaction, setNpcReaction] = useState<{npcId: NpcId; cue: NpcReactionCue; sequence: number} | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const pendingActionRef = useRef<PendingAction | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -232,6 +235,7 @@ export default function Home() {
   const primaryNpc = gameState?.world_scene.npc_id ?? gameState?.world_scene.npc_interactions?.[0]?.npc_id;
   const primaryTarget: InteractionTarget = isNpcId(primaryNpc) ? primaryNpc : "landmark";
   const displayNpcId = dialogueOpen ? activeNpcId : nearTarget && nearTarget !== "landmark" ? nearTarget : activeNpcId;
+  const portraitReaction = npcReaction?.npcId === displayNpcId ? npcReaction.cue : "idle";
   const profile = profiles[displayNpcId];
   const visibleMessages = messages.filter(message => message.speaker !== "系統" && (activeLandmark
     ? message.targetId === "landmark" && message.sceneId === scene.scene_id
@@ -268,6 +272,7 @@ export default function Home() {
     setDialogueOpen(false);
     pendingApproach.current = null;
     setTrackedChoice(null);
+    setNpcReaction(null);
   }, [scene.scene_id]);
 
   useEffect(() => {
@@ -544,8 +549,22 @@ export default function Home() {
         setPlayerChoices(choices);
       } catch { /* The committed turn remains valid if the optional quest refresh fails. */ }
       const playerVisibleDialogue = turn.story.dialogue.filter((line) => line.speaker_name !== "系統");
+      const reactionLine = [...playerVisibleDialogue].reverse().find(
+        line => line.speaker_type === "npc" && isNpcId(line.speaker_id),
+      );
+      if (reactionLine && isNpcId(reactionLine.speaker_id)) {
+        setNpcReaction({
+          npcId: reactionLine.speaker_id,
+          cue: resolveNpcReaction(reactionLine.emotion),
+          sequence: turn.turn_number,
+        });
+      } else {
+        setNpcReaction(null);
+      }
       const nextMessages: ChatMessage[] = [...messages, playerLine, ...playerVisibleDialogue.map((line) => ({
-        id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const, npcId: messageNpcId, targetId:messageTarget, sceneId:scene.scene_id,
+        id: window.crypto.randomUUID(), speaker: line.speaker_name, text: line.text, kind: "npc" as const,
+        npcId: isNpcId(line.speaker_id) ? line.speaker_id : messageNpcId,
+        targetId:messageTarget, sceneId:scene.scene_id, emotion: line.emotion,
       }))];
       setMessages(nextMessages);
       setLastNpcSpeech(playerVisibleDialogue.map((line) => line.text).join("\n"));
@@ -591,6 +610,7 @@ export default function Home() {
     setInput("");
     setInputType("text");
     setIntroOpen(true);
+    setNpcReaction(null);
     pendingActionRef.current = null;
     void initialize(id);
   }
@@ -607,7 +627,7 @@ export default function Home() {
         onError={music.onError}
       />
       <section className="map-stage" aria-label={`斜俯視的${scene.region_name}遊戲地圖`}>
-        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, profile.name])) as Record<NpcId, string>} paused={introOpen || dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onZoomChange={setMapZoom} />}
+        {sessionId && <MinglinGame key={`${sessionId}:${scene.scene_id}:${sceneImageUrl}`} backgroundUrl={sceneImageUrl} sceneId={scene.scene_id} tilemapUrl={scene.tilemap_url} sceneName={scene.display_name} npcNames={Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, profile.name])) as Record<NpcId, string>} reaction={npcReaction} paused={introOpen || dialogueOpen || helpOpen || worldMapOpen || journalOpen || restartConfirm || busy || initializing || !ready} onNearChange={setNearTarget} onInteract={openDialogue} onZoomChange={setMapZoom} />}
         <div className="scene-vignette" aria-hidden="true" />
 
         <header className="location-banner" aria-label="目前場景">
@@ -666,7 +686,7 @@ export default function Home() {
         </div>
 
         {dialogueOpen && <section className={`dialogue-panel is-open ${activeLandmark ? "is-landmark" : ""}`} aria-label={activeLandmark ? scene.display_name : `與${profile.name}對話`}>
-          {!activeLandmark && <div className={`dialogue-portrait npc-${displayNpcId}`}>
+          {!activeLandmark && <div key={`${displayNpcId}:${npcReaction?.sequence ?? 0}`} className={`dialogue-portrait npc-${displayNpcId} reaction-${portraitReaction}`} data-reaction={portraitReaction}>
             <Image src={profile.portrait_url} alt={`${profile.name}肖像`} fill sizes="(max-width: 640px) 90px, 175px" />
           </div>}
           <div className="dialogue-main">

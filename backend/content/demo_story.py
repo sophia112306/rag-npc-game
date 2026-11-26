@@ -40,6 +40,7 @@ class DemoStoryChoiceDefinition:
     epilogue_answer_key: str | None = None
     epilogue_answer_value: str | None = None
     ending_id: str | None = None
+    emotion: str | None = None
 
     def to_player_choice(self) -> PlayerChoice:
         return PlayerChoice(
@@ -701,6 +702,7 @@ def available_npc_dialogue_choices(state: GameState, npc_id: str) -> tuple[DemoS
             definition.label, definition.message, definition.response_text,
             state.story_progress.node_id, state.story_progress.chapter_title,
             action_mode=ActionMode.DIALOGUE, target_npc_id=npc_id,
+            emotion=definition.emotion,
         )
         for definition in NPC_DIALOGUE_CHOICES.get(npc_id, ())
     )

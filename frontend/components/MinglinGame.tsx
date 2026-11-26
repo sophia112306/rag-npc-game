@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type Phaser from "phaser";
+import type { NpcReactionCue } from "../lib/npc-reactions";
 
 export type GameCommand = { dx: number; dy: number };
 export const NPC_IDS = ["vidalia", "andre", "menmesvento", "dasso", "seth", "syra"] as const;
@@ -10,6 +11,7 @@ export function isNpcId(value: string | null | undefined): value is NpcId {
   return NPC_IDS.some(id => id === value);
 }
 export type InteractionTarget = NpcId | "landmark";
+export type NpcReactionEvent = { npcId: NpcId; cue: NpcReactionCue; sequence: number };
 export const MIN_MAP_ZOOM = 1;
 export const MAX_MAP_ZOOM = 2.2;
 export const MAP_ZOOM_STEP = 0.2;
@@ -41,6 +43,7 @@ type Props = {
   sceneName: string;
   tilemapUrl: string;
   npcNames: Record<NpcId, string>;
+  reaction: NpcReactionEvent | null;
   paused: boolean;
   onNearChange: (targetId: InteractionTarget | null) => void;
   onInteract: (targetId: InteractionTarget) => void;
@@ -60,7 +63,7 @@ const directions = [
   { texture: "traveler", flipX: true },
 ] as const;
 
-export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemapUrl, npcNames, paused, onNearChange, onInteract, onZoomChange }: Props) {
+export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemapUrl, npcNames, reaction, paused, onNearChange, onInteract, onZoomChange }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused);
   const nearRef = useRef(onNearChange);
@@ -73,6 +76,11 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
   useEffect(() => { interactRef.current = onInteract; }, [onInteract]);
   useEffect(() => { zoomRef.current = onZoomChange; }, [onZoomChange]);
   useEffect(() => { namesRef.current = npcNames; }, [npcNames]);
+  useEffect(() => {
+    if (reaction) {
+      window.dispatchEvent(new CustomEvent<NpcReactionEvent>("minglin:npc-reaction", { detail: reaction }));
+    }
+  }, [reaction]);
 
   useEffect(() => {
     let game: Phaser.Game | undefined;
@@ -209,6 +217,9 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
             const command = (event as CustomEvent<ZoomCommand>).detail;
             this.setMapZoom(command.kind === "reset" ? MIN_MAP_ZOOM : this.cameras.main.zoom + command.amount);
           };
+          const react = (event: Event) => {
+            this.playNpcReaction((event as CustomEvent<NpcReactionEvent>).detail);
+          };
           const wheelZoom = (pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
             if (dy === 0) return;
             this.setMapZoom(this.cameras.main.zoom * Math.exp(-dy * 0.0015), pointer.x, pointer.y);
@@ -277,6 +288,7 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
           window.addEventListener("minglin:zoom", zoomControl);
           window.addEventListener("minglin:interact", talk);
           window.addEventListener("minglin:approach", approach);
+          window.addEventListener("minglin:npc-reaction", react);
           this.events.once("shutdown", () => {
             this.scale.off("resize", resized);
             window.removeEventListener("keydown", keydown);
@@ -292,12 +304,46 @@ export default function MinglinGame({ backgroundUrl, sceneId, sceneName, tilemap
             window.removeEventListener("minglin:zoom", zoomControl);
             window.removeEventListener("minglin:interact", talk);
             window.removeEventListener("minglin:approach", approach);
+            window.removeEventListener("minglin:npc-reaction", react);
           });
           this.refreshNearState();
         }
 
         private canWalk(x: number, y: number) {
           return this.walkable.some(polygon => PhaserEngine.Geom.Polygon.Contains(polygon, x, y));
+        }
+
+        private playNpcReaction(reaction: NpcReactionEvent) {
+          const sprite = this.npcs[reaction.npcId];
+          const home = this.targets.get(reaction.npcId);
+          if (!sprite || !home || reaction.cue === "idle") return;
+
+          this.tweens.killTweensOf(sprite);
+          const reset = () => sprite.setPosition(home.x, home.y).setAngle(0).setAlpha(1).clearTint();
+          reset();
+
+          const common = {
+            targets: sprite,
+            ease: "Sine.InOut",
+            yoyo: true,
+            onComplete: reset,
+          };
+          if (reaction.cue === "surprised") {
+            this.tweens.add({ ...common, x: home.x + 9, y: home.y + 5, angle: -7, duration: 75, repeat: 2 });
+          } else if (reaction.cue === "fearful") {
+            sprite.setTint(0xc8d8e8);
+            this.tweens.add({ ...common, x: home.x - 7, y: home.y + 7, angle: 6, alpha: 0.78, duration: 150, repeat: 1 });
+          } else if (reaction.cue === "guarded") {
+            sprite.setTint(0xe6d2b2);
+            this.tweens.add({ ...common, y: home.y - 4, angle: -3, duration: 210 });
+          } else if (reaction.cue === "firm") {
+            sprite.setTint(0xffe1a3);
+            this.tweens.add({ ...common, y: home.y - 5, duration: 180 });
+          } else if (reaction.cue === "thoughtful") {
+            this.tweens.add({ ...common, y: home.y - 2, angle: -3, duration: 420 });
+          } else {
+            this.tweens.add({ ...common, y: home.y - 5, duration: 180, repeat: 1 });
+          }
         }
 
         private worldAt(x: number, y: number) {

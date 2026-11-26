@@ -49,6 +49,7 @@ def test_six_scene_preset_journey_never_calls_model_and_resumes(tmp_path):
             for definition in NPC_DIALOGUE_CHOICES[npc_id]:
                 result = choose(definition.choice_id, npc_id)
                 assert result["story"]["dialogue"][0]["text"] == definition.response_text
+                assert result["story"]["dialogue"][0]["emotion"] == definition.emotion
                 assert state["story_progress"]["node_id"] == before
                 assert state["npc_states"][npc_id]["met"] is True
 
