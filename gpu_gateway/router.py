@@ -611,6 +611,7 @@ _SIMPLIFIED_TO_TRADITIONAL = str.maketrans(
         "温": "溫",
         "线": "線",
         "质": "質",
+        "贵": "貴",
     }
 )
 _UNVERIFIED_SCROLL_CLAIM_PATTERNS = (
