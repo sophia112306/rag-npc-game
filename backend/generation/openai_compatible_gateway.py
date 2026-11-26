@@ -15,6 +15,7 @@ from backend.generation.gateway import (
 from backend.schemas.story import OperationType
 
 ResponseFormat = Literal["json_schema", "json_object"]
+MAX_STORY_OUTPUT_TOKENS = 320
 
 SYSTEM_PROMPT = """You generate one untrusted story proposal for a persistent NPC game.
 Return only the JSON object required by the response format. Do not use Markdown.
@@ -122,7 +123,7 @@ class OpenAICompatibleChatGateway:
             "repetition_penalty": self._repetition_penalty,
             "frequency_penalty": self._frequency_penalty,
             "presence_penalty": self._presence_penalty,
-            "max_tokens": 512,
+            "max_tokens": MAX_STORY_OUTPUT_TOKENS,
             "messages": self._build_messages(request),
             "response_format": self._build_response_format(request),
         }

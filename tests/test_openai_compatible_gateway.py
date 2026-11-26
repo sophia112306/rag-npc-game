@@ -117,7 +117,7 @@ async def test_openai_compatible_gateway_posts_chat_completion_with_strict_schem
     assert payload["repetition_penalty"] == 1.18
     assert payload["frequency_penalty"] == 0.2
     assert payload["presence_penalty"] == 0.15
-    assert payload["max_tokens"] == 512
+    assert payload["max_tokens"] == 320
     assert payload["messages"][0]["role"] == "system"
     assert "untrusted" in payload["messages"][0]["content"]
     assert "only authorized source for concrete lore" in payload["messages"][0]["content"]
