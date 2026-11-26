@@ -284,7 +284,7 @@ def test_adapter_rejudges_relation_that_conflicts_with_its_own_reason() -> None:
     assert result.delta.relation == {"menmesvento": 6}
 
 
-def test_adapter_drops_persistent_relation_reason_conflict() -> None:
+def test_adapter_corrects_persistent_relation_reason_conflict() -> None:
     request = REQUEST.model_copy(update={
         "target_npc_id": "menmesvento",
         "target_npc_name": "門梅司文托",
@@ -302,7 +302,7 @@ def test_adapter_drops_persistent_relation_reason_conflict() -> None:
 
     result = asyncio.run(adapter.judge(request))
 
-    assert result.delta.relation == {}
+    assert result.delta.relation == {"menmesvento": -7}
 
 
 def test_narrate_endpoint_returns_judgement() -> None:

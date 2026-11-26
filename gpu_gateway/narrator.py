@@ -187,16 +187,14 @@ def _proposed_axis_has_no_valid_stance(text: str) -> bool:
     ) is None
 
 
-def _relation_reason_conflicts(
+def _expected_relation_sign_from_reason(
     response: NarrativeAIResponse,
     request: NarrativeAIRequest,
-) -> bool:
-    """Detect a signed relation delta that contradicts the model's own reason."""
+) -> int:
+    """Return the sign implied by an explicit canonical preference in reason."""
 
-    target = request.target_npc_id
-    amount = response.delta.relation.get(target or "", 0)
-    if not amount or target != "menmesvento":
-        return False
+    if request.target_npc_id != "menmesvento":
+        return 0
     reason = response.reason.replace(" ", "")
     positive_markers = (
         "死亡的意義",
@@ -214,9 +212,23 @@ def _relation_reason_conflicts(
         "支持長老會",
         "維持輪迴",
     )
-    return (amount < 0 and any(marker in reason for marker in positive_markers)) or (
-        amount > 0 and any(marker in reason for marker in negative_markers)
-    )
+    if any(marker in reason for marker in positive_markers):
+        return 1
+    if any(marker in reason for marker in negative_markers):
+        return -1
+    return 0
+
+
+def _relation_reason_conflicts(
+    response: NarrativeAIResponse,
+    request: NarrativeAIRequest,
+) -> bool:
+    """Detect a signed relation delta that contradicts the model's own reason."""
+
+    target = request.target_npc_id
+    amount = response.delta.relation.get(target or "", 0)
+    expected_sign = _expected_relation_sign_from_reason(response, request)
+    return bool(amount and expected_sign and (amount > 0) != (expected_sign > 0))
 
 
 class NarrativeAdapter:
@@ -318,7 +330,12 @@ class NarrativeAdapter:
                 )
             if last_relation_conflict and request.target_npc_id:
                 safe_relations = dict(last_result.delta.relation)
-                safe_relations.pop(request.target_npc_id, None)
+                amount = safe_relations.get(request.target_npc_id, 0)
+                expected_sign = _expected_relation_sign_from_reason(last_result, request)
+                if amount and expected_sign:
+                    safe_relations[request.target_npc_id] = abs(amount) * expected_sign
+                else:
+                    safe_relations.pop(request.target_npc_id, None)
                 return last_result.model_copy(
                     update={
                         "delta": last_result.delta.model_copy(
