@@ -1,6 +1,7 @@
 """Deterministic Alan HUD messages derived from authoritative game state."""
 
 from backend.schemas.alan_hud import AlanHud, AlanTone
+from backend.rules.scene_rules import SceneRules
 from backend.schemas.game_state import GameState, StoryPhase
 
 
@@ -16,7 +17,7 @@ def _calm_message(state: GameState) -> str:
     return "目標已建立。請沿路線收集異常資料。"
 
 
-def build_alan_hud(state: GameState) -> AlanHud:
+def build_alan_hud(state: GameState, next_step: str | None = None) -> AlanHud:
     """Project private state into a protagonist-only Alan HUD signal.
 
     The thresholds mirror the existing state rules: 50 marks an urgent
@@ -70,6 +71,16 @@ def build_alan_hud(state: GameState) -> AlanHud:
             tone="urgent",
             message="偵測到世界規則偏移。請勿相信未驗證的聲音。",
             event_key="alan:urgent",
+        )
+
+    # 規格 v3 回合保底：階段停留到最高回合時，只提示下一步，不強制換階段。
+    if next_step and SceneRules.phase_turn_limit_reached(state):
+        return AlanHud(
+            label=label,
+            display_value=usurp,
+            tone="calm",
+            message=f"任務進度停滯。{next_step}"[:300],
+            event_key=f"alan:nudge:{state.story_phase.value}",
         )
 
     tone: AlanTone = "calm"

@@ -163,7 +163,7 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "enter_veta_source",
             "veta_q1_each_life",
             "veta_q2_remember",
-            "choose_wake",
+            "choose_long_sleep",
         ),
         "orientation-life-spring-and-border-ignore": (
             "ask_location",
@@ -190,7 +190,7 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "enter_veta_source",
             "veta_q1_each_life",
             "veta_q2_release",
-            "choose_new_dream",
+            "choose_wake",
         ),
         "orientation-rune-grove": (
             "ask_location",
@@ -222,7 +222,7 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "listen_to_forgotten_names",
             "return_with_dust_findings",
         ),
-        "dust-return-ending": (
+        "dust-token-accepted": (
             "travel_to_minglin_rune_grove", "trace_dust_runes", "enter_liuchen_valley",
             "listen_to_forgotten_names", "return_with_dust_findings",
             "travel_to_minglin_life_spring", "study_spring_ash", "enter_lieyi_plains",
@@ -231,7 +231,7 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "inspect_invasion_archive", "inspect_life_death_book", "contact_alan_observer",
             "seek_menmesvento_after_truths", "accept_dust_return_token",
             "return_to_minglin_for_veta", "enter_veta_source", "veta_q1_recurring_life",
-            "veta_q2_release", "choose_dust_return",
+            "veta_q2_release", "choose_wake",
         ),
         "usurp-ending": (
             "travel_to_minglin_rune_grove", "trace_dust_runes", "enter_liuchen_valley",
@@ -261,14 +261,14 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             *_TO_BORDER_RESOLUTION, "border_ignore", "return_after_border_choice",
             "side_spring_anomaly", "pump_ignore", "rune_refuse_spring",
         ),
-        # 階段三：真相 C 後拒絕艾倫、拆除符印，再走到塵歸結局
+        # 階段三：真相 C 後拒絕艾倫、拆除符印，再走到結局
         "reject-alan-and-remove-runes": (
             *_TO_BORDER_RESOLUTION, "border_help_both", "return_after_border_choice",
             "side_spring_anomaly", "pump_ignore", "rune_place_spring",
             "enter_memory_library_with_map", "inspect_invasion_archive", "inspect_life_death_book",
             "contact_alan_observer", "reject_alan_after_truths", "seek_menmesvento_after_truths",
             "accept_dust_return_token", "return_to_minglin_for_veta", "remove_placed_runes",
-            "enter_veta_source", "veta_q1_recurring_life", "veta_q2_release", "choose_dust_return",
+            "enter_veta_source", "veta_q1_recurring_life", "veta_q2_release", "choose_long_sleep",
         ),
     }
     expected_edges = {
@@ -279,6 +279,9 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
         # 改由 test_act3_events.py 以指定狀態驗證
         and not choice.min_relations
         and choice.source_node_id != "side_vidalia_offer"
+        # 新夢、塵歸要靠對話累積的關係值與主軸（維塔三問不再加數值），
+        # 改由 test_veta_endings.py 以指定狀態驗證
+        and choice.choice_id not in {"choose_new_dream", "choose_dust_return"}
     }
     visited_edges: set[tuple[str, str, str]] = {
         ("meet_andre", "minglin_arrival", "minglin"),

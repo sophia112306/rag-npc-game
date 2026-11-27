@@ -6,14 +6,20 @@ from backend.schemas.game_state import GameState, StoryPhase
 # 所以把規格 v3 的四個階段對應到主線的劇情節點：
 # - 階段二：兩區調查完後第一次前往邊境廢墟（E2-3 屬於中期事件）
 # - 階段三：進入記憶圖書館，開始揭露真相 A／B／C
-# - 進入維塔源頭暫時維持階段三：維塔三問目前仍會加數值，
-#   等事件接齊、拿掉三問數值後再改成階段四（結局期會鎖住主軸與篡奪值）
+# - 進入維塔源頭暫時維持階段三：第 2 題「控制」仍是現行的篡夢路線（篡奪值 +90），
+#   階段四會鎖住篡奪值；等階段三的篡夢倒數流程接上後再改成階段四
 STORY_CHOICE_PHASES: dict[str, StoryPhase] = {
     "preview_border_ruins": StoryPhase.ACT2_MIDTERM,
     "enter_memory_library_with_map": StoryPhase.ACT3_FREEDOM,
     "enter_memory_library_with_elders": StoryPhase.ACT3_FREEDOM,
     "enter_memory_library_alone": StoryPhase.ACT3_FREEDOM,
     "enter_veta_source": StoryPhase.ACT3_FREEDOM,
+}
+# 規格 v3 各階段的最高回合。到達時只提示下一步，不強制換階段（主線靠劇情節點推進）。
+PHASE_TURN_LIMITS: dict[StoryPhase, int] = {
+    StoryPhase.ACT1_APPROACHING: 20,
+    StoryPhase.ACT2_MIDTERM: 30,
+    StoryPhase.ACT3_FREEDOM: 30,
 }
 PHASE_ORDER = (
     StoryPhase.ACT1_APPROACHING,
@@ -96,6 +102,13 @@ class SceneRules:
         if PHASE_ORDER.index(target) <= PHASE_ORDER.index(current):
             return current
         return target
+
+    @staticmethod
+    def phase_turn_limit_reached(game_state: GameState) -> bool:
+        """目前階段的回合數是否已達規格 v3 的最高回合。"""
+
+        limit = PHASE_TURN_LIMITS.get(game_state.story_phase)
+        return limit is not None and game_state.phase_turns >= limit
 
     @staticmethod
     def enter_phase(game_state: GameState, phase: StoryPhase) -> bool:
