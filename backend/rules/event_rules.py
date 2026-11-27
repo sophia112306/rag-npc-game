@@ -11,10 +11,10 @@ class EventRules:
     EVENT_DATABASE: Dict[str, dict] = {
         # 階段一事件
         "E1-1": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
-        "E1-2": {"axis": 0, "usurp": 0, "relation": {"andre": 5}, "flags": {}},
-        "E1-3": {"axis": 0, "usurp": 0, "relation": {"vidalia": 5}, "flags": {}},
+        "E1-2": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
+        "E1-3": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
         "E1-4": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
-        "E1-5": {"axis": 0, "usurp": 0, "relation": {"menmesvento": 5}, "flags": {}},
+        "E1-5": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
 
         # 階段二事件
         "E2-1_prevent": {"axis": 0, "usurp": -5, "relation": {"andre": 10}, "flags": {}},
