@@ -229,6 +229,7 @@ def project_player_view(state: GameState) -> PlayerViewState:
                    if finding.scene_id == state.current_scene_id and finding.visual_signal), None)
     if latest:
         world.discovery = WorldDiscovery(clue_id=latest.clue_id, label=latest.title, signal=latest.visual_signal)
+    navigation = project_navigation(state)
     return PlayerViewState(
         session_id=state.session_id,
         state_version=state.state_version,
@@ -236,8 +237,8 @@ def project_player_view(state: GameState) -> PlayerViewState:
         game_status=state.game_status,
         final_ending=state.final_ending,
         current_scene_id=state.current_scene_id,
-        navigation=project_navigation(state),
-        alan_hud=build_alan_hud(state),
+        navigation=navigation,
+        alan_hud=build_alan_hud(state, next_step=navigation.objective),
         world_scene=world,
         current_scene=PlayerSceneView(
             scene_id=scene.scene_id,
