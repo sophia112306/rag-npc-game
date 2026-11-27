@@ -3,6 +3,9 @@
 支援 7B 模型與多輪動態 JSON 輸出的微調訓練（角色：希拉 Syra）
 """
 
+import os
+from pathlib import Path
+
 import torch
 from unsloth import FastLanguageModel, is_bfloat16_supported
 from unsloth.chat_templates import train_on_responses_only
@@ -10,7 +13,7 @@ from datasets import load_dataset
 from trl import SFTTrainer
 from transformers import TrainingArguments
 
-max_seq_length = 2048  # 保留足夠的 Context 長度以容納參考資料與多輪對話
+max_seq_length = int(os.getenv("MAX_SEQ_LENGTH", "2048"))  # 保留足夠的 Context 長度以容納參考資料與多輪對話
 dtype = None
 load_in_4bit = True    # 16GB VRAM 務必開啟；若為 24GB+ 顯卡可改為 False
 
@@ -37,7 +40,21 @@ model = FastLanguageModel.get_peft_model(
 )
 
 print("正在載入並處理希拉動態 JSON 訓練資料集...")
-dataset_filename = "training/data/syra.jsonl"
+ROOT_DIR = Path(__file__).resolve().parents[2]
+dataset_filename = os.getenv(
+    "TRAINING_DATA_FILE",
+    str(ROOT_DIR / "training" / "data" / "npc_train_syra.jsonl"),
+)
+checkpoint_dir = os.getenv(
+    "TRAINING_CHECKPOINT_DIR",
+    str(ROOT_DIR / "training" / "outputs" / "syra_checkpoints"),
+)
+output_path = os.getenv(
+    "LORA_OUTPUT_PATH",
+    str(ROOT_DIR / "training" / "outputs" / "syra_lora_model"),
+)
+print(f"訓練資料：{dataset_filename}")
+print(f"輸出位置：{output_path}")
 raw_dataset = load_dataset("json", data_files=dataset_filename, split="train")
 
 # 套用 Qwen 的 ChatML 對話模板（完整支援單輪與多輪對話）
@@ -66,7 +83,7 @@ training_args = TrainingArguments(
     fp16 = not is_bfloat16_supported(),
     bf16 = is_bfloat16_supported(),
     logging_steps = 2,
-    output_dir = "training/outputs/syra_checkpoints",  # 獨立存放希拉的 checkpoints
+    output_dir = checkpoint_dir,  # 獨立存放希拉的 checkpoints
     report_to = "none"
 )
 
@@ -92,7 +109,6 @@ trainer_stats = trainer.train()
 print("訓練完成！")
 
 # 儲存最終 LoRA 權重
-output_path = "training/outputs/syra_lora_model"
 model.save_pretrained(output_path)
 tokenizer.save_pretrained(output_path)
 print(f"希拉新模型權重已成功儲存至 {output_path}")
