@@ -49,11 +49,12 @@ class EventRules:
         "E3-3_accept_transformation": {"axis": -20, "usurp": 0, "relation": {}, "flags": {"is_transformed": True, "transformed_race": "elf"}},
         "E3-4": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"hidden_cave_unlocked": True}},
 
-        # 終局維塔三問；數值只由固定選項套用，不交給模型自行推測。
-        "VETA_Q1_EACH_LIFE": {"axis": 10, "usurp": 0, "relation": {"menmesvento": 20}, "flags": {}},
-        "VETA_Q1_RECURRING": {"axis": -10, "usurp": 0, "relation": {"vidalia": 10}, "flags": {}},
-        "VETA_Q2_REMEMBER": {"axis": 10, "usurp": 0, "relation": {"menmesvento": 10}, "flags": {}},
-        "VETA_Q2_RELEASE": {"axis": -10, "usurp": 0, "relation": {"vidalia": 30}, "flags": {}},
+        # 終局維塔三問：規格 v3 第 1、2 題只記入尾聲旗標（epilogue_flags），不加數值。
+        # VETA_Q2_CONTROL／VETA_USURP_CONFIRM 是現行的篡夢路線，等階段三的篡夢倒數流程接上後再移除。
+        "VETA_Q1_EACH_LIFE": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
+        "VETA_Q1_RECURRING": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
+        "VETA_Q2_REMEMBER": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
+        "VETA_Q2_RELEASE": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
         "VETA_Q2_CONTROL": {"axis": 0, "usurp": 90, "relation": {}, "flags": {}},
         "VETA_USURP_CONFIRM": {"axis": 0, "usurp": 15, "relation": {}, "flags": {}, "clear_warning_cooldown": True},
     }
