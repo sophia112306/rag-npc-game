@@ -233,6 +233,17 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "return_to_minglin_for_veta", "enter_veta_source", "veta_q1_recurring_life",
             "veta_q2_release", "choose_wake",
         ),
+        "dust-return-with-authored-stance": (
+            "travel_to_minglin_rune_grove", "trace_dust_runes", "enter_liuchen_valley",
+            "listen_to_forgotten_names", "return_with_dust_findings",
+            "travel_to_minglin_life_spring", "study_spring_ash", "enter_lieyi_plains",
+            "observe_sacred_fire", "return_with_fire_findings", "preview_border_ruins",
+            "border_help_both", "return_after_border_choice", "enter_memory_library_with_map",
+            "inspect_invasion_archive", "inspect_life_death_book", "contact_alan_observer",
+            "seek_menmesvento_after_truths", "accept_dust_return_token",
+            "return_to_minglin_for_veta", "affirm_preserve_cycle", "enter_veta_source",
+            "veta_q1_recurring_life", "veta_q2_release", "choose_dust_return",
+        ),
         "usurp-ending": (
             "travel_to_minglin_rune_grove", "trace_dust_runes", "enter_liuchen_valley",
             "listen_to_forgotten_names", "return_with_dust_findings",
@@ -243,6 +254,28 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "seek_menmesvento_after_truths", "decline_dust_return_token",
             "return_to_minglin_for_veta", "enter_veta_source", "veta_q1_recurring_life",
             "veta_q2_control", "confirm_usurp_after_warning", "choose_usurp",
+        ),
+        "dust-return-during-usurp": (
+            "travel_to_minglin_rune_grove", "trace_dust_runes", "enter_liuchen_valley",
+            "listen_to_forgotten_names", "return_with_dust_findings",
+            "travel_to_minglin_life_spring", "study_spring_ash", "enter_lieyi_plains",
+            "observe_sacred_fire", "return_with_fire_findings", "preview_border_ruins",
+            "border_help_both", "return_after_border_choice", "enter_memory_library_with_map",
+            "inspect_invasion_archive", "inspect_life_death_book", "contact_alan_observer",
+            "seek_menmesvento_after_truths", "accept_dust_return_token",
+            "return_to_minglin_for_veta", "enter_veta_source", "veta_q1_recurring_life",
+            "veta_q2_control", "confirm_usurp_after_warning", "choose_dust_return",
+        ),
+        "positive-authored-stance": (
+            "travel_to_minglin_rune_grove", "trace_dust_runes", "enter_liuchen_valley",
+            "listen_to_forgotten_names", "return_with_dust_findings",
+            "travel_to_minglin_life_spring", "study_spring_ash", "enter_lieyi_plains",
+            "observe_sacred_fire", "return_with_fire_findings", "preview_border_ruins",
+            "border_report", "return_after_border_choice", "enter_memory_library_with_elders",
+            "inspect_invasion_archive", "inspect_life_death_book", "contact_alan_observer",
+            "seek_menmesvento_after_truths", "decline_dust_return_token",
+            "return_to_minglin_for_veta", "affirm_accept_endings", "enter_veta_source",
+            "veta_q1_each_life", "veta_q2_remember", "choose_long_sleep",
         ),
         # 階段二選做支線：E2-1 抽泉裝置與 E2-4 觀測符印的每個選項
         "side-events-place": (
@@ -279,9 +312,8 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
         # 改由 test_act3_events.py 以指定狀態驗證
         and not choice.min_relations
         and choice.source_node_id != "side_vidalia_offer"
-        # 新夢、塵歸要靠對話累積的關係值與主軸（維塔三問不再加數值），
-        # 改由 test_veta_endings.py 以指定狀態驗證
-        and choice.choice_id not in {"choose_new_dream", "choose_dust_return"}
+        # 新夢要靠對話累積的關係值；塵歸另有固定立場路線。
+        and choice.choice_id != "choose_new_dream"
     }
     visited_edges: set[tuple[str, str, str]] = {
         ("meet_andre", "minglin_arrival", "minglin"),

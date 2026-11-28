@@ -7,7 +7,7 @@ from typing import Protocol
 from uuid import UUID
 
 from backend.content.characters import NPC_SCENES, npc_is_present
-from backend.content.demo_story import find_available_demo_story_choice
+from backend.content.demo_story import DemoStoryChoiceDefinition, available_demo_story_choices, find_available_demo_story_choice
 from backend.orchestration.world_commands import build_world_command_proposal
 from backend.orchestration.input_classification import contains_non_negated_phrase
 from backend.database.repository import (
@@ -231,13 +231,16 @@ class GameOrchestrator:
             typed_choice = match_typed_story_dialogue(action, state)
             confirmed_choice_id = typed_choice.choice_id if typed_choice else None
             _, turn_guidance = await self._public_turn_guidance(state)
+            inferred_choice = None
             if typed_choice is None and action.action_mode == ActionMode.DIALOGUE:
                 # 規格 v3 每回合流程 3～5：敘事 AI 先判讀、程式套用數值，
                 # NPC 再依更新後的狀態說話。固定選項的數值仍由事件表決定。
-                state = await self._apply_narrative_judgement(action, state, turn_guidance)
+                state, inferred_choice = await self._apply_narrative_judgement(action, state, turn_guidance)
+                if inferred_choice:
+                    confirmed_choice_id = inferred_choice.choice_id
             proposal = (
-                build_demo_story_proposal(action, state, typed_choice)
-                if typed_choice else await self._story_planner.propose(
+                build_demo_story_proposal(action, state, typed_choice or inferred_choice)
+                if typed_choice or inferred_choice else await self._story_planner.propose(
                     action,
                     parsed_action,
                     state.model_copy(deep=True),
@@ -284,15 +287,21 @@ class GameOrchestrator:
         action: PlayerAction,
         state: GameState,
         turn_guidance: TurnGuidance,
-    ) -> GameState:
-        """Return a copy of state with the clamped dialogue delta applied.
+    ) -> tuple[GameState, DemoStoryChoiceDefinition | None]:
+        """Apply a bounded dialogue delta or select one validated authored event.
 
         Any narrative-AI failure leaves the state unchanged (delta 0), so a
         missing or broken endpoint never blocks the NPC's reply.
         """
 
         if self.narrative_judge is None:
-            return state
+            return state, None
+        # Pilot: only the existing, player-visible promise to wake Veta may be
+        # inferred from free text. The resolver applies its authored event.
+        legal_events = tuple(
+            choice for choice in available_demo_story_choices(state)
+            if choice.rule_event_id == "E3-2_agree" and choice.target_npc_id == action.target_npc_id
+        )
         target = state.npc_states.get(action.target_npc_id or "")
         request = NarrativeAIRequest(
             player_message=action.message,
@@ -309,24 +318,35 @@ class GameOrchestrator:
                 for npc_id in DIALOGUE_RELATION_NPCS
                 if npc_id in state.npc_states
             },
+            legal_event_labels=[choice.label for choice in legal_events],
         )
         try:
             judgement = await self.narrative_judge.judge(request)
         except Exception:  # noqa: BLE001 - the turn must continue without the judgement
             logger.warning("Narrative AI unavailable; dialogue delta treated as 0", exc_info=True)
-            return state
-        judgement = ActionValidator.validate_narrative_response(judgement, allowed_events=[])
+            return state, None
+        judgement = ActionValidator.validate_narrative_response(
+            judgement, allowed_events=[choice.label for choice in legal_events]
+        )
+        if judgement.event_reviewed and judgement.event_done:
+            explicit_promise = contains_non_negated_phrase(action.message, ("答應", "同意", "願意"))
+            explicit_waking = contains_non_negated_phrase(
+                action.message, ("喚醒維塔", "叫醒維塔", "讓維塔醒來")
+            )
+            if explicit_promise and explicit_waking:
+                chosen = next((choice for choice in legal_events if choice.label == judgement.event_done), None)
+                if chosen:
+                    return state, chosen
         judged_state = state.model_copy(deep=True)
         applied = StateRules.apply_dialogue_delta(
             judged_state,
-            # Free-form model judgement may shape affinity and hostility, but
-            # it is not authoritative for story direction.  Axis, phase and
-            # endings advance only through validated authored choices/events.
-            axis_delta=0,
+            # Only an explicit, direction-matched stance may affect the axis.
+            # StateRules still enforces the per-turn, phase and repetition limits.
+            axis_delta=judgement.delta.axis if judgement.axis_reviewed and judgement.stance else 0,
             usurp_delta=judgement.delta.usurp,
             relation_deltas=judgement.delta.relation,
             player_message=action.message,
-            axis_stance=None,
+            axis_stance=judgement.stance if judgement.axis_reviewed else None,
         )
         logger.info(
             "Narrative delta session=%s proposed=%s stance=%s applied=%s duplicate=%s reason=%s",
@@ -337,7 +357,7 @@ class GameOrchestrator:
             applied.duplicate_message,
             judgement.reason,
         )
-        return judged_state
+        return judged_state, None
 
     @staticmethod
     def _validate_opening_sequence(action: PlayerAction, state: GameState) -> None:

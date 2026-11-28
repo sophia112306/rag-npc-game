@@ -49,6 +49,10 @@ class EventRules:
         "E3-3_accept_transformation": {"axis": -20, "usurp": 0, "relation": {}, "flags": {"is_transformed": True, "transformed_race": "elf"}},
         "E3-4": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"hidden_cave_unlocked": True}},
 
+        # 進入維塔源頭前的明確立場；不屬於維塔三問，僅由玩家固定選項觸發。
+        "PRE_VETA_PRESERVE_CYCLE": {"axis": -20, "usurp": 0, "relation": {}, "flags": {}},
+        "PRE_VETA_ACCEPT_ENDINGS": {"axis": 20, "usurp": 0, "relation": {}, "flags": {}},
+
         # 終局維塔三問：規格 v3 第 1、2 題只記入尾聲旗標（epilogue_flags），不加數值。
         # VETA_Q2_CONTROL／VETA_USURP_CONFIRM 是現行的篡夢路線，等階段三的篡夢倒數流程接上後再移除。
         "VETA_Q1_EACH_LIFE": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},

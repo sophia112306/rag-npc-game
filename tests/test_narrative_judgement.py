@@ -67,16 +67,18 @@ def judgement(axis=0, usurp=0, relation=None, **extra) -> NarrativeAIResponse:
     )
 
 
-async def make_orchestrator(tmp_path, judge, planner, node_id="minglin_briefed"):
+async def make_orchestrator(tmp_path, judge, planner, node_id="minglin_briefed", scene_id="minglin"):
     engine = create_database_engine(f"sqlite+aiosqlite:///{tmp_path / 'narrative.db'}")
     await create_schema(engine)
     repository = SqlAlchemyGameRepository(create_async_session_factory(engine))
     initial = GameState(
         session_id="narrative-session",
-        current_scene_id="minglin",
+        current_scene_id=scene_id,
         player=PlayerState(player_id="player"),
     )
     initial.story_progress.node_id = node_id
+    if node_id == "dust_token_decided":
+        initial.npc_states["menmesvento"].relation = 60
     await repository.create_or_get_session(initial)
     return repository, GameOrchestrator(repository, story_planner=planner, narrative_judge=judge)
 
@@ -92,20 +94,21 @@ def talk(message: str, npc_id: str = "vidalia", version: int = 1) -> PlayerActio
 
 
 @pytest.mark.asyncio
-async def test_free_dialogue_applies_affinity_but_not_story_axis_before_npc_reply(tmp_path) -> None:
-    judge = StubJudge(judgement(axis=-3, relation={"vidalia": 5, "seth": 9}))
+async def test_free_dialogue_applies_valid_stance_and_affinity_before_npc_reply(tmp_path) -> None:
+    judge = StubJudge(judgement(axis=-3, stance="承諾陪伴", axis_reviewed=True, relation={"vidalia": 5, "seth": 9}))
     planner = RecordingPlanner()
     repository, orchestrator = await make_orchestrator(tmp_path, judge, planner)
 
     await orchestrator.process_turn(talk("我想留在鳴霖陪妳"))
 
     stored = await repository.get_state("narrative-session")
-    assert stored.axis == 0
+    assert stored.axis == -3
     assert stored.npc_states["vidalia"].relation == 35
     assert stored.npc_states["seth"].relation == 30
     assert stored.phase_relation_dialogue_gain["vidalia"] == 5
     # NPC 模型看到的是套用數值之後的狀態
     assert planner.seen_states[0].npc_states["vidalia"].relation == 35
+    assert planner.seen_states[0].axis == -3
     sent = judge.requests[0]
     assert sent.player_message == "我想留在鳴霖陪妳"
     assert sent.target_npc_id == "vidalia"
@@ -121,10 +124,10 @@ class SequenceJudge:
 
 
 @pytest.mark.asyncio
-async def test_free_dialogue_stances_cannot_accumulate_on_story_axis(tmp_path) -> None:
+async def test_distinct_valid_stances_accumulate_on_story_axis(tmp_path) -> None:
     judge = SequenceJudge(
-        judgement(axis=-3, stance="尋求安寧"),
-        judgement(axis=-3, stance="承諾陪伴"),
+        judgement(axis=-3, stance="尋求安寧", axis_reviewed=True),
+        judgement(axis=-3, stance="承諾陪伴", axis_reviewed=True),
     )
     repository, orchestrator = await make_orchestrator(tmp_path, judge, RecordingPlanner())
 
@@ -132,8 +135,34 @@ async def test_free_dialogue_stances_cannot_accumulate_on_story_axis(tmp_path) -
     await orchestrator.process_turn(talk("我想留下來陪妳", version=2))
 
     stored = await repository.get_state("narrative-session")
+    assert stored.axis == -6
+    assert stored.recent_axis_stances == ["尋求安寧", "承諾陪伴"]
+
+
+@pytest.mark.asyncio
+async def test_repeated_stance_is_not_counted_twice(tmp_path) -> None:
+    judge = SequenceJudge(
+        judgement(axis=-5, stance="尋求安寧", axis_reviewed=True),
+        judgement(axis=-5, stance="尋求安寧", axis_reviewed=True),
+    )
+    repository, orchestrator = await make_orchestrator(tmp_path, judge, RecordingPlanner())
+
+    await orchestrator.process_turn(talk("我想在這裡得到安寧"))
+    await orchestrator.process_turn(talk("我仍想在此找到平靜", version=2))
+
+    stored = await repository.get_state("narrative-session")
+    assert stored.axis == -5
+
+
+@pytest.mark.asyncio
+async def test_unreviewed_stance_cannot_change_story_axis(tmp_path) -> None:
+    judge = StubJudge(judgement(axis=-5, stance="尋求安寧"))
+    repository, orchestrator = await make_orchestrator(tmp_path, judge, RecordingPlanner())
+
+    await orchestrator.process_turn(talk("我想在這裡得到安寧"))
+
+    stored = await repository.get_state("narrative-session")
     assert stored.axis == 0
-    assert stored.recent_axis_stances == [None, None]
 
 
 @pytest.mark.asyncio
@@ -176,6 +205,43 @@ async def test_narrative_ai_cannot_trigger_events_or_set_flags(tmp_path) -> None
     stored = await repository.get_state("narrative-session")
     assert stored.flags["is_transformed"] is False
     assert stored.axis == 0
+
+
+@pytest.mark.asyncio
+async def test_explicit_promise_can_confirm_legal_authored_event(tmp_path) -> None:
+    label = "答應他喚醒維塔的請求"
+    judge = StubJudge(judgement(event_done=label, event_reviewed=True))
+    planner = RecordingPlanner()
+    repository, orchestrator = await make_orchestrator(
+        tmp_path, judge, planner, node_id="dust_token_decided", scene_id="liuchen_valley"
+    )
+
+    await orchestrator.process_turn(talk("我答應你，會喚醒維塔。", npc_id="menmesvento"))
+
+    stored = await repository.get_state("narrative-session")
+    assert judge.requests[0].legal_event_labels == [label]
+    assert stored.axis == 10
+    assert stored.npc_states["menmesvento"].relation == 70
+    assert "agree_wake_veta" in stored.story_progress.completed_choice_ids
+    assert planner.seen_states == []
+
+
+@pytest.mark.parametrize(("message", "reviewed"), (
+    ("我不答應喚醒維塔。", True),
+    ("我答應你，會喚醒維塔。", False),
+))
+@pytest.mark.asyncio
+async def test_negated_or_unreviewed_event_candidate_stays_plain_dialogue(tmp_path, message, reviewed) -> None:
+    label = "答應他喚醒維塔的請求"
+    judge = StubJudge(judgement(event_done=label, event_reviewed=reviewed))
+    planner = RecordingPlanner()
+    repository, orchestrator = await make_orchestrator(
+        tmp_path, judge, planner, node_id="dust_token_decided", scene_id="liuchen_valley"
+    )
+    await orchestrator.process_turn(talk(message, npc_id="menmesvento"))
+    stored = await repository.get_state("narrative-session")
+    assert "agree_wake_veta" not in stored.story_progress.completed_choice_ids
+    assert planner.seen_states
 
 
 @pytest.mark.asyncio

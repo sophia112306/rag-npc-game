@@ -36,8 +36,10 @@ def ids(state: GameState) -> list[str]:
     return [choice.choice_id for choice in available_demo_story_choices(state)]
 
 
-def test_hub_without_relations_only_offers_the_veta_source() -> None:
-    assert ids(act3_state()) == ["enter_veta_source"]
+def test_hub_without_relations_offers_stance_and_veta_source() -> None:
+    assert ids(act3_state()) == [
+        "affirm_preserve_cycle", "affirm_accept_endings", "enter_veta_source"
+    ]
 
 
 @pytest.mark.parametrize(

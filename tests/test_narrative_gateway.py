@@ -62,6 +62,7 @@ def test_adapter_uses_base_model_and_clamps_proposal() -> None:
     assert "我想留在鳴霖陪妳" in seen["messages"][1]["content"]
     assert payloads[1]["messages"][0]["content"] == NARRATOR_VERIFICATION_PROMPT
     assert result.delta.axis == -5
+    assert result.axis_reviewed is True
     assert result.delta.usurp == 0
     assert result.delta.relation == {"vidalia": 10}
     assert result.speaker == "vidalia"
@@ -226,6 +227,43 @@ def test_adapter_rejudges_nonzero_axis_without_valid_stance() -> None:
     assert payloads[1]["messages"][0]["content"] == NARRATOR_VERIFICATION_PROMPT
     assert result.delta.axis == -3
     assert result.stance == "肯定永生或輪迴"
+    assert result.axis_reviewed is True
+
+
+def test_one_pass_axis_is_not_marked_reviewed() -> None:
+    adapter = NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=1),
+        transport=httpx.MockTransport(lambda _: completion(json.dumps({
+            "reason": "想留下，偏守夢", "axis": -3, "stance": "留戀",
+            "usurp": 0, "relation": {},
+        }, ensure_ascii=False))),
+    )
+
+    result = asyncio.run(adapter.judge(REQUEST))
+
+    assert result.delta.axis == -3
+    assert result.axis_reviewed is False
+
+
+def test_event_candidate_requires_second_review_and_legal_label() -> None:
+    request = REQUEST.model_copy(update={"legal_event_labels": ["答應他喚醒維塔的請求"]})
+    calls = 0
+
+    def upstream(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return completion(json.dumps({
+            "reason": "主角明確答應喚醒維塔", "axis": 0, "stance": None,
+            "usurp": 0, "relation": {}, "event_done": "答應他喚醒維塔的請求",
+        }, ensure_ascii=False))
+
+    result = asyncio.run(NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=2), transport=httpx.MockTransport(upstream)
+    ).judge(request))
+
+    assert calls == 2
+    assert result.event_done == "答應他喚醒維塔的請求"
+    assert result.event_reviewed is True
 
 
 def test_adapter_verifies_a_zero_effect_decision_once() -> None:

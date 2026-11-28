@@ -1,8 +1,8 @@
 """終局維塔三問與五個結局（規格 v3「結局判定與終局對話」）。
 
 第 1、2 題只記入尾聲旗標、不加數值；可選結局完全由進入終局時的主軸、
-真相度、關係值與旗標決定。新夢、塵歸要靠對話累積的數值，固定選項路線走不到，
-所以在這裡用指定狀態驗證。
+真相度、關係值與旗標決定。新夢要靠對話累積的關係值；一般主軸路線的塵歸
+也要累積主軸。進入維塔源頭前的固定立場選項提供離線路線。
 """
 
 from uuid import uuid4
@@ -125,3 +125,18 @@ async def test_transformed_player_loses_new_dream_and_dust_return(tmp_path) -> N
     at_choice = await _play(tmp_path, state, *_TO_FINAL_CHOICE)
 
     assert final_choices(at_choice) == {"choose_long_sleep", "choose_wake"}
+
+
+@pytest.mark.asyncio
+async def test_offline_fixed_choices_can_reach_dust_return_during_usurp_countdown(tmp_path) -> None:
+    state = veta_state(has_dust_token=True)
+
+    at_choice = await _play(
+        tmp_path, state, "enter_veta_source", "veta_q1_recurring_life",
+        "veta_q2_control", "confirm_usurp_after_warning",
+    )
+
+    assert at_choice.usurp >= 90
+    assert "choose_dust_return" in final_choices(at_choice)
+    stored = await _play(tmp_path, at_choice, "choose_dust_return")
+    assert stored.final_ending == "塵歸"

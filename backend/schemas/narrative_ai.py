@@ -54,3 +54,4 @@ class NarrativeAIRequest(BaseModel):
     usurp: int = Field(..., ge=0, le=100)
     truth_level: int = Field(..., ge=0, le=3)
     relations: Dict[str, int] = Field(default_factory=dict)
+    legal_event_labels: list[str] = Field(default_factory=list)

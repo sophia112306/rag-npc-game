@@ -619,6 +619,22 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         special_scene_transition=True,
     ),
     _choice(
+        "affirm_preserve_cycle", "veta_route_ready", "minglin",
+        "表明願意守護既有輪迴", "我願意守護這個世界已有的輪迴與記憶。",
+        "你向維達利亞說清自己的立場。她點頭，仍把最後的選擇留給你。",
+        "veta_route_ready", "命脈之泉源頭",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+        rule_event_id="PRE_VETA_PRESERVE_CYCLE", once_group="pre_veta_stance",
+    ),
+    _choice(
+        "affirm_accept_endings", "veta_route_ready", "minglin",
+        "表明生命應有終點", "我認為生命應有終點，無盡的輪迴不能替人作決定。",
+        "你向維達利亞說清自己的立場。她沉默片刻，仍把最後的選擇留給你。",
+        "veta_route_ready", "命脈之泉源頭",
+        action_mode=ActionMode.DIALOGUE, target_npc_id="vidalia",
+        rule_event_id="PRE_VETA_ACCEPT_ENDINGS", once_group="pre_veta_stance",
+    ),
+    _choice(
         "enter_veta_source", "veta_route_ready", "minglin",
         "前往維塔沉眠之所", "我沿重新顯現的水脈前往維塔沉眠之所。",
         "古根與泉水在你面前分開。沉睡巨龍伏在石台上，意識越過夢境，向你提出最後三個問題。",
