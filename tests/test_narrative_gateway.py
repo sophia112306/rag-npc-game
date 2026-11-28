@@ -248,10 +248,12 @@ def test_one_pass_axis_is_not_marked_reviewed() -> None:
 def test_event_candidate_requires_second_review_and_legal_label() -> None:
     request = REQUEST.model_copy(update={"legal_event_labels": ["答應他喚醒維塔的請求"]})
     calls = 0
+    payloads = []
 
-    def upstream(_: httpx.Request) -> httpx.Response:
+    def upstream(sent: httpx.Request) -> httpx.Response:
         nonlocal calls
         calls += 1
+        payloads.append(json.loads(sent.content))
         return completion(json.dumps({
             "reason": "主角明確答應喚醒維塔", "axis": 0, "stance": None,
             "usurp": 0, "relation": {}, "event_done": "答應他喚醒維塔的請求",
@@ -264,6 +266,10 @@ def test_event_candidate_requires_second_review_and_legal_label() -> None:
     assert calls == 2
     assert result.event_done == "答應他喚醒維塔的請求"
     assert result.event_reviewed is True
+    assert all(
+        '["答應他喚醒維塔的請求"]' in payload["messages"][1]["content"]
+        for payload in payloads
+    )
 
 
 def test_event_candidate_rejected_on_second_review_stays_unapproved() -> None:

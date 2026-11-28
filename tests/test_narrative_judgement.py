@@ -332,6 +332,23 @@ async def test_event_candidate_needs_current_target_and_explicit_text(tmp_path) 
 
 
 @pytest.mark.asyncio
+async def test_model_miss_leaves_authored_event_button_available(tmp_path) -> None:
+    judge = StubJudge(judgement(relation={"menmesvento": 10}))
+    repository, orchestrator = await make_orchestrator(
+        tmp_path, judge, RecordingPlanner(),
+        node_id="dust_token_offer", scene_id="liuchen_valley",
+    )
+
+    await orchestrator.process_turn(talk("我願意收下塵歸令，現在就接過石牌。", npc_id="menmesvento"))
+
+    stored = await repository.get_state("narrative-session")
+    choices = await orchestrator.get_player_choices("narrative-session")
+    assert stored.flags["has_dust_token"] is False
+    assert stored.story_progress.node_id == "dust_token_offer"
+    assert "accept_dust_return_token" in {choice.choice_id for choice in choices}
+
+
+@pytest.mark.asyncio
 async def test_authored_choice_text_skips_narrative_ai(tmp_path) -> None:
     judge = StubJudge(judgement(relation={"andre": 10}))
     repository, orchestrator = await make_orchestrator(
