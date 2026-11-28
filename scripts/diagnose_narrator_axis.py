@@ -91,7 +91,9 @@ def main() -> None:
         second_raw = chat(args.url, args.model, build_narrator_verification_messages(request))
         second = parse_narrator_output(second_raw, request)
         print(f"  第二輪：{raw_axis(second_raw)}")
-        if second.delta.axis != 0 and second.stance:
+        if second.delta.axis and (second.delta.axis > 0) != (first.delta.axis > 0):
+            print("  → 兩輪方向相反，不採用，主軸不變")
+        elif second.delta.axis != 0 and second.stance:
             adopted += 1
             print(f"  → 採用：主軸 {second.delta.axis:+d}（{second.stance}）")
         else:

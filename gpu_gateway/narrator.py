@@ -76,7 +76,8 @@ NARRATOR_SYSTEM_PROMPT = """你是遊戲《龍夢》的敘事 AI。你只判讀�
 NARRATOR_VERIFICATION_PROMPT = """你是遊戲數值判讀的獨立審核者。請從頭判讀玩家原句，不延續或猜測先前答案。
 
 逐項分開判斷：
-1. axis 只表示玩家本人主張的世界觀，與對話的角色同不同意無關，也不需要玩家提出行動或要求；說出看法、表達嚮往或用反問句表達看法，本身就是表態。
+1. axis 只表示玩家本人主張的世界觀，與對話的角色同不同意無關，也不需要玩家提出行動或要求；說出看法、表達嚮往或用反問句表達看法，本身就是表態。「沒有提出行動或要求」不是 axis 給 0 的理由，行動只和 event_done 有關。
+   否定長生、認為沒有終點的生命沒有意義，是醒夢方向（指出長生的虛妄），不是肯定永生。
    詢問、調查意願、消極抱怨、稱讚或冒犯 NPC 都不是世界觀表態，axis=0、stance=null。
    守夢方向（axis 為負數，-1～-5）的 stance：留戀、尋求安寧、承諾陪伴、肯定永生或輪迴、保存記憶、維持現狀。
    醒夢方向（axis 為正數，+1～+5）的 stance：探討死亡的意義、指出長生的虛妄、支持門梅司文托、主張打破循環。
@@ -185,6 +186,13 @@ def _has_effect(response: NarrativeAIResponse) -> bool:
     return bool(delta.axis or delta.usurp or any(delta.relation.values()))
 
 
+_SIMPLIFIED_STANCE_CHARS = str.maketrans({
+    "恋": "戀", "寻": "尋", "宁": "寧", "诺": "諾", "轮": "輪", "回": "回", "记": "記", "忆": "憶",
+    "维": "維", "现": "現", "状": "狀", "讨": "討", "义": "義", "长": "長", "虚": "虛", "门": "門",
+    "张": "張", "环": "環",
+})
+
+
 def _axis_from_stance(proposed_axis: int, raw_stance: object) -> tuple[int, str | None]:
     """主軸的正負號以立場類別為準，幅度沿用模型給的數字。
 
@@ -195,6 +203,9 @@ def _axis_from_stance(proposed_axis: int, raw_stance: object) -> tuple[int, str 
 
     if proposed_axis == 0:
         return 0, None
+    if isinstance(raw_stance, str):
+        # 模型偶爾把類別名稱寫成簡體（例如「探讨死亡的意义」），轉回清單的寫法
+        raw_stance = raw_stance.strip().translate(_SIMPLIFIED_STANCE_CHARS)
     direction = AXIS_STANCES.get(raw_stance) if isinstance(raw_stance, str) else None
     if direction is None:
         # A non-zero axis without a valid stance is not actionable.  Requiring the
@@ -280,6 +291,7 @@ class NarrativeAdapter:
         last_no_effect_conflict = False
         last_relation_conflict = False
         first_event_label: str | None = None
+        first_axis = 0
         event_consistent = True
         try:
             async with httpx.AsyncClient(
@@ -307,6 +319,7 @@ class NarrativeAdapter:
                     last_result = parse_narrator_output(raw_output, request)
                     if attempt == 0:
                         first_event_label = last_result.event_done
+                        first_axis = last_result.delta.axis
                     elif last_result.event_done != first_event_label:
                         event_consistent = False
                     last_no_effect_conflict = _declares_no_effect(last_result) and _has_effect(last_result)
@@ -330,6 +343,17 @@ class NarrativeAdapter:
                         or verify_event
                         or verify_no_effect
                     ):
+                        # 兩輪的主軸方向相反時不採用（例如把「否定長生」判成肯定永生）
+                        if (
+                            attempt > 0
+                            and first_axis
+                            and last_result.delta.axis
+                            and (first_axis > 0) != (last_result.delta.axis > 0)
+                        ):
+                            last_result = last_result.model_copy(update={
+                                "delta": last_result.delta.model_copy(update={"axis": 0}),
+                                "stance": None,
+                            })
                         return last_result.model_copy(update={
                             "axis_reviewed": attempt > 0 and last_result.delta.axis != 0,
                             "event_reviewed": (

@@ -140,6 +140,32 @@ def test_parser_takes_axis_direction_from_the_stance(axis, stance, expected_axis
     assert result.stance == stance
 
 
+def test_parser_accepts_simplified_stance_names() -> None:
+    text = json.dumps({"reason": "測試", "axis": 3, "stance": "探讨死亡的意义", "usurp": 0, "relation": {}}, ensure_ascii=False)
+
+    result = parse_narrator_output(text, REQUEST)
+
+    assert result.delta.axis == 3
+    assert result.stance == "探討死亡的意義"
+
+
+def test_adapter_rejects_axis_when_review_flips_direction() -> None:
+    replies = iter([
+        {"reason": "否定長生，偏醒夢", "axis": 3, "stance": "指出長生的虛妄", "usurp": 0, "relation": {}},
+        {"reason": "否定長生", "axis": -3, "stance": "肯定永生或輪迴", "usurp": 0, "relation": {}},
+    ])
+    adapter = NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=2),
+        transport=httpx.MockTransport(lambda _: completion(json.dumps(next(replies), ensure_ascii=False))),
+    )
+
+    result = asyncio.run(adapter.judge(REQUEST))
+
+    assert result.delta.axis == 0
+    assert result.stance is None
+    assert result.axis_reviewed is False
+
+
 def test_verification_prompt_shows_both_axis_directions() -> None:
     assert "axis -3、stance 留戀" in NARRATOR_VERIFICATION_PROMPT
     assert "axis +3、stance 探討死亡的意義" in NARRATOR_VERIFICATION_PROMPT
