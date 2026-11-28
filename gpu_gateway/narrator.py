@@ -99,6 +99,58 @@ NARRATOR_VERIFICATION_PROMPT = """你是遊戲數值判讀的獨立審核者。�
 {"reason":"繁體中文理由","axis":整數,"stance":"合法類別或 null","usurp":整數,"relation":{"角色ID":整數},"event_done":"合法選項標籤或 null"}"""
 
 
+# 主軸的第二道審查：只問「這句話有沒有表達第一輪判定的立場」。
+# 實測 7B 基礎模型從頭重判整份 JSON 時，常以「沒有提出行動」為由給 0、
+# 自創清單外的類別或把方向寫反；是非題比重判穩定得多。
+STANCE_DEFINITIONS = {
+    "留戀": "想留下來、不想離開、捨不得這裡",
+    "尋求安寧": "喜歡這裡的平靜、覺得安心、想遠離外面的紛擾",
+    "承諾陪伴": "答應陪著對方、說會一直在、願意守在對方身邊",
+    "肯定永生或輪迴": "覺得永遠活著或不斷輪迴是好事、嚮往長生",
+    "保存記憶": "主張記憶或過去應該被保留、不該遺忘",
+    "維持現狀": "主張世界保持原樣、不要改變或破壞結界",
+    "探討死亡的意義": "認為死亡讓生命有價值、接受生命有終點",
+    "指出長生的虛妄": "批評長生或輪迴是逃避、沒有意義",
+    "支持門梅司文托": "認同門梅司文托的主張或站在他那邊",
+    "主張打破循環": "主張打破輪迴或結界、讓世界回到真實",
+}
+
+NARRATOR_AXIS_CONFIRM_PROMPT = """你是遊戲數值判讀的審核者，只回答一個是非題：玩家這句話有沒有表達指定的世界觀立場。
+
+判斷原則：
+- 只看玩家本人說了什麼看法，不管對話的角色同不同意，也不需要玩家提出行動或要求。
+- 說出看法、表達嚮往、用反問句表達看法，都算表達立場。
+- 只是問路、問資訊、閒聊、一起調查、稱讚或冒犯角色，不算表達立場。
+- 立場的意思和玩家的話相反時，回答 false。
+
+只輸出 JSON：{"reason": "一句繁體中文理由", "confirm": true 或 false}"""
+
+
+def build_axis_confirmation_messages(request: NarrativeAIRequest, stance: str) -> list[dict[str, str]]:
+    direction = "守夢方向" if AXIS_STANCES.get(stance, 0) < 0 else "醒夢方向"
+    target = request.target_npc_name or request.target_npc_id or "（沒有指定對象）"
+    return [
+        {"role": "system", "content": NARRATOR_AXIS_CONFIRM_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                f"對話對象：{target}\n"
+                f"玩家說：{request.player_message}\n"
+                f"要確認的立場：「{stance}」（{direction}）：{STANCE_DEFINITIONS.get(stance, stance)}\n"
+                "這句話有沒有表達這個立場？"
+            ),
+        },
+    ]
+
+
+def parse_axis_confirmation(text: str) -> bool:
+    payload = _extract_json_object(text)
+    value = payload.get("confirm")
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "yes", "是", "有"}
+    return value is True
+
+
 def build_narrator_user_prompt(request: NarrativeAIRequest) -> str:
     relations = "、".join(f"{npc_id} {value}" for npc_id, value in request.relations.items()) or "無"
     target = request.target_npc_name or request.target_npc_id or "（沒有指定對象）"
@@ -277,6 +329,70 @@ class NarrativeAdapter:
         self.transport = transport
 
     async def judge(self, request: NarrativeAIRequest) -> NarrativeAIResponse:
+        first: dict[str, Any] = {}
+        result = await self._judge_values(request, first)
+        return await self._confirm_axis(request, result, first)
+
+    async def _confirm_axis(
+        self, request: NarrativeAIRequest, result: NarrativeAIResponse, first: dict[str, Any]
+    ) -> NarrativeAIResponse:
+        """主軸只採用第一輪判定、且通過是非題確認的立場。
+
+        第二輪完整重判仍負責關係值與事件；主軸改由這一題確認，避免小模型重判時
+        把明確的立場推翻成 0 或寫反方向。只設定一次判讀時不做任何審查。
+        """
+
+        def without_axis() -> NarrativeAIResponse:
+            return result.model_copy(update={
+                "delta": result.delta.model_copy(update={"axis": 0}),
+                "stance": None,
+                "axis_reviewed": False,
+            })
+
+        max_attempts = self.settings.narrator_upstream_max_attempts or self.settings.upstream_max_attempts
+        if max_attempts < 2:
+            return result.model_copy(update={"axis_reviewed": False})
+        if first.get("fail_closed"):
+            return without_axis()
+        candidate_axis, candidate_stance = first.get("axis", 0), first.get("stance")
+        if not candidate_axis and result.delta.axis and result.stance:
+            # 第一輪給了主軸卻沒有合法類別，第二輪補上類別時才用第二輪的判定
+            candidate_axis, candidate_stance = result.delta.axis, result.stance
+        if not candidate_axis or not candidate_stance:
+            return without_axis()
+        headers = {"Content-Type": "application/json"}
+        if self.settings.upstream_api_key:
+            headers["Authorization"] = f"Bearer {self.settings.upstream_api_key}"
+        try:
+            async with httpx.AsyncClient(
+                transport=self.transport, timeout=self.settings.upstream_timeout_seconds
+            ) as client:
+                response = await client.post(
+                    self.settings.upstream_base_url.rstrip("/") + "/chat/completions",
+                    headers=headers,
+                    json={
+                        "model": self.settings.narrator_model,
+                        "temperature": 0.1,
+                        "top_p": 0.9,
+                        "max_tokens": 128,
+                        "response_format": {"type": "json_object"},
+                        "messages": build_axis_confirmation_messages(request, candidate_stance),
+                    },
+                )
+                response.raise_for_status()
+                confirmed = parse_axis_confirmation(response.json()["choices"][0]["message"]["content"])
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+            # 確認失敗只讓主軸不變，關係值等其他判讀照常使用
+            return without_axis()
+        if not confirmed:
+            return without_axis()
+        return result.model_copy(update={
+            "delta": result.delta.model_copy(update={"axis": candidate_axis}),
+            "stance": candidate_stance,
+            "axis_reviewed": True,
+        })
+
+    async def _judge_values(self, request: NarrativeAIRequest, first: dict[str, Any]) -> NarrativeAIResponse:
         model = self.settings.narrator_model
         if not model:
             raise ModelGatewayTransientError("Narrator model is not configured")
@@ -291,7 +407,6 @@ class NarrativeAdapter:
         last_no_effect_conflict = False
         last_relation_conflict = False
         first_event_label: str | None = None
-        first_axis = 0
         event_consistent = True
         try:
             async with httpx.AsyncClient(
@@ -319,7 +434,7 @@ class NarrativeAdapter:
                     last_result = parse_narrator_output(raw_output, request)
                     if attempt == 0:
                         first_event_label = last_result.event_done
-                        first_axis = last_result.delta.axis
+                        first["axis"], first["stance"] = last_result.delta.axis, last_result.stance
                     elif last_result.event_done != first_event_label:
                         event_consistent = False
                     last_no_effect_conflict = _declares_no_effect(last_result) and _has_effect(last_result)
@@ -343,17 +458,6 @@ class NarrativeAdapter:
                         or verify_event
                         or verify_no_effect
                     ):
-                        # 兩輪的主軸方向相反時不採用（例如把「否定長生」判成肯定永生）
-                        if (
-                            attempt > 0
-                            and first_axis
-                            and last_result.delta.axis
-                            and (first_axis > 0) != (last_result.delta.axis > 0)
-                        ):
-                            last_result = last_result.model_copy(update={
-                                "delta": last_result.delta.model_copy(update={"axis": 0}),
-                                "stance": None,
-                            })
                         return last_result.model_copy(update={
                             "axis_reviewed": attempt > 0 and last_result.delta.axis != 0,
                             "event_reviewed": (
@@ -399,6 +503,7 @@ class NarrativeAdapter:
             # continue, but this turn cannot mutate relationship/story values.
             assert last_result is not None
             if last_no_effect_conflict:
+                first["fail_closed"] = True
                 return last_result.model_copy(
                     update={"delta": DeltaPayload(), "stance": None}, deep=True
                 )

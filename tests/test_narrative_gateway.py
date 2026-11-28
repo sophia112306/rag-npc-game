@@ -13,6 +13,7 @@ from gpu_gateway.app import create_app
 from gpu_gateway.config import DEFAULT_BASE_MODEL, GatewaySettings
 from backend.schemas.narrative_ai import AXIS_STANCES
 from gpu_gateway.narrator import (
+    NARRATOR_AXIS_CONFIRM_PROMPT,
     NARRATOR_SYSTEM_PROMPT,
     NARRATOR_VERIFICATION_PROMPT,
     NarrativeAdapter,
@@ -40,6 +41,20 @@ def completion(content: str, finish_reason: str = "stop") -> httpx.Response:
     })
 
 
+def answer_confirmation(upstream, confirm: bool = True, seen: list | None = None):
+    """主軸是非題確認的請求由這裡回答，其餘請求交給原本的 upstream。"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if body["messages"][0]["content"] == NARRATOR_AXIS_CONFIRM_PROMPT:
+            if seen is not None:
+                seen.append(body)
+            return completion(json.dumps({"reason": "確認", "confirm": confirm}, ensure_ascii=False))
+        return upstream(request)
+
+    return handler
+
+
 def test_narrator_review_budget_can_be_separate_from_npc_attempts(monkeypatch) -> None:
     monkeypatch.setenv("VLLM_UPSTREAM_MAX_ATTEMPTS", "1")
     monkeypatch.setenv("NARRATOR_UPSTREAM_MAX_ATTEMPTS", "2")
@@ -62,7 +77,7 @@ def test_adapter_uses_base_model_and_clamps_proposal() -> None:
             "reason": "承諾陪伴",
         }, ensure_ascii=False))
 
-    adapter = NarrativeAdapter(GatewaySettings(), transport=httpx.MockTransport(upstream))
+    adapter = NarrativeAdapter(GatewaySettings(), transport=httpx.MockTransport(answer_confirmation(upstream)))
     result = asyncio.run(adapter.judge(REQUEST))
 
     seen = payloads[0]
@@ -149,14 +164,36 @@ def test_parser_accepts_simplified_stance_names() -> None:
     assert result.stance == "探討死亡的意義"
 
 
-def test_adapter_rejects_axis_when_review_flips_direction() -> None:
+def _first_pass_then_drop_axis():
+    """第一輪判定醒夢立場，第二輪完整重判（實測常見）卻把主軸推翻成 0 或寫反。"""
+
     replies = iter([
         {"reason": "否定長生，偏醒夢", "axis": 3, "stance": "指出長生的虛妄", "usurp": 0, "relation": {}},
-        {"reason": "否定長生", "axis": -3, "stance": "肯定永生或輪迴", "usurp": 0, "relation": {}},
+        {"reason": "否定長生，但沒有提出行動", "axis": -3, "stance": "肯定永生或輪迴", "usurp": 0, "relation": {}},
     ])
+    return lambda _: completion(json.dumps(next(replies), ensure_ascii=False))
+
+
+def test_confirmed_first_pass_stance_sets_the_axis() -> None:
+    confirmations = []
     adapter = NarrativeAdapter(
         GatewaySettings(upstream_max_attempts=2),
-        transport=httpx.MockTransport(lambda _: completion(json.dumps(next(replies), ensure_ascii=False))),
+        transport=httpx.MockTransport(answer_confirmation(_first_pass_then_drop_axis(), True, confirmations)),
+    )
+
+    result = asyncio.run(adapter.judge(REQUEST))
+
+    assert result.delta.axis == 3
+    assert result.stance == "指出長生的虛妄"
+    assert result.axis_reviewed is True
+    question = confirmations[0]["messages"][1]["content"]
+    assert "指出長生的虛妄" in question and REQUEST.player_message in question
+
+
+def test_rejected_confirmation_keeps_the_axis_unchanged() -> None:
+    adapter = NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=2),
+        transport=httpx.MockTransport(answer_confirmation(_first_pass_then_drop_axis(), False)),
     )
 
     result = asyncio.run(adapter.judge(REQUEST))
@@ -164,6 +201,22 @@ def test_adapter_rejects_axis_when_review_flips_direction() -> None:
     assert result.delta.axis == 0
     assert result.stance is None
     assert result.axis_reviewed is False
+
+
+def test_no_confirmation_when_first_pass_has_no_stance() -> None:
+    confirmations = []
+    adapter = NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=2),
+        transport=httpx.MockTransport(answer_confirmation(lambda _: completion(json.dumps({
+            "reason": "問路", "axis": 0, "stance": None, "usurp": 0, "relation": {},
+        }, ensure_ascii=False)), True, confirmations)),
+    )
+
+    result = asyncio.run(adapter.judge(REQUEST))
+
+    assert result.delta.axis == 0
+    assert result.axis_reviewed is False
+    assert confirmations == []
 
 
 def test_verification_prompt_shows_both_axis_directions() -> None:
@@ -279,7 +332,7 @@ def test_adapter_rejudges_nonzero_axis_without_valid_stance() -> None:
 
     adapter = NarrativeAdapter(
         GatewaySettings(upstream_max_attempts=2),
-        transport=httpx.MockTransport(upstream),
+        transport=httpx.MockTransport(answer_confirmation(upstream)),
     )
 
     result = asyncio.run(adapter.judge(REQUEST))
@@ -514,7 +567,7 @@ def test_adapter_corrects_persistent_relation_reason_conflict() -> None:
 def test_narrate_endpoint_returns_judgement() -> None:
     app = create_app(
         GatewaySettings(),
-        transport=httpx.MockTransport(lambda request: completion('{"axis": 2, "stance": "主張打破循環", "usurp": 0, "relation": {}, "reason": "支持打破循環"}')),
+        transport=httpx.MockTransport(answer_confirmation(lambda request: completion('{"axis": 2, "stance": "主張打破循環", "usurp": 0, "relation": {}, "reason": "支持打破循環"}'))),
     )
     with TestClient(app) as client:
         response = client.post("/narrate", json=REQUEST.model_dump(mode="json"))
