@@ -13,7 +13,7 @@ import httpx
 
 from backend.generation.gateway import ModelGatewayTransientError
 from backend.schemas.api_response import DeltaPayload, NarrativeAIResponse
-from backend.schemas.narrative_ai import NarrativeAIRequest, valid_axis_stance
+from backend.schemas.narrative_ai import AXIS_STANCES, NarrativeAIRequest, valid_axis_stance
 
 from .config import GatewaySettings
 
@@ -59,6 +59,7 @@ NARRATOR_SYSTEM_PROMPT = """你是遊戲《龍夢》的敘事 AI。你只判讀�
 - 主角對安德烈說「不說的話，我就燒了議會庭！」→ {"reason": "威脅逼迫角色，帶毀滅欲望", "axis": 0, "stance": null, "usurp": 2, "relation": {"andre": -8}}
 - 主角對維達利亞說「妳年輕的時候，也見過海嗎？」→ {"reason": "真心想了解她的過去，是深入的對話，不是問資訊", "axis": 0, "stance": null, "usurp": 0, "relation": {"vidalia": 4}}
 - 主角對維達利亞說「等這些事結束，我也想在森林裡住下來。」→ {"reason": "想留在森林不離開，偏守夢；維達利亞樂見", "axis": -3, "stance": "留戀", "usurp": 0, "relation": {"vidalia": 5}}
+- 主角對門梅司文托說「真希望能一直活下去，永遠不必面對死亡。」→ {"reason": "嚮往長生，偏守夢，與門梅司文托的主張相反", "axis": -3, "stance": "肯定永生或輪迴", "usurp": 0, "relation": {"menmesvento": -4}}
 - 主角對門梅司文托說「請教您，木乃伊為什麼忘不掉那些痛苦？」→ {"reason": "謙卑請教其關心的痛苦，但主角沒有表達自己的生死立場", "axis": 0, "stance": null, "usurp": 0, "relation": {"menmesvento": 5}}
 - 主角對門梅司文托說「長老會抽泉水也是為了大家好。」→ {"reason": "支持門梅司文托反對的長老會作法，但沒有表達永生或輪迴立場", "axis": 0, "stance": null, "usurp": 0, "relation": {"menmesvento": -4}}
 - 主角對安德烈說「反正都會毀掉，調查沒有用。」→ {"reason": "消極否定調查，安德烈不認同；但不是維持世界現狀的主張", "axis": 0, "stance": null, "usurp": 0, "relation": {"andre": -4}}
@@ -75,9 +76,11 @@ NARRATOR_SYSTEM_PROMPT = """你是遊戲《龍夢》的敘事 AI。你只判讀�
 NARRATOR_VERIFICATION_PROMPT = """你是遊戲數值判讀的獨立審核者。請從頭判讀玩家原句，不延續或猜測先前答案。
 
 逐項分開判斷：
-1. axis 只表示玩家本人明確主張的世界觀。詢問、調查意願、消極抱怨、稱讚或冒犯 NPC 都不是世界觀表態，axis=0、stance=null。
-   負向合法 stance：留戀、尋求安寧、承諾陪伴、肯定永生或輪迴、保存記憶、維持現狀。
-   正向合法 stance：探討死亡的意義、指出長生的虛妄、支持門梅司文托、主張打破循環。
+1. axis 只表示玩家本人主張的世界觀，與對話的角色同不同意無關，也不需要玩家提出行動或要求；說出看法本身就是表態。
+   詢問、調查意願、消極抱怨、稱讚或冒犯 NPC 都不是世界觀表態，axis=0、stance=null。
+   守夢方向（axis 為負數，-1～-5）的 stance：留戀、尋求安寧、承諾陪伴、肯定永生或輪迴、保存記憶、維持現狀。
+   醒夢方向（axis 為正數，+1～+5）的 stance：探討死亡的意義、指出長生的虛妄、支持門梅司文托、主張打破循環。
+   stance 只能填上面其中一個類別名稱本身，不要填「守夢方向」之類的說明文字。
 2. relation 與 axis 獨立。只評正在對話的角色：
    - andre：理性探究、共同調查 +3～6；消極否定調查、毀滅欲望 -3～-10。
    - vidalia：詢問她本人的過去或旅行、真誠陪伴、喜歡森林 +3～6；嘲弄、威脅 -3～-10。
@@ -89,6 +92,7 @@ NARRATOR_VERIFICATION_PROMPT = """你是遊戲數值判讀的獨立審核者。�
 校準事件：合法標籤=["收下塵歸令"]，主角說「我願意收下塵歸令，現在接過石牌」時 event_done="收下塵歸令"；主角只問「塵歸令有什麼用」時 event_done=null。
 
 校準：詢問木乃伊痛苦是 axis 0、menmesvento 正關係；說調查沒用是 axis 0、andre 負關係；邀請一起調查是 axis 0、andre 正關係；支持長老會抽泉是 axis 0、menmesvento 負關係。
+主軸校準：「我捨不得離開這座森林」是 axis -3、stance 留戀；「大家一直輪迴下去，就不必和重要的人分開」是 axis -3、stance 肯定永生或輪迴；「正因為人會死，活著的每一天才珍貴」是 axis +3、stance 探討死亡的意義；「這個輪迴應該結束了」是 axis +3、stance 主張打破循環。
 
 只輸出 JSON：
 {"reason":"繁體中文理由","axis":整數,"stance":"合法類別或 null","usurp":整數,"relation":{"角色ID":整數},"event_done":"合法選項標籤或 null"}"""
@@ -152,10 +156,7 @@ def parse_narrator_output(text: str, request: NarrativeAIRequest) -> NarrativeAI
             if amount:
                 relation[npc_id] = amount
     proposed_axis = _clamp(_to_int(delta.get("axis", 0)), -5, 5)
-    stance = valid_axis_stance(payload.get("stance", delta.get("stance")), proposed_axis)
-    # A non-zero axis without a valid stance is not actionable.  Requiring the
-    # enum prevents vague sentiment or NPC affinity from drifting the ending.
-    axis = proposed_axis if stance is not None else 0
+    axis, stance = _axis_from_stance(proposed_axis, payload.get("stance", delta.get("stance")))
     return NarrativeAIResponse(
         scene=request.scene_name,
         speaker=request.target_npc_id or "narrator",
@@ -184,15 +185,32 @@ def _has_effect(response: NarrativeAIResponse) -> bool:
     return bool(delta.axis or delta.usurp or any(delta.relation.values()))
 
 
+def _axis_from_stance(proposed_axis: int, raw_stance: object) -> tuple[int, str | None]:
+    """主軸的正負號以立場類別為準，幅度沿用模型給的數字。
+
+    實測基礎模型常把類別與理由判對、正負號卻寫反（例如「尋求安寧」配 +3）。
+    類別是從固定清單挑的，比單一數字可靠，所以方向跟著類別走。
+    非 0 主軸仍必須有合法類別；主軸為 0 時不需要類別。
+    """
+
+    if proposed_axis == 0:
+        return 0, None
+    direction = AXIS_STANCES.get(raw_stance) if isinstance(raw_stance, str) else None
+    if direction is None:
+        # A non-zero axis without a valid stance is not actionable.  Requiring the
+        # enum prevents vague sentiment or NPC affinity from drifting the ending.
+        return 0, None
+    stance = str(raw_stance)
+    return direction * abs(proposed_axis), valid_axis_stance(stance, direction)
+
+
 def _proposed_axis_has_no_valid_stance(text: str) -> bool:
     payload = _extract_json_object(text)
     delta = payload.get("delta") if isinstance(payload.get("delta"), dict) else payload
     proposed_axis = _clamp(_to_int(delta.get("axis", 0)), -5, 5)
     if proposed_axis == 0:
         return False
-    return valid_axis_stance(
-        payload.get("stance", delta.get("stance")), proposed_axis
-    ) is None
+    return _axis_from_stance(proposed_axis, payload.get("stance", delta.get("stance")))[1] is None
 
 
 def _expected_relation_sign_from_reason(

@@ -95,7 +95,7 @@ def test_parser_accepts_fenced_and_nested_delta() -> None:
     [
         (-3, "承諾陪伴", "承諾陪伴"),
         (4, "主張打破循環", "主張打破循環"),
-        (-3, "主張打破循環", None),  # 方向與主軸不符
+        (-3, "主張打破循環", "主張打破循環"),  # 正負號寫反時，方向以類別為準
         (-3, "喜歡下雨", None),  # 不在清單內
         (0, "尋求安寧", None),  # 主軸為 0 不需要類別
     ],
@@ -120,6 +120,31 @@ def test_parser_zeros_axis_without_a_valid_stance() -> None:
     assert result.delta.axis == 0
     assert result.stance is None
     assert result.delta.relation == {"andre": 5}
+
+
+@pytest.mark.parametrize(
+    ("axis", "stance", "expected_axis"),
+    [
+        (3, "尋求安寧", -3),  # 實測：守夢類別配正數
+        (3, "肯定永生或輪迴", -3),
+        (-2, "探討死亡的意義", 2),
+        (-3, "留戀", -3),  # 方向本來就對，不變
+    ],
+)
+def test_parser_takes_axis_direction_from_the_stance(axis, stance, expected_axis) -> None:
+    text = json.dumps({"reason": "測試", "axis": axis, "stance": stance, "usurp": 0, "relation": {}}, ensure_ascii=False)
+
+    result = parse_narrator_output(text, REQUEST)
+
+    assert result.delta.axis == expected_axis
+    assert result.stance == stance
+
+
+def test_verification_prompt_shows_both_axis_directions() -> None:
+    assert "axis -3、stance 留戀" in NARRATOR_VERIFICATION_PROMPT
+    assert "axis +3、stance 探討死亡的意義" in NARRATOR_VERIFICATION_PROMPT
+    for stance in AXIS_STANCES:
+        assert stance in NARRATOR_VERIFICATION_PROMPT
 
 
 def test_prompt_lists_every_stance() -> None:
