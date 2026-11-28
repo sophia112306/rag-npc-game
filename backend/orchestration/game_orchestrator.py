@@ -9,7 +9,7 @@ from uuid import UUID
 from backend.content.characters import NPC_SCENES, npc_is_present
 from backend.content.demo_story import DemoStoryChoiceDefinition, available_demo_story_choices, find_available_demo_story_choice
 from backend.orchestration.world_commands import build_world_command_proposal
-from backend.orchestration.input_classification import contains_non_negated_phrase
+from backend.orchestration.input_classification import contains_non_negated_phrase, explicitly_requests_authored_event
 from backend.database.repository import (
     ActionIdConflictError as RepositoryActionIdConflictError,
     CommittedGameEvent,
@@ -296,11 +296,13 @@ class GameOrchestrator:
 
         if self.narrative_judge is None:
             return state, None
-        # Pilot: only the existing, player-visible promise to wake Veta may be
-        # inferred from free text. The resolver applies its authored event.
+        # The text check narrows the candidate set; the independent AI review
+        # must still choose its exact player-visible label. The resolver alone
+        # applies the authored event, including items, flags and transitions.
         legal_events = tuple(
             choice for choice in available_demo_story_choices(state)
-            if choice.rule_event_id == "E3-2_agree" and choice.target_npc_id == action.target_npc_id
+            if choice.target_npc_id == action.target_npc_id
+            and explicitly_requests_authored_event(choice.choice_id, action.message)
         )
         target = state.npc_states.get(action.target_npc_id or "")
         request = NarrativeAIRequest(
@@ -329,14 +331,9 @@ class GameOrchestrator:
             judgement, allowed_events=[choice.label for choice in legal_events]
         )
         if judgement.event_reviewed and judgement.event_done:
-            explicit_promise = contains_non_negated_phrase(action.message, ("答應", "同意", "願意"))
-            explicit_waking = contains_non_negated_phrase(
-                action.message, ("喚醒維塔", "叫醒維塔", "讓維塔醒來")
-            )
-            if explicit_promise and explicit_waking:
-                chosen = next((choice for choice in legal_events if choice.label == judgement.event_done), None)
-                if chosen:
-                    return state, chosen
+            chosen = next((choice for choice in legal_events if choice.label == judgement.event_done), None)
+            if chosen:
+                return state, chosen
         judged_state = state.model_copy(deep=True)
         applied = StateRules.apply_dialogue_delta(
             judged_state,

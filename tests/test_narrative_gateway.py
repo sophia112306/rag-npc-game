@@ -266,6 +266,52 @@ def test_event_candidate_requires_second_review_and_legal_label() -> None:
     assert result.event_reviewed is True
 
 
+def test_event_candidate_rejected_on_second_review_stays_unapproved() -> None:
+    label = "收下塵歸令"
+    request = REQUEST.model_copy(update={"legal_event_labels": [label]})
+    calls = 0
+
+    def upstream(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return completion(json.dumps({
+            "reason": "玩家明確收下" if calls == 1 else "玩家只是詢問",
+            "axis": 0, "stance": None, "usurp": 0, "relation": {},
+            "event_done": label if calls == 1 else None,
+        }, ensure_ascii=False))
+
+    result = asyncio.run(NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=2), transport=httpx.MockTransport(upstream)
+    ).judge(request))
+
+    assert calls == 2
+    assert result.event_done is None
+    assert result.event_reviewed is False
+
+
+def test_event_first_proposed_only_on_second_pass_stays_unapproved() -> None:
+    label = "收下塵歸令"
+    request = REQUEST.model_copy(update={"legal_event_labels": [label]})
+    calls = 0
+
+    def upstream(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return completion(json.dumps({
+            "reason": "無關" if calls == 1 else "主角明確收下",
+            "axis": 0, "stance": None, "usurp": 0, "relation": {},
+            "event_done": None if calls == 1 else label,
+        }, ensure_ascii=False))
+
+    result = asyncio.run(NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=2), transport=httpx.MockTransport(upstream)
+    ).judge(request))
+
+    assert calls == 2
+    assert result.event_done == label
+    assert result.event_reviewed is False
+
+
 def test_adapter_verifies_a_zero_effect_decision_once() -> None:
     payloads = []
 

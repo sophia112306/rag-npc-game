@@ -13,8 +13,9 @@ from backend.generation.narrative_client import (
     build_narrative_client_from_env,
 )
 from backend.orchestration.game_orchestrator import GameOrchestrator
+from backend.orchestration.input_classification import explicitly_requests_authored_event
 from backend.schemas.api_response import DeltaPayload, NarrativeAIResponse
-from backend.schemas.game_state import GameState, PlayerState
+from backend.schemas.game_state import GameState, PlayerState, StoryPhase
 from backend.schemas.narrative_ai import NarrativeAIRequest
 from backend.schemas.player_action import PlayerAction
 from backend.schemas.story import DialogueLine, SpeakerType, StoryProposal
@@ -67,7 +68,10 @@ def judgement(axis=0, usurp=0, relation=None, **extra) -> NarrativeAIResponse:
     )
 
 
-async def make_orchestrator(tmp_path, judge, planner, node_id="minglin_briefed", scene_id="minglin"):
+async def make_orchestrator(
+    tmp_path, judge, planner, node_id="minglin_briefed", scene_id="minglin",
+    relations=None, axis=0, flags=None,
+):
     engine = create_database_engine(f"sqlite+aiosqlite:///{tmp_path / 'narrative.db'}")
     await create_schema(engine)
     repository = SqlAlchemyGameRepository(create_async_session_factory(engine))
@@ -77,8 +81,15 @@ async def make_orchestrator(tmp_path, judge, planner, node_id="minglin_briefed",
         player=PlayerState(player_id="player"),
     )
     initial.story_progress.node_id = node_id
+    initial.axis = axis
+    initial.flags.update(flags or {})
+    if node_id in {"dust_token_offer", "dust_token_decided", "veta_route_ready", "side_vidalia_offer"}:
+        initial.story_phase = StoryPhase.ACT3_FREEDOM
+        initial.truth_level = 3
+    for npc_id, relation in (relations or {}).items():
+        initial.npc_states[npc_id].relation = relation
     if node_id == "dust_token_decided":
-        initial.npc_states["menmesvento"].relation = 60
+        initial.npc_states["menmesvento"].relation = (relations or {}).get("menmesvento", 60)
     await repository.create_or_get_session(initial)
     return repository, GameOrchestrator(repository, story_planner=planner, narrative_judge=judge)
 
@@ -91,6 +102,20 @@ def talk(message: str, npc_id: str = "vidalia", version: int = 1) -> PlayerActio
         target_npc_id=npc_id,
         expected_state_version=version,
     )
+
+
+@pytest.mark.parametrize(("choice_id", "message", "expected"), [
+    ("accept_dust_return_token", "我拒絕收下塵歸令。", False),
+    ("decline_dust_return_token", "我拒絕收下塵歸令。", True),
+    ("agree_wake_veta", "我不答應喚醒維塔。", False),
+    ("refuse_wake_veta", "我不答應喚醒維塔。", True),
+    ("andre_shows_breach", "我不想去看屏障裂縫。", False),
+    ("vidalia_asks_outside", "維達利亞，我們隨便聊聊。", False),
+    ("affirm_preserve_cycle", "我願意守護既有輪迴。", False),
+    ("remove_placed_runes", "我想拆除符印。", False),
+])
+def test_only_explicit_authorized_dialogue_events_are_candidates(choice_id, message, expected) -> None:
+    assert explicitly_requests_authored_event(choice_id, message) is expected
 
 
 @pytest.mark.asyncio
@@ -241,6 +266,68 @@ async def test_negated_or_unreviewed_event_candidate_stays_plain_dialogue(tmp_pa
     await orchestrator.process_turn(talk(message, npc_id="menmesvento"))
     stored = await repository.get_state("narrative-session")
     assert "agree_wake_veta" not in stored.story_progress.completed_choice_ids
+    assert planner.seen_states
+
+
+@pytest.mark.parametrize(
+    ("node_id", "scene_id", "npc_id", "message", "label", "relations", "axis", "flags", "expected_choice"),
+    [
+        ("dust_token_offer", "liuchen_valley", "menmesvento", "我願意收下塵歸令。", "收下塵歸令", {}, 0, {}, "accept_dust_return_token"),
+        ("dust_token_offer", "liuchen_valley", "menmesvento", "我拒絕收下塵歸令。", "不收下塵歸令", {}, 0, {}, "decline_dust_return_token"),
+        ("dust_token_decided", "liuchen_valley", "menmesvento", "我不會喚醒維塔。", "婉拒他喚醒維塔的請求", {}, 0, {}, "refuse_wake_veta"),
+        ("veta_route_ready", "minglin", "vidalia", "維達利亞，說說妳的心事吧。", "聽維達利亞想說的話", {"vidalia": 60}, 0, {}, "vidalia_asks_outside"),
+        ("veta_route_ready", "minglin", "andre", "安德烈，帶我去看屏障裂縫。", "跟安德烈去看屏障裂縫", {"andre": 60}, 0, {}, "andre_shows_breach"),
+        ("side_vidalia_offer", "minglin", "vidalia", "我願意接受織夢，變成精靈。", "接受織夢，成為精靈", {"vidalia": 60}, -20, {}, "accept_dream_weaving"),
+        ("side_vidalia_offer", "minglin", "vidalia", "我不能接受織夢。", "婉拒織夢", {"vidalia": 60}, -20, {}, "decline_dream_weaving"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_reviewed_explicit_dialogue_resolves_authored_act3_event(
+    tmp_path, node_id, scene_id, npc_id, message, label, relations, axis, flags, expected_choice
+) -> None:
+    judge = StubJudge(judgement(
+        event_done=label, event_reviewed=True, axis=5,
+        stance="探討死亡的意義", axis_reviewed=True,
+        relation={npc_id: 9},
+    ))
+    planner = RecordingPlanner()
+    repository, orchestrator = await make_orchestrator(
+        tmp_path, judge, planner, node_id=node_id, scene_id=scene_id,
+        relations=relations, axis=axis, flags=flags,
+    )
+
+    await orchestrator.process_turn(talk(message, npc_id=npc_id))
+
+    stored = await repository.get_state("narrative-session")
+    assert judge.requests[0].legal_event_labels == [label]
+    assert expected_choice in stored.story_progress.completed_choice_ids
+    assert planner.seen_states == []
+    assert stored.axis == (axis - 20 if expected_choice == "accept_dream_weaving" else axis)
+    initial_relation = 60 if node_id == "dust_token_decided" else relations.get(npc_id, 30)
+    assert stored.npc_states[npc_id].relation == (
+        initial_relation + (10 if expected_choice == "accept_dust_return_token" else 0)
+    )
+    if expected_choice == "accept_dust_return_token":
+        assert stored.flags["has_dust_token"] is True
+    if expected_choice == "andre_shows_breach":
+        assert stored.flags["hidden_cave_unlocked"] is True
+
+
+@pytest.mark.asyncio
+async def test_event_candidate_needs_current_target_and_explicit_text(tmp_path) -> None:
+    label = "跟安德烈去看屏障裂縫"
+    judge = StubJudge(judgement(event_done=label, event_reviewed=True))
+    planner = RecordingPlanner()
+    repository, orchestrator = await make_orchestrator(
+        tmp_path, judge, planner, node_id="veta_route_ready",
+        relations={"andre": 60, "vidalia": 60},
+    )
+
+    await orchestrator.process_turn(talk("屏障裂縫是什麼？", npc_id="vidalia"))
+
+    stored = await repository.get_state("narrative-session")
+    assert judge.requests[0].legal_event_labels == []
+    assert "andre_shows_breach" not in stored.story_progress.completed_choice_ids
     assert planner.seen_states
 
 
