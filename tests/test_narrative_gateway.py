@@ -306,7 +306,7 @@ def test_event_candidate_rejected_on_second_review_stays_unapproved() -> None:
     assert result.event_reviewed is False
 
 
-def test_event_first_proposed_only_on_second_pass_stays_unapproved() -> None:
+def test_event_first_proposed_only_on_second_pass_uses_backend_prefilter() -> None:
     label = "收下塵歸令"
     request = REQUEST.model_copy(update={"legal_event_labels": [label]})
     calls = 0
@@ -326,6 +326,60 @@ def test_event_first_proposed_only_on_second_pass_stays_unapproved() -> None:
 
     assert calls == 2
     assert result.event_done == label
+    assert result.event_reviewed is True
+
+
+def test_legal_event_is_reviewed_even_when_first_pass_only_scores_relation() -> None:
+    label = "聽維達利亞想說的話"
+    request = REQUEST.model_copy(update={
+        "player_message": "維達利亞，我想聽妳的心事，妳願意說給我聽嗎？",
+        "legal_event_labels": [label],
+    })
+    calls = 0
+
+    def upstream(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return completion(json.dumps({
+            "reason": "詢問她的心事",
+            "axis": 0, "stance": None, "usurp": 0,
+            "relation": {"vidalia": 5},
+            "event_done": label if calls == 2 else None,
+        }, ensure_ascii=False))
+
+    result = asyncio.run(NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=1, narrator_upstream_max_attempts=2),
+        transport=httpx.MockTransport(upstream),
+    ).judge(request))
+
+    assert calls == 2
+    assert result.event_done == label
+    assert result.event_reviewed is True
+
+
+def test_reviewed_information_question_does_not_become_event() -> None:
+    request = REQUEST.model_copy(update={
+        "player_message": "妳有心事嗎？",
+        "legal_event_labels": ["聽維達利亞想說的話"],
+    })
+    calls = 0
+
+    def upstream(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return completion(json.dumps({
+            "reason": "只是詢問有無心事，沒有要求她現在說出來",
+            "axis": 0, "stance": None, "usurp": 0,
+            "relation": {"vidalia": 4}, "event_done": None,
+        }, ensure_ascii=False))
+
+    result = asyncio.run(NarrativeAdapter(
+        GatewaySettings(upstream_max_attempts=1, narrator_upstream_max_attempts=2),
+        transport=httpx.MockTransport(upstream),
+    ).judge(request))
+
+    assert calls == 2
+    assert result.event_done is None
     assert result.event_reviewed is False
 
 

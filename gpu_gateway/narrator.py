@@ -299,7 +299,10 @@ class NarrativeAdapter:
                     # statement irrelevant too quickly.  Verify either claim
                     # once with a focused follow-up before accepting it.
                     verify_axis = attempt == 0 and last_result.delta.axis != 0
-                    verify_event = attempt == 0 and last_result.event_done is not None
+                    # The backend supplied only labels that passed its
+                    # explicit-text check. Review those candidates even if
+                    # the first model pass missed the requested action.
+                    verify_event = attempt == 0 and bool(request.legal_event_labels)
                     verify_no_effect = attempt == 0 and _declares_no_effect(last_result)
                     if not (
                         last_no_effect_conflict
@@ -311,7 +314,11 @@ class NarrativeAdapter:
                     ):
                         return last_result.model_copy(update={
                             "axis_reviewed": attempt > 0 and last_result.delta.axis != 0,
-                            "event_reviewed": attempt > 0 and first_event_label is not None and event_consistent,
+                            "event_reviewed": (
+                                attempt > 0
+                                and last_result.event_done is not None
+                                and (first_event_label is None or event_consistent)
+                            ),
                         })
                     if attempt + 1 < max_attempts:
                         corrections = []

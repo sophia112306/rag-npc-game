@@ -334,21 +334,31 @@ async def test_event_candidate_needs_current_target_and_explicit_text(tmp_path) 
     assert planner.seen_states
 
 
+@pytest.mark.parametrize(
+    ("node_id", "scene_id", "npc_id", "relations", "message", "choice_id"),
+    [
+        ("dust_token_offer", "liuchen_valley", "menmesvento", {},
+         "我願意收下塵歸令，現在就接過石牌。", "accept_dust_return_token"),
+        ("veta_route_ready", "minglin", "vidalia", {"vidalia": 60},
+         "維達利亞，我想聽妳的心事，妳願意說給我聽嗎？", "vidalia_asks_outside"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_model_miss_leaves_authored_event_button_available(tmp_path) -> None:
-    judge = StubJudge(judgement(relation={"menmesvento": 10}))
+async def test_model_miss_leaves_authored_event_button_available(
+    tmp_path, node_id, scene_id, npc_id, relations, message, choice_id
+) -> None:
+    judge = StubJudge(judgement(relation={npc_id: 10}))
     repository, orchestrator = await make_orchestrator(
         tmp_path, judge, RecordingPlanner(),
-        node_id="dust_token_offer", scene_id="liuchen_valley",
+        node_id=node_id, scene_id=scene_id, relations=relations,
     )
 
-    await orchestrator.process_turn(talk("我願意收下塵歸令，現在就接過石牌。", npc_id="menmesvento"))
+    await orchestrator.process_turn(talk(message, npc_id=npc_id))
 
     stored = await repository.get_state("narrative-session")
     choices = await orchestrator.get_player_choices("narrative-session")
-    assert stored.flags["has_dust_token"] is False
-    assert stored.story_progress.node_id == "dust_token_offer"
-    assert "accept_dust_return_token" in {choice.choice_id for choice in choices}
+    assert stored.story_progress.node_id == node_id
+    assert choice_id in {choice.choice_id for choice in choices}
 
 
 @pytest.mark.asyncio
