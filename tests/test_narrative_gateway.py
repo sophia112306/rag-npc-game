@@ -40,6 +40,16 @@ def completion(content: str, finish_reason: str = "stop") -> httpx.Response:
     })
 
 
+def test_narrator_review_budget_can_be_separate_from_npc_attempts(monkeypatch) -> None:
+    monkeypatch.setenv("VLLM_UPSTREAM_MAX_ATTEMPTS", "1")
+    monkeypatch.setenv("NARRATOR_UPSTREAM_MAX_ATTEMPTS", "2")
+
+    settings = GatewaySettings.from_env()
+
+    assert settings.upstream_max_attempts == 1
+    assert settings.narrator_upstream_max_attempts == 2
+
+
 def test_adapter_uses_base_model_and_clamps_proposal() -> None:
     payloads = []
 
@@ -260,7 +270,8 @@ def test_event_candidate_requires_second_review_and_legal_label() -> None:
         }, ensure_ascii=False))
 
     result = asyncio.run(NarrativeAdapter(
-        GatewaySettings(upstream_max_attempts=2), transport=httpx.MockTransport(upstream)
+        GatewaySettings(upstream_max_attempts=1, narrator_upstream_max_attempts=2),
+        transport=httpx.MockTransport(upstream)
     ).judge(request))
 
     assert calls == 2

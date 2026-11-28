@@ -33,6 +33,9 @@ class GatewaySettings:
     response_format: Literal["json_schema", "json_object"] = "json_schema"
     upstream_timeout_seconds: float = 60.0
     upstream_max_attempts: int = 2
+    # Narrator events need a judgement and an independent review even when
+    # NPC generation is limited to one upstream attempt.
+    narrator_upstream_max_attempts: int | None = None
     # 敘事 AI（/narrate）用基礎模型，不掛 NPC LoRA
     narrator_model: str | None = DEFAULT_BASE_MODEL
     # Production enables a base-model semantic review after each NPC draft.
@@ -44,6 +47,8 @@ class GatewaySettings:
     review_audit_hmac_key: str | None = None
 
     def __post_init__(self) -> None:
+        if self.narrator_upstream_max_attempts is not None and not 1 <= self.narrator_upstream_max_attempts <= 3:
+            raise ValueError("narrator_upstream_max_attempts must be between 1 and 3")
         if bool(self.review_audit_path) != bool(self.review_audit_hmac_key):
             raise ValueError(
                 "review_audit_path and review_audit_hmac_key "
@@ -107,6 +112,11 @@ class GatewaySettings:
             raise ValueError(
                 "VLLM_UPSTREAM_MAX_ATTEMPTS must be between 1 and 3"
             )
+        raw_narrator_attempts = os.getenv("NARRATOR_UPSTREAM_MAX_ATTEMPTS", "").strip()
+        try:
+            narrator_attempts = int(raw_narrator_attempts) if raw_narrator_attempts else None
+        except ValueError as exc:
+            raise ValueError("NARRATOR_UPSTREAM_MAX_ATTEMPTS must be an integer") from exc
 
         fallback = os.getenv("NPC_FALLBACK_MODEL", DEFAULT_BASE_MODEL).strip()
         narrator = os.getenv("NARRATOR_MODEL", DEFAULT_BASE_MODEL).strip()
@@ -144,6 +154,7 @@ class GatewaySettings:
             response_format=response_format,
             upstream_timeout_seconds=timeout_seconds,
             upstream_max_attempts=max_attempts,
+            narrator_upstream_max_attempts=narrator_attempts,
             narrator_model=narrator or None,
             semantic_review_enabled=semantic_review_enabled,
             review_audit_path=review_audit_path or None,

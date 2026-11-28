@@ -266,7 +266,8 @@ class NarrativeAdapter:
             async with httpx.AsyncClient(
                 transport=self.transport, timeout=self.settings.upstream_timeout_seconds
             ) as client:
-                for attempt in range(self.settings.upstream_max_attempts):
+                max_attempts = self.settings.narrator_upstream_max_attempts or self.settings.upstream_max_attempts
+                for attempt in range(max_attempts):
                     response = await client.post(
                         self.settings.upstream_base_url.rstrip("/") + "/chat/completions",
                         headers=headers,
@@ -311,7 +312,7 @@ class NarrativeAdapter:
                             "axis_reviewed": attempt > 0 and last_result.delta.axis != 0,
                             "event_reviewed": attempt > 0 and first_event_label is not None and event_consistent,
                         })
-                    if attempt + 1 < self.settings.upstream_max_attempts:
+                    if attempt + 1 < max_attempts:
                         corrections = []
                         if verify_no_effect or last_no_effect_conflict:
                             corrections.append(
