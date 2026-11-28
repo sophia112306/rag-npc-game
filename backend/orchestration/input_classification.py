@@ -46,9 +46,10 @@ def contains_non_negated_phrase(text: str, phrases: tuple[str, ...]) -> bool:
 
 
 def explicitly_requests_authored_event(choice_id: str, text: str) -> bool:
-    """Recognize explicit Act 3 dialogue intents before asking AI to review them.
+    """Recognize explicit dialogue intents before asking AI to review them.
 
-    Only these authored dialogue actions may be inferred. Scene travel, rune
+    Only these authored dialogue actions may be inferred: the Act 2 border
+    decision with Seth (E2-3) and the Act 3 dialogue events. Scene travel, rune
     removal, the pre-Veta ±20 stances, and endings still require their buttons.
     The AI must independently confirm the matching label before any event runs.
     """
@@ -97,4 +98,19 @@ def explicitly_requests_authored_event(choice_id: str, text: str) -> bool:
         return mentions("裂縫", "屏障") and contains_non_negated_phrase(
             normalized, ("帶我去看", "去看", "一起看", "看看", "瞧瞧")
         )
+    # 階段二邊境抉擇（E2-3）：只在對塞特明確表態時才交給敘事 AI 複查。
+    if choice_id == "border_help_both":
+        return contains_non_negated_phrase(normalized, (
+            "幫你們", "幫助你們", "幫忙你們", "協助你們", "保護你們", "掩護你們", "帶你們",
+            "幫塞特", "幫助塞特", "協助塞特", "幫希拉", "幫助希拉", "協助希拉",
+        ))
+    if choice_id == "border_report":
+        return mentions("長老會", "長老", "議會") and contains_non_negated_phrase(
+            normalized, ("通報", "報告", "舉報", "上報", "回報", "告訴", "交給")
+        )
+    if choice_id == "border_ignore":
+        return contains_non_negated_phrase(normalized, (
+            "不介入", "不插手", "不想管", "不管你們", "不想捲入", "不參與",
+            "不關我的事", "與我無關", "跟我無關", "袖手旁觀",
+        ))
     return False

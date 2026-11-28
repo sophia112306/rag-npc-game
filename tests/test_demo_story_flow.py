@@ -197,6 +197,7 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "travel_to_minglin_rune_grove",
             "read_ember_runes",
             "enter_lieyi_plains",
+            "hear_elder_invitation",
             "observe_sacred_fire",
             "return_with_fire_findings",
         ),

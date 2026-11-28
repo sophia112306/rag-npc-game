@@ -402,6 +402,23 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         visual_signal="ember",
         reveal_clue_ids=("elders_surveyed_fire",),
     ),
+    # 規格 v3 E1-4「長老會的邀請」：首次進入烈燚原時，長老會主動接近主角。
+    # 選做、無數值，只記錄旗標；做完仍可繼續調查聖火。
+    _choice(
+        "hear_elder_invitation",
+        "lieyi_arrival",
+        "lieyi_plains",
+        "聽長老會的邀請",
+        "我聽聽長老會想對我說什麼。",
+        "外來者，長老會早就注意到你了。外務長老辛德想請你到議會廳坐坐——別緊張，只是談談。你走過的那些地方，或許正好是我們需要的東西。",
+        "lieyi_arrival",
+        "長老會的邀請",
+        action_mode=ActionMode.DIALOGUE,
+        target_npc_id="dasso",
+        witness_npc_ids=("dasso",),
+        rule_event_id="E1-4",
+        once_group="e1_4_invitation",
+    ),
     _choice(
         "listen_to_forgotten_names",
         "liuchen_arrival",

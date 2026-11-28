@@ -13,7 +13,7 @@ class EventRules:
         "E1-1": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
         "E1-2": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
         "E1-3": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
-        "E1-4": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
+        "E1-4": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"elder_invitation_heard": True}},
         "E1-5": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
 
         # 階段二事件

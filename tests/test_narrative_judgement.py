@@ -113,6 +113,14 @@ def talk(message: str, npc_id: str = "vidalia", version: int = 1) -> PlayerActio
     ("vidalia_asks_outside", "維達利亞，我們隨便聊聊。", False),
     ("affirm_preserve_cycle", "我願意守護既有輪迴。", False),
     ("remove_placed_runes", "我想拆除符印。", False),
+    ("border_help_both", "塞特，我會幫你們離開這裡。", True),
+    ("border_help_both", "我不會幫你們。", False),
+    ("border_help_both", "你們需要幫忙嗎？", False),
+    ("border_report", "我要把這件事通報長老會。", True),
+    ("border_report", "我不會把你們交給長老會。", False),
+    ("border_report", "長老會是什麼？", False),
+    ("border_ignore", "這不關我的事，我不介入。", True),
+    ("border_ignore", "我不會袖手旁觀。", False),
 ])
 def test_only_explicit_authorized_dialogue_events_are_candidates(choice_id, message, expected) -> None:
     assert explicitly_requests_authored_event(choice_id, message) is expected
@@ -314,6 +322,59 @@ async def test_reviewed_explicit_dialogue_resolves_authored_act3_event(
         assert stored.flags["has_dust_token"] is True
     if expected_choice == "andre_shows_breach":
         assert stored.flags["hidden_cave_unlocked"] is True
+
+
+@pytest.mark.parametrize(
+    ("message", "label", "expected_choice"),
+    [
+        ("塞特，我會幫你們離開這裡。", "協助塞特與希拉", "border_help_both"),
+        ("我要把這件事通報長老會。", "選擇通報長老會", "border_report"),
+        ("這不關我的事，我不介入。", "暫不介入兩人的處境", "border_ignore"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_reviewed_explicit_dialogue_resolves_border_decision(
+    tmp_path, message, label, expected_choice
+) -> None:
+    judge = StubJudge(judgement(event_done=label, event_reviewed=True))
+    planner = RecordingPlanner()
+    repository, orchestrator = await make_orchestrator(
+        tmp_path, judge, planner, node_id="border_ruins_preview", scene_id="border_ruins",
+    )
+
+    await orchestrator.process_turn(talk(message, npc_id="seth"))
+
+    stored = await repository.get_state("narrative-session")
+    assert judge.requests[0].legal_event_labels == [label]
+    assert expected_choice in stored.story_progress.completed_choice_ids
+    assert stored.story_progress.node_id == "border_choice_resolved"
+    assert planner.seen_states == []
+    if expected_choice == "border_help_both":
+        assert stored.flags["fissure_map"] is True
+        assert "library_route_lead" in stored.story_progress.public_clue_ids
+    if expected_choice == "border_report":
+        assert stored.axis == -10
+        assert stored.usurp == 5
+        assert stored.flags["elder_cooperation"] is True
+    if expected_choice == "border_ignore":
+        assert stored.axis == 0
+        assert "fissure_map" not in stored.flags
+
+
+@pytest.mark.asyncio
+async def test_unreviewed_border_decision_stays_plain_dialogue(tmp_path) -> None:
+    judge = StubJudge(judgement(event_done="選擇通報長老會", event_reviewed=False))
+    planner = RecordingPlanner()
+    repository, orchestrator = await make_orchestrator(
+        tmp_path, judge, planner, node_id="border_ruins_preview", scene_id="border_ruins",
+    )
+
+    await orchestrator.process_turn(talk("我要把這件事通報長老會。", npc_id="seth"))
+
+    stored = await repository.get_state("narrative-session")
+    assert stored.story_progress.node_id == "border_ruins_preview"
+    assert "border_report" not in stored.story_progress.completed_choice_ids
+    assert planner.seen_states
 
 
 @pytest.mark.asyncio
