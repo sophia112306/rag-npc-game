@@ -16,6 +16,8 @@ from backend.generation.rule_based_planner import RuleBasedStoryPlanner
 from backend.orchestration.game_orchestrator import GameOrchestrator
 from backend.schemas.game_state import GameState, PlayerState, StoryPhase
 from backend.schemas.player_action import PlayerAction
+from backend.schemas.api_response import DeltaPayload, NarrativeAIResponse
+from backend.schemas.story import DialogueLine, SpeakerType, StoryProposal
 
 
 def veta_state(relations=None, axis=0, **flags) -> GameState:
@@ -140,3 +142,97 @@ async def test_offline_fixed_choices_can_reach_dust_return_during_usurp_countdow
     assert "choose_dust_return" in final_choices(at_choice)
     stored = await _play(tmp_path, at_choice, "choose_dust_return")
     assert stored.final_ending == "塵歸"
+
+
+@pytest.mark.asyncio
+async def test_new_dream_is_reachable_by_bounded_dialogue_relationship_gains(tmp_path) -> None:
+    class AffinityJudge:
+        async def judge(self, request):
+            return NarrativeAIResponse(
+                scene=request.scene_name,
+                speaker=request.target_npc_id,
+                delta=DeltaPayload(relation={request.target_npc_id: 10}),
+                reason="對話增進信任",
+            )
+
+    class PassivePlanner:
+        async def propose(self, action, parsed_action, state, turn_guidance):
+            npc = state.npc_states[action.target_npc_id]
+            return StoryProposal(
+                session_id=action.session_id,
+                turn_number=state.turn_count + 1,
+                intent_summary="NPC 回應玩家。",
+                proposed_dialogue=[DialogueLine(
+                    speaker_type=SpeakerType.NPC,
+                    speaker_id=action.target_npc_id,
+                    speaker_name=npc.name,
+                    text="我聽見你的想法。",
+                )],
+            )
+
+    state = veta_state(relations={"menmesvento": 40, "vidalia": 30}, has_dust_token=True)
+    state.current_scene_id = "liuchen_valley"
+    state.story_progress.node_id = "dust_token_decided"
+    engine = create_database_engine(f"sqlite+aiosqlite:///{tmp_path / 'new-dream.db'}")
+    await create_schema(engine)
+    repository = SqlAlchemyGameRepository(create_async_session_factory(engine))
+    await repository.create_or_get_session(state)
+    orchestrator = GameOrchestrator(
+        repository, story_planner=PassivePlanner(), narrative_judge=AffinityJudge()
+    )
+
+    async def talk_to(npc_id: str, message: str) -> None:
+        current = await repository.get_state(state.session_id)
+        await orchestrator.process_turn(PlayerAction(
+            session_id=state.session_id,
+            action_id=uuid4(),
+            message=message,
+            target_npc_id=npc_id,
+            expected_state_version=current.state_version,
+        ))
+
+    async def choose(choice_id: str) -> None:
+        current = await repository.get_state(state.session_id)
+        choice = next(
+            choice for choice in await orchestrator.get_player_choices(state.session_id)
+            if choice.choice_id == choice_id
+        )
+        await orchestrator.process_turn(PlayerAction(
+            session_id=state.session_id,
+            action_id=uuid4(),
+            message=choice.message,
+            action_mode=choice.action_mode,
+            target_npc_id=choice.target_npc_id,
+            destination_scene_id=choice.destination_scene_id,
+            story_choice_id=choice.choice_id,
+            expected_state_version=current.state_version,
+        ))
+
+    for message in (
+        "我想了解你記下的那些名字。",
+        "謝謝你告訴我他們的故事。",
+        "我想知道這段記憶對你意味著什麼。",
+        "你願意再說說他們的願望嗎？",
+    ):
+        await talk_to("menmesvento", message)
+    await choose("return_to_minglin_for_veta")
+    for message in (
+        "我想聽聽妳以前走過哪些地方。",
+        "那些旅行之後，妳最懷念什麼？",
+        "謝謝妳願意和我分享回憶。",
+        "妳第一次看見這座森林時是什麼感覺？",
+        "我們可以再聊聊妳走過的地方嗎？",
+    ):
+        await talk_to("vidalia", message)
+    for choice_id in _TO_FINAL_CHOICE:
+        await choose(choice_id)
+
+    at_choice = await repository.get_state(state.session_id)
+    assert at_choice.axis == 0
+    assert at_choice.npc_states["menmesvento"].relation == 64
+    assert at_choice.npc_states["vidalia"].relation == 60
+    assert "choose_new_dream" in final_choices(at_choice)
+    await choose("choose_new_dream")
+    stored = await repository.get_state(state.session_id)
+    assert stored.final_ending == "新夢"
+    await engine.dispose()
