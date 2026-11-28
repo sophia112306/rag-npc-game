@@ -264,7 +264,7 @@ export default function Home() {
   const storyNode = gameState?.story_progress.node_id ?? "minglin_arrival";
   const minglinOpeningAndre = scene.scene_id === "minglin" && ["minglin_arrival", "minglin_path_open"].includes(storyNode);
   const visibleNpcIds: NpcId[] = scene.scene_id === "minglin"
-    ? (minglinOpeningAndre ? ["andre"] : ["vidalia"])
+    ? (minglinOpeningAndre ? ["andre"] : storyNode === "veta_route_ready" ? ["vidalia", "andre"] : ["vidalia"])
     : [...Object.keys(profiles)] as NpcId[];
   const forwardChoice = playerChoices.find(choice => choice.choice_id === "walk_to_council");
   const primaryNpc = gameState?.world_scene.npc_id ?? gameState?.world_scene.npc_interactions?.[0]?.npc_id;
@@ -275,7 +275,9 @@ export default function Home() {
   const visibleMessages = messages.filter(message => message.speaker !== "系統" && (activeLandmark
     ? message.targetId === "landmark" && message.sceneId === scene.scene_id
     : message.targetId !== "landmark" && (message.npcId ?? "vidalia") === displayNpcId));
-  const sceneChoices = gameState?.world_scene.npc_id === activeNpcId
+  const sceneChoices = storyNode === "veta_route_ready"
+    ? playerChoices.filter(choice => !choice.target_npc_id || choice.target_npc_id === activeNpcId || choice.action_mode === "movement")
+    : gameState?.world_scene.npc_id === activeNpcId
     ? playerChoices : playerChoices.filter(choice => choice.action_mode === "movement" || choice.target_npc_id === activeNpcId);
   const npcChoices = npcChoiceSet?.npcId === activeNpcId ? npcChoiceSet.choices : [];
   const visibleChoices = activeLandmark ? playerChoices

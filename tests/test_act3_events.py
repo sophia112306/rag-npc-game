@@ -42,6 +42,45 @@ def test_hub_without_relations_offers_stance_and_veta_source() -> None:
     ]
 
 
+def test_concurrent_hub_events_all_remain_available() -> None:
+    state = act3_state(
+        relations={"vidalia": 60, "andre": 60},
+        placed_runes=["lieyi_plains"],
+    )
+
+    assert ids(state) == [
+        "affirm_preserve_cycle", "affirm_accept_endings", "enter_veta_source",
+        "vidalia_asks_outside", "andre_shows_breach", "remove_placed_runes",
+    ]
+
+    state.story_progress.completed_choice_ids.append("affirm_preserve_cycle")
+    assert ids(state) == [
+        "enter_veta_source", "vidalia_asks_outside", "andre_shows_breach",
+        "remove_placed_runes",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_hub_events_can_all_resolve_before_veta(tmp_path) -> None:
+    state = act3_state(
+        relations={"vidalia": 70, "andre": 70},
+        placed_runes=["lieyi_plains"],
+        has_dust_token=True,
+    )
+
+    stored = await _play(
+        tmp_path, state, "affirm_preserve_cycle", "vidalia_offer_weaving",
+        "decline_dream_weaving", "andre_shows_breach", "remove_placed_runes",
+        "enter_veta_source", "veta_q1_each_life", "veta_q2_release",
+        "choose_dust_return",
+    )
+
+    assert stored.final_ending == "塵歸"
+    assert stored.flags["hidden_cave_unlocked"] is True
+    assert stored.flags["placed_runes"] == []
+    assert stored.flags["is_transformed"] is False
+
+
 @pytest.mark.parametrize(
     ("axis", "expected"),
     [(-20, "vidalia_offer_weaving"), (20, "vidalia_confides_wavering"), (0, "vidalia_asks_outside"), (-19, "vidalia_asks_outside")],

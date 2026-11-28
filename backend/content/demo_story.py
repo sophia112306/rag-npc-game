@@ -996,7 +996,7 @@ def pending_warning_choices(state: GameState) -> tuple[DemoStoryChoiceDefinition
 
 
 def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefinition, ...]:
-    """Return at most four choices valid for the authoritative story position."""
+    """Return choices valid for the authoritative story position."""
 
     if state.game_status != "active":
         return ()
@@ -1044,6 +1044,10 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
         available = tuple(
             sorted(available, key=lambda choice: choice.destination_scene_id is None)
         )
+    # This hub can hold several independent Act 3 events at once. Truncating
+    # here makes later events unreachable when their conditions overlap.
+    if state.story_progress.node_id == "veta_route_ready":
+        return available
     return available[:4]
 
 
