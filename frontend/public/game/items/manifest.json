@@ -51,6 +51,32 @@
       "source_type": "user_provided_generated_image",
       "source_rule": "E3-2_receive_dust_token",
       "prompt_document": "docs/ITEM_ASSET_PROMPTS.md"
+    },
+    {
+      "item_id": "vidalia_observation_page",
+      "version": 1,
+      "display_name": "維達利亞的觀察手札殘頁",
+      "file": "vidalia-observation-page-v1.jpg",
+      "sha256": "c34cc646b628b542ac2ce2f14cd451181934eacedc1d477f2c19216a31064f58",
+      "width": 2752,
+      "height": 1536,
+      "transparent": false,
+      "source_type": "user_provided_image",
+      "source_rule": "E1-3_find_vidalia_notes",
+      "prompt_document": null
+    },
+    {
+      "item_id": "remembrance_slab",
+      "version": 1,
+      "display_name": "銘記石板",
+      "file": "remembrance-slab-v1.jpg",
+      "sha256": "8b83604622ee80515dcab7a08993a46f4b597eb9880dd69640efa2728f5c92bc",
+      "width": 2752,
+      "height": 1536,
+      "transparent": false,
+      "source_type": "user_provided_image",
+      "source_rule": "liuchen_find_remembrance_slab",
+      "prompt_document": null
     }
   ]
 }

@@ -1,0 +1,20 @@
+flowchart LR
+    Player[玩家<br/>進行遊戲] -->|移動／調查／對話| UI[遊戲畫面<br/>Next.js · React · Phaser 2D<br/>localhost:3200]
+
+    subgraph Local[本機遊戲系統]
+        Assets[固定遊戲素材<br/>場景圖、Tiled 地圖、人物、道具、配樂] --> UI
+        UI -->|玩家操作 · HTTP/JSON| API[遊戲伺服器<br/>FastAPI · localhost:8300]
+        API -->|玩家畫面狀態 · JSON| UI
+        API -->|固定選項| Story[依既定劇情推進]
+        API -->|自由輸入| Dialogue[產生角色回答]
+        Dialogue -->|未設定模型連線| Rules[預設回答]
+        Story --> Check[後端檢查場景、道具與結果]
+        Dialogue --> Check
+        Check -->|保存或讀取| DB[(SQLite<br/>進度、事件、對話、NPC 記憶)]
+        Knowledge[審核 JSONL 角色知識] -->|提供可公開的背景| Dialogue
+    end
+
+    subgraph GPU[學校 GPU · Docker · 可選]
+        Gateway[NPC Gateway<br/>127.0.0.1:8000] -->|模型請求| VLLM[vLLM · 8001<br/>基底模型 + NPC LoRA]
+    end
+    Dialogue -.->|設定 MODEL_GATEWAY_URL · SSH tunnel／本機 8800| Gateway

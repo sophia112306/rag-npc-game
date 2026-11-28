@@ -114,6 +114,30 @@ async def test_planner_sends_only_explicit_authorized_context() -> None:
 
 
 @pytest.mark.asyncio
+async def test_owned_vidalia_page_adds_only_current_public_page_to_npc_context() -> None:
+    gateway = SequenceGateway({
+        "intent_summary": "Acknowledge the page.",
+        "npc_dialogue": [{"text": "你讀過我的筆記了。"}],
+        "event_proposals": [],
+    })
+    action, parsed, state = make_inputs()
+    action.message = "我想問你手札殘頁的內容。"
+    state.player.inventory.append("vidalia_observation_page")
+    state.npc_states["vidalia"].relation = 60
+    state.axis = 20
+
+    await GatewayStoryPlanner(gateway, FixedContextProvider()).propose(action, parsed, state)
+
+    request = gateway.requests[0]
+    page = next(item for item in request.target_context.knowledge
+                if item.subject_key == "vidalia_observation_page")
+    assert "塗改" in page.content
+    assert "axis" not in page.content
+    assert "60" not in page.content
+    assert "private_secret" not in request.model_dump_json()
+
+
+@pytest.mark.asyncio
 async def test_movement_request_limits_model_to_scene_change_operation() -> None:
     gateway = SequenceGateway(
         {

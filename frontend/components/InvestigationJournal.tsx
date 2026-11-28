@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PlayerChoice, PlayerItem, StoryFinding } from "../lib/game-api";
 import styles from "./InvestigationJournal.module.css";
 
@@ -13,6 +14,8 @@ type Props = {
 };
 
 export default function InvestigationJournal({findings,objective,onClose,onReport,near,inventory=[],itemUseChoices={},onUseItem}:Props) {
+  const [openedItemId, setOpenedItemId] = useState<string | null>(null);
+  const openedItem = inventory.find(item => item.item_id === openedItemId);
   return <div className={styles.modal} onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
     <section className={styles.journal} role="dialog" aria-modal="true" aria-label="調查紀錄"
       onKeyDown={event=>{
@@ -31,10 +34,15 @@ export default function InvestigationJournal({findings,objective,onClose,onRepor
         {inventory.length ? <ul>{inventory.map(item=><li key={item.item_id}>
           {item.image_url && <img src={item.image_url} alt="" width={72} height={72} />}
           <div><strong>{item.name}</strong><p>{item.description}</p>
+            {["vidalia_observation_page", "remembrance_slab"].includes(item.item_id) && <button type="button" className={styles.useButton} onClick={()=>setOpenedItemId(openedItemId===item.item_id?null:item.item_id)} aria-expanded={openedItemId===item.item_id}>檢視{item.item_id === "remembrance_slab" ? "石板" : "殘頁"}</button>}
             {itemUseChoices[item.item_id] && onUseItem && <button type="button" className={styles.useButton} onClick={()=>onUseItem(itemUseChoices[item.item_id])}>{itemUseChoices[item.item_id].label}</button>}
           </div>
         </li>)}</ul>
           : <p>目前沒有道具。調查線索請查看下方紀錄。</p>}
+        {openedItem && <div className={styles.itemDetail} aria-label={`${openedItem.name}內容`}>
+          {openedItem.image_url && <img src={openedItem.image_url} alt={openedItem.name} />}
+          <div><strong>{openedItem.name}</strong><p>{openedItem.description}</p><small>{openedItem.item_id === "remembrance_slab" ? "石板尚未記下經查證的姓名。" : "你可在與維達利亞交談時，提起這張殘頁。"}</small></div>
+        </div>}
       </section>
       {findings.length ? <div className={styles.findingsGrid}>{findings.map(finding=><article key={finding.clue_id} data-signal={finding.visual_signal}>
         {finding.image_url && <img className={styles.findingImage} src={finding.image_url} alt="" />}

@@ -7,6 +7,7 @@ from typing import Any, Protocol
 from pydantic import ValidationError
 
 from backend.content.context_repository import CharacterDefinitionNotFoundError
+from backend.content.items import vidalia_page_text
 from backend.generation.gateway import (
     GenerationBudget,
     ModelGateway,
@@ -20,7 +21,7 @@ from backend.generation.gateway import (
 )
 from backend.orchestration.player_choices import build_player_choices
 from backend.rules.state_rules import npc_behavior_mode, npc_trust_tier
-from backend.schemas.content import NPCGenerationContext
+from backend.schemas.content import KnowledgeItem, NPCGenerationContext
 from backend.schemas.game_state import GameState
 from backend.schemas.parsed_action import ParsedAction
 from backend.schemas.player_action import ActionMode, PlayerAction
@@ -113,6 +114,25 @@ class GatewayStoryPlanner:
             )
         except CharacterDefinitionNotFoundError as exc:
             raise StoryGenerationUnavailableError("character_context_missing", 0) from exc
+
+        if npc_id == "vidalia" and "vidalia_observation_page" in state.player.inventory:
+            # Use the existing knowledge field; the remote Gateway request contract
+            # stays compatible while the NPC can answer about a page the player owns.
+            target_context = target_context.model_copy(deep=True)
+            target_context.knowledge.append(KnowledgeItem(
+                knowledge_id=f"{action.session_id}:vidalia_observation_page",
+                subject_key="vidalia_observation_page",
+                content=(
+                    "玩家持有維達利亞的觀察手札殘頁。這是她的主觀筆記，不是世界真相。"
+                    f"目前可見的字跡與氛圍：{vidalia_page_text(state)}"
+                    "目前沒有已確認的後續信件。"
+                ),
+                epistemic_status="confirmed",
+                source_kind="authored_item",
+                source_id="vidalia_observation_page",
+                acquired_turn=state.turn_count,
+                provenance={"item_id": "vidalia_observation_page"},
+            ))
 
         allowed_operations = (
             [OperationType.CHANGE_SCENE]

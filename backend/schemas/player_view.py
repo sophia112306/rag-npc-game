@@ -42,7 +42,7 @@ def project_navigation(state: GameState) -> PlayerNavigationView:
 
     choices = build_player_choices(state, [])
     routes = {c.destination_scene_id: c for c in choices if c.destination_scene_id}
-    investigations = [c for c in choices if c.action_mode == "interaction"]
+    investigations = [c for c in choices if c.action_mode == "interaction" and c.choice_id not in {"find_vidalia_notes", "find_remembrance_slab"}]
     decisions = [
         choice
         for choice in available_demo_story_choices(state)
@@ -237,7 +237,12 @@ def project_player_view(state: GameState) -> PlayerViewState:
                    if finding.scene_id == state.current_scene_id and finding.visual_signal), None)
     if latest:
         world.discovery = WorldDiscovery(clue_id=latest.clue_id, label=latest.title, signal=latest.visual_signal)
-    return PlayerViewState(
+    player = PlayerIdentityView(
+        player_id=state.player.player_id,
+        name=state.player.name,
+        inventory=list(state.player.inventory),
+    )
+    view = PlayerViewState(
         session_id=state.session_id,
         state_version=state.state_version,
         turn_count=state.turn_count,
@@ -270,11 +275,7 @@ def project_player_view(state: GameState) -> PlayerViewState:
                 demo_act1=is_demo_first_stage(state),
             ),
         ),
-        player=PlayerIdentityView(
-            player_id=state.player.player_id,
-            name=state.player.name,
-            inventory=list(state.player.inventory),
-        ),
+        player=player,
         npc_states={
             npc_id: NPCPublicStateView(
                 npc_id=npc.npc_id,
@@ -286,3 +287,9 @@ def project_player_view(state: GameState) -> PlayerViewState:
         created_at=state.created_at,
         updated_at=state.updated_at,
     )
+    if "vidalia_observation_page" in state.player.inventory:
+        from backend.content.items import vidalia_page_text
+        for item in view.player.items:
+            if item.item_id == "vidalia_observation_page":
+                item.description = vidalia_page_text(state)
+    return view

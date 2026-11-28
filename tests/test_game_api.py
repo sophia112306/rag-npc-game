@@ -321,6 +321,7 @@ def test_default_rule_planner_offers_and_remembers_dynamic_quest(client: TestCli
         "promise_to_report",
         "travel_to_minglin_life_spring",
         "travel_to_minglin_rune_grove",
+        "find_vidalia_notes",
     ]
     assert quests.json()[0]["title"] in choices.json()[0]["label"]
     assert second.status_code == 200

@@ -6,7 +6,7 @@
 
 這份 README 說明目前程式；原始設定見 [世界設計](docs/GENERATIVE_WORLD_DESIGN.md)，操作與交接見 [Demo 交接](docs/DEMO_HANDOFF.md)，歷史進度見 [PROGRESS](docs/PROGRESS.md)。舊進度百分比只代表當時驗收範圍，不代表整個遊戲完成。
 
-完整平台的目標設計見 [系統架構總圖與判斷流程](docs/SYSTEM_ARCHITECTURE.md)，內含可下載的 SVG／PNG、回合判斷、資料庫分工、RAG 邊界與非同步生成，並標示已實作／部分完成／待接入。
+目前 2D 主遊戲的展示圖見 [目前系統架構](docs/CURRENT_SYSTEM_ARCHITECTURE.md)（含 PNG／SVG 與可編輯 Mermaid）。完整平台的目標設計另見 [系統架構總圖與判斷流程](docs/SYSTEM_ARCHITECTURE.md)，其中含尚未接入的功能，展示現況時請以目前系統架構圖為準。
 
 ## 1. 遊戲情境與目標
 

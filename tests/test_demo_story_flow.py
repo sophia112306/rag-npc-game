@@ -95,6 +95,7 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
     paths = {
         "council-dialogue-and-border-help": (
             "ask_location",
+            "find_vidalia_notes",
             "ask_about_anomaly",
             "ask_about_factions",
             "ask_about_fire_elder",
@@ -113,6 +114,7 @@ def test_every_authored_story_edge_is_playable_end_to_end(tmp_path) -> None:
             "trace_dust_runes",
             "enter_liuchen_valley",
             "listen_to_forgotten_names",
+            "find_remembrance_slab",
             "return_with_dust_findings",
             "preview_border_ruins",
             "return_from_border_ruins",

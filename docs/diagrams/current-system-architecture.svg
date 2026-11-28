@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">RAG NPC Game｜目前主遊戲系統架構</title>
+  <desc id="desc">玩家使用瀏覽器前端；前端向本機 FastAPI 傳送操作，後端處理固定故事或自由對話，讀寫 SQLite 並讀取審核知識。模型連線可選，經 SSH tunnel 連接學校 GPU 的 Docker Gateway 與 vLLM。</desc>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#3262a4" stroke-width="1.8"/></marker>
+    <marker id="arrOpt" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#aa6b18" stroke-width="1.8"/></marker>
+    <style>
+      text{font-family:'PingFang TC','Noto Sans CJK TC','Microsoft JhengHei',Arial,sans-serif;fill:#17324f}
+      .title{font-size:37px;font-weight:750;letter-spacing:.3px}
+      .subtitle{font-size:18px;fill:#53677e}
+      .boundary{fill:#f8fbff;stroke:#a9c1dc;stroke-width:2;rx:21}
+      .gpu-boundary{fill:#fffaf0;stroke:#d8b276;stroke-width:2;rx:19}
+      .head{font-size:22px;font-weight:700}
+      .box{fill:white;stroke:#6f9bc8;stroke-width:2;rx:15}
+      .story{fill:#edf8f1;stroke:#68aa7a;stroke-width:1.5;rx:10}
+      .model{fill:#fff4df;stroke:#d4a152;stroke-width:1.5;rx:10}
+      .asset{fill:#f2f7fc;stroke:#9bb6cf;stroke-width:1.5;rx:12}
+      .box-title{font-size:22px;font-weight:700}
+      .body{font-size:17px;fill:#4b6075}
+      .detail{font-size:15px;fill:#61758a}
+      .label{font-size:16px;font-weight:650;fill:#356198}
+      .label-opt{font-size:16px;font-weight:650;fill:#a46515}
+      .line{fill:none;stroke:#3262a4;stroke-width:3;marker-end:url(#arr)}
+      .opt{fill:none;stroke:#aa6b18;stroke-width:3;stroke-dasharray:10 8;marker-end:url(#arrOpt)}
+      .subline{fill:none;stroke:#5b93b5;stroke-width:2.5;marker-end:url(#arr)}
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="#f2f6fa"/>
+  <rect x="0" y="0" width="1600" height="10" fill="#3262a4"/>
+  <text class="title" x="48" y="73">RAG NPC Game｜目前主遊戲系統架構</text>
+  <text class="subtitle" x="50" y="110">玩家操作 → 前端畫面 → 後端判定 → 保存進度；只有啟用模型連線時才使用學校 GPU</text>
+  <path d="M50 139 H1550" stroke="#cbd9e7" stroke-width="1.5"/>
+
+  <rect class="box" x="45" y="327" width="184" height="144"/>
+  <circle cx="137" cy="362" r="18" fill="#e8f0fb" stroke="#3262a4" stroke-width="2"/>
+  <path d="M103 409 Q137 377 171 409 M103 409 V418 H171 V409" fill="#e8f0fb" stroke="#3262a4" stroke-width="2"/>
+  <text class="box-title" x="137" y="451" text-anchor="middle">進行遊戲</text>
+
+  <rect class="boundary" x="260" y="178" width="1290" height="481"/>
+  <text class="head" x="289" y="218">本機遊戲系統</text>
+  <text class="detail" x="486" y="217">2D 主遊戲 · 開啟網頁即可遊玩固定劇情</text>
+
+  <rect class="box" x="290" y="255" width="305" height="242"/>
+  <rect x="290" y="255" width="305" height="11" rx="5" fill="#3a78b7"/>
+  <text class="box-title" x="310" y="300">遊戲畫面</text>
+  <text class="detail" x="310" y="326">Next.js · React · Phaser 2D</text>
+  <text class="body" x="310" y="371">地圖移動、調查、NPC 對話</text>
+  <text class="body" x="310" y="402">手記、背包、HUD、音樂</text>
+  <text class="body" x="310" y="433">瀏覽器語音輸入與朗讀</text>
+  <text class="detail" x="310" y="473">localhost:3200</text>
+
+  <rect class="asset" x="290" y="535" width="305" height="87"/>
+  <text x="310" y="567" font-size="19" font-weight="700">固定遊戲素材</text>
+  <text class="body" x="310" y="594" font-size="15">場景圖、Tiled 地圖、人物、道具、配樂</text>
+
+  <rect class="box" x="670" y="255" width="375" height="367"/>
+  <rect x="670" y="255" width="375" height="11" rx="5" fill="#3a78b7"/>
+  <text class="box-title" x="693" y="300">遊戲伺服器</text>
+  <text class="detail" x="693" y="326">FastAPI · localhost:8300</text>
+  <text class="body" x="693" y="370">① 接收操作，確認目前進度</text>
+  <rect class="story" x="692" y="393" width="152" height="73"/>
+  <text class="label" x="708" y="422">固定故事選項</text>
+  <text class="detail" x="708" y="447">依劇情推進</text>
+  <rect class="model" x="860" y="393" width="164" height="73"/>
+  <text class="label-opt" x="876" y="422">自由輸入對話</text>
+  <text class="detail" x="876" y="447">模型或預設回答</text>
+  <path d="M704 482 H1011" stroke="#d5e0ea" stroke-width="1.5"/>
+  <text class="body" x="693" y="518">② 檢查場景、道具與故事結果</text>
+  <text class="body" x="693" y="554">③ 保存進度，回傳玩家畫面</text>
+  <text class="detail" x="693" y="595">AI 無法自行決定道具、路線或結局</text>
+
+  <rect class="box" x="1125" y="255" width="385" height="151"/>
+  <rect x="1125" y="255" width="385" height="11" rx="5" fill="#6587a5"/>
+  <text class="box-title" x="1145" y="301">遊戲存檔</text>
+  <text class="detail" x="1145" y="329">SQLite</text>
+  <text class="body" x="1145" y="363">進度、背包、事件、對話、NPC 記憶</text>
+  <text class="detail" x="1145" y="388">回合去重紀錄</text>
+  <rect class="box" x="1125" y="454" width="385" height="137"/>
+  <rect x="1125" y="454" width="385" height="11" rx="5" fill="#6587a5"/>
+  <text class="box-title" x="1145" y="499">角色知識</text>
+  <text class="detail" x="1145" y="527">審核過的 JSONL + 已保存的角色記憶</text>
+  <text class="body" x="1145" y="561">依目前可公開內容提供對話背景</text>
+
+  <path class="line" d="M229 395 H284"/>
+  <text class="label" x="238" y="382">操作</text>
+  <path class="line" d="M595 338 H664"/>
+  <text class="label" x="600" y="323">操作</text>
+  <path class="line" d="M670 453 H601"/>
+  <text class="label" x="606" y="483">畫面</text>
+  <path class="line" d="M1045 333 H1119"/>
+  <text class="label" x="1052" y="319">讀寫</text>
+  <path class="line" d="M1125 519 H1051"/>
+  <text class="label" x="1053" y="504">讀取</text>
+  <path class="subline" d="M442 535 V503"/>
+
+  <rect class="gpu-boundary" x="670" y="711" width="880" height="140"/>
+  <text class="head" x="693" y="745">學校 GPU</text>
+  <text class="detail" x="808" y="744">Docker 內執行 · 設定 MODEL_GATEWAY_URL 後使用</text>
+  <rect class="model" x="693" y="768" width="322" height="56"/>
+  <text class="body" x="711" y="802">NPC Gateway｜127.0.0.1:8000</text>
+  <rect class="model" x="1112" y="768" width="412" height="56"/>
+  <text class="body" x="1130" y="802">vLLM｜8001 · 基底模型 + NPC LoRA</text>
+  <path class="opt" d="M1016 796 H1104"/>
+  <text class="label-opt" x="1030" y="783">請求</text>
+  <path class="opt" d="M858 623 V701"/>
+  <text class="label-opt" x="878" y="678">可選：SSH tunnel → 本機 8800</text>
+
+  <path d="M50 876 H1550" stroke="#cbd9e7" stroke-width="1.5"/>
+  <text class="detail" x="50" y="894">實線：主遊戲資料流　·　虛線：啟用模型連線後的路徑　·　未畫入舊 3D 與即時生圖</text>
+</svg>

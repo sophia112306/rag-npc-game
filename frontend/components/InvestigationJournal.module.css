@@ -25,4 +25,9 @@
 .inventory strong { font-weight:400;color:#e8ddbb; }
 .useButton { margin-top:8px;padding:6px 10px;border:1px solid #c2a96c99;background:#1d2a1fcc;color:#f0dca9;font-size:12px;cursor:pointer; }
 .useButton:hover { background:#2c4036;color:#fff3c9; }
+.itemDetail { display:grid;grid-template-columns:minmax(0, 1fr) minmax(190px, .8fr);gap:18px;align-items:center;margin-top:14px;padding:14px;border:1px solid #a8946966;background:#0d1b1f; }
+.itemDetail img { width:100%;height:auto;max-height:320px;object-fit:contain; }
+.itemDetail strong { color:#e8ddbb;font-size:16px;font-weight:400; }
+.itemDetail small { color:#a9b8ad;font-size:12px;line-height:1.7; }
 @media(max-width:640px) { .modal{padding:12px}.journal{padding:25px 18px}.journal h2{font-size:21px}.findingsGrid{grid-template-columns:1fr;max-height:48svh}.findingsGrid article{padding:13px 15px} }
+@media(max-width:640px) { .itemDetail{grid-template-columns:1fr}.itemDetail img{max-height:220px} }

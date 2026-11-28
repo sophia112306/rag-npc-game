@@ -13,6 +13,7 @@ class EventRules:
         "E1-1": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
         "E1-2": {"axis": 0, "usurp": 0, "relation": {"andre": 5}, "flags": {}},
         "E1-3": {"axis": 0, "usurp": 0, "relation": {"vidalia": 5}, "flags": {}},
+        "E1-3_find_vidalia_notes": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
         "E1-4": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
         "E1-5": {"axis": 0, "usurp": 0, "relation": {"menmesvento": 5}, "flags": {}},
 
@@ -22,6 +23,7 @@ class EventRules:
         "E2-1_ignore": {"axis": 0, "usurp": 5, "relation": {}, "flags": {}},
 
         "E2-2_testify": {"axis": 0, "usurp": 0, "relation": {"menmesvento": 10}, "flags": {"e2_2_testified": True}},
+        "liuchen_find_remembrance_slab": {"axis": 0, "usurp": 0, "relation": {}, "flags": {}},
 
         "E2-3_help_both": {"axis": 0, "usurp": 0, "relation": {}, "flags": {"fissure_map": True, "library_path": True}},
         "E2-3_report": {"axis": -10, "usurp": 5, "relation": {}, "flags": {"elder_cooperation": True}},

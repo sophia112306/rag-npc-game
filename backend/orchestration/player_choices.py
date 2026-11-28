@@ -53,7 +53,8 @@ def build_player_choices(
             # Keep existing quest dialogue, but travel must also advance the
             # story node. A plain scene change stranded legacy quest sessions.
             travel = [choice.to_player_choice() for choice in story_choices if choice.destination_scene_id]
-            return [*_dialogue_choices(state, quests)[:2], *travel[:2]]
+            notes = [choice.to_player_choice() for choice in story_choices if choice.choice_id == "find_vidalia_notes"]
+            return [*_dialogue_choices(state, quests)[:2], *travel[:2], *notes]
         return [choice.to_player_choice() for choice in story_choices]
 
     travel = _travel_choices(state.current_scene_id)

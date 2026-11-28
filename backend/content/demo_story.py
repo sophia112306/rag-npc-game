@@ -219,6 +219,17 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
     ),
     *_minglin_travel_choices("minglin_briefed"),
     _choice(
+        "find_vidalia_notes",
+        "minglin_briefed",
+        "minglin",
+        "查看林間石台的殘頁",
+        "我查看維達利亞身旁林間石台上未收妥的手札殘頁。",
+        "石台邊有一張未收妥的手札殘頁。你拾起它，認出上面記錄的是一位未記載的訪客。",
+        "minglin_briefed",
+        "兩條調查路線",
+        rule_event_id="E1-3_find_vidalia_notes",
+    ),
+    _choice(
         "ask_about_fire_elder",
         "minglin_briefed",
         "minglin",
@@ -419,6 +430,17 @@ DEMO_STORY_CHOICES: tuple[DemoStoryChoiceDefinition, ...] = (
         "Demo 完成：同一批靈魂",
         visual_signal="dust",
         reveal_clue_ids=("burial_fire_cycle",),
+    ),
+    _choice(
+        "find_remembrance_slab",
+        "demo_dust_complete",
+        "liuchen_valley",
+        "拾起銘記石板",
+        "我查看流塵谷岩壁旁幾乎空白的石板，並將它收好。",
+        "風沙從石板的舊紋間滑落，中央仍留著空白。你將它帶在身邊，等有足夠見證時再記下名字。",
+        "demo_dust_complete",
+        "流塵谷的見證",
+        rule_event_id="liuchen_find_remembrance_slab",
     ),
     _choice(
         "return_with_fire_findings",
@@ -743,7 +765,7 @@ AUTHORED_RULE_IDS = frozenset(
 
 
 def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefinition, ...]:
-    """Return at most four choices valid for the authoritative story position."""
+    """Return the main choices plus an optional page discovery in Minglin."""
 
     if state.game_status != "active":
         return ()
@@ -769,6 +791,7 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
         )
         and (choice.choice_id not in BORDER_RESOLUTION_IDS or not border_resolution)
         and set(choice.required_completed_choice_ids).issubset(completed)
+        and (choice.choice_id != "find_remembrance_slab" or choice.choice_id not in completed)
         and set(choice.required_inventory_ids).issubset(state.player.inventory)
         and (choice.item_use_id is None or choice.item_use_id not in used_item_ids)
         and (
@@ -787,9 +810,12 @@ def available_demo_story_choices(state: GameState) -> tuple[DemoStoryChoiceDefin
     if state.story_progress.node_id == "minglin_briefed":
         # Once the task is accepted, put the two authored destinations first;
         # optional follow-up questions must not hide the investigation routes.
-        available = tuple(
-            sorted(available, key=lambda choice: choice.destination_scene_id is None)
-        )
+        available = tuple(sorted(available, key=lambda choice: (
+            0 if choice.destination_scene_id else 1
+        )))
+        page_choices = tuple(choice for choice in available if choice.choice_id == "find_vidalia_notes")
+        main_choices = tuple(choice for choice in available if choice.choice_id != "find_vidalia_notes")
+        return (*main_choices[:4], *page_choices)
     return available[:4]
 
 
