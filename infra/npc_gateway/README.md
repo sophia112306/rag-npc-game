@@ -17,6 +17,20 @@ docker compose -f infra/npc_gateway/compose.yaml logs --tail=100 runtime
 
 The only host listeners are `127.0.0.1:8000` for the Gateway and `127.0.0.1:8001` for vLLM. Do not change them to a public bind address.
 
+## Isolated game preview
+
+The preview Gateway reuses the running vLLM through its loopback port. It is a CPU-only container with no GPU device, a 768 MiB memory limit, one upstream attempt for NPC generation, and two sequential passes only when the narrator needs an independent event review. Starting it does not recreate the main runtime.
+
+```bash
+ssh nccu-gpu
+cd /home/team115_1/rag-npc-game
+docker compose -f infra/npc_gateway/compose.preview.yaml up -d gateway_preview
+docker compose -f infra/npc_gateway/compose.preview.yaml ps
+curl --fail --max-time 5 http://127.0.0.1:8003/health
+```
+
+The preview listens only at `127.0.0.1:8003` on the school machine. From the game computer, forward it privately with `ssh -N -L 127.0.0.1:8802:127.0.0.1:8003 nccu-gpu`, then point the local game backend's `MODEL_GATEWAY_URL` and `NARRATIVE_GATEWAY_URL` at `http://127.0.0.1:8802/generate` and `http://127.0.0.1:8802/narrate`. Keep the preview database separate from player saves. Do not run repeated or parallel model checks to verify a code-only change.
+
 ## Verify before accepting a cutover
 
 ```bash
