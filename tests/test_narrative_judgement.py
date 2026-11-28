@@ -358,7 +358,7 @@ async def test_reviewed_explicit_dialogue_resolves_border_decision(
         assert stored.flags["elder_cooperation"] is True
     if expected_choice == "border_ignore":
         assert stored.axis == 0
-        assert "fissure_map" not in stored.flags
+        assert not stored.flags.get("fissure_map")
 
 
 @pytest.mark.asyncio
